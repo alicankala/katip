@@ -497,7 +497,7 @@ onMounted(() => {
 .dashboard-header p {
   margin: 6px 0 0;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .dashboard-actions {
@@ -509,7 +509,7 @@ onMounted(() => {
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(180px, 1fr));
-  gap: 16px;
+  gap: 20px;
   margin-bottom: 24px;
 }
 
@@ -518,16 +518,21 @@ onMounted(() => {
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 20px;
+  padding: 22px 24px;
   box-shadow: var(--shadow-sm);
   overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
 }
 
 .stat-card:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
 }
+
+.stat-card.accent-blue:hover { border-color: rgba(59, 130, 246, 0.4); box-shadow: 0 6px 20px rgba(59, 130, 246, 0.08); }
+.stat-card.accent-green:hover { border-color: rgba(16, 185, 129, 0.4); box-shadow: 0 6px 20px rgba(16, 185, 129, 0.08); }
+.stat-card.accent-orange:hover { border-color: rgba(245, 158, 11, 0.4); box-shadow: 0 6px 20px rgba(245, 158, 11, 0.08); }
+.stat-card.accent-purple:hover { border-color: rgba(139, 92, 246, 0.4); box-shadow: 0 6px 20px rgba(139, 92, 246, 0.08); }
 
 .stat-card::before {
   content: "";
@@ -557,7 +562,7 @@ onMounted(() => {
 .stat-card span {
   display: block;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -567,7 +572,7 @@ onMounted(() => {
 .stat-card strong {
   display: block;
   color: var(--text-title);
-  font-size: 32px;
+  font-size: 30px;
   font-weight: 800;
   line-height: 1.1;
 }
@@ -576,28 +581,28 @@ onMounted(() => {
   display: block;
   margin-top: 8px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13.5px;
   line-height: 1.4;
 }
 
 .dashboard-content-grid {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
-  gap: 20px;
+  gap: 24px;
 }
 
 .info-panel {
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: 12px;
-  padding: 20px;
+  padding: 24px;
   box-shadow: var(--shadow-md);
 }
 
 .info-panel h2 {
   margin: 0 0 4px;
   color: var(--text-title);
-  font-size: 18px;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.01em;
 }
@@ -605,13 +610,13 @@ onMounted(() => {
 .info-panel p {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 .panel-title-row {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -622,7 +627,7 @@ onMounted(() => {
 
 .muted {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
   margin-top: 4px;
 }
 
@@ -672,13 +677,13 @@ onMounted(() => {
 
 .customer-history-box h3 {
   margin: 0 0 4px 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   color: #ffffff;
 }
 
 .customer-history-box span {
-  font-size: 12px;
+  font-size: 13.5px;
   color: #c7d2fe;
   line-height: 1.4;
 }
@@ -690,7 +695,7 @@ onMounted(() => {
   padding: 14px;
   border-radius: 8px;
   line-height: 1.5;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .form-area {
@@ -709,7 +714,7 @@ onMounted(() => {
 .form-group label {
   color: var(--text-secondary);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .empty-message {
@@ -733,14 +738,14 @@ onMounted(() => {
 .low-stock-box h3 {
   margin: 0 0 6px;
   color: #f59e0b;
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
 }
 
 .low-stock-box p {
   margin: 0 0 12px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .low-stock-box ul {
@@ -756,7 +761,7 @@ onMounted(() => {
   align-items: center;
   padding: 8px 0;
   border-top: 1px solid rgba(245, 158, 11, 0.15);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .low-stock-box li:first-child {
@@ -795,12 +800,12 @@ onMounted(() => {
 
 .stock-empty-box strong {
   color: var(--text-title);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .stock-empty-box span {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13.5px;
 }
 
 @media (max-width: 1100px) {
@@ -832,7 +837,7 @@ onMounted(() => {
 .history-helper {
   margin: -6px 0 4px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .history-card-list {
@@ -870,13 +875,13 @@ onMounted(() => {
   display: block;
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14.5px;
 }
 
 .service-title {
   color: var(--text-title);
   font-weight: 700;
-  font-size: 15px;
+  font-size: 16px;
   margin-bottom: 12px;
 }
 
@@ -899,7 +904,7 @@ onMounted(() => {
 .history-total span {
   display: block;
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 12.5px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 4px;
@@ -908,7 +913,7 @@ onMounted(() => {
 
 .history-detail-grid strong {
   color: var(--text-title);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
 }
 
@@ -919,7 +924,7 @@ onMounted(() => {
 .history-section p {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.5;
 }
 
@@ -931,7 +936,7 @@ onMounted(() => {
 .history-items li {
   padding: 4px 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .history-items li em {

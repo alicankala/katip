@@ -320,12 +320,12 @@ onMounted(() => {
 
 .summary-card span {
   color: #94a3b8;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .summary-card strong {
   color: #e5e7eb;
-  font-size: 20px;
+  font-size: 22px;
 }
 
 .summary-card small {

@@ -2117,8 +2117,8 @@ onMounted(() => {
 }
 
 .form-group label {
-  font-size: 0.9rem;
-  color: #ccc;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
 }
 
 .p-input-icon-left {
@@ -2165,7 +2165,7 @@ onMounted(() => {
 .inline-kalem-header p {
   margin: 6px 0 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
 }
 .durum-dropdown {
   min-width: 145px;
@@ -2204,7 +2204,7 @@ onMounted(() => {
 .internal-profit-header p {
   margin: 5px 0 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .profit-grid {
@@ -2225,12 +2225,12 @@ onMounted(() => {
 
 .profit-card span {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .profit-card strong {
   color: var(--text-title);
-  font-size: 18px;
+  font-size: 19px;
 }
 
 .profit-card small {
@@ -2277,7 +2277,7 @@ onMounted(() => {
 
 .work-order-log-item span {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .work-order-log-item p {
@@ -2309,7 +2309,7 @@ onMounted(() => {
 .extra-info-panel p {
   margin: 5px 0 0;
   color: #94a3b8;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .extra-info-actions {

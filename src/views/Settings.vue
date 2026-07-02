@@ -461,7 +461,7 @@ onMounted(() => {
   display: block;
   word-break: break-all;
   font-family: Consolas, Monaco, monospace;
-  font-size: 13px;
+  font-size: 14px;
   color: var(--accent-color);
 }
 
@@ -520,6 +520,6 @@ onMounted(() => {
 .theme-box span {
   display: block;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 </style>

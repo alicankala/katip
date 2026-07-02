@@ -438,7 +438,7 @@ onMounted(() => {
 
 .form-group label {
   color: #cbd5e1;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -529,7 +529,7 @@ onMounted(() => {
 .active-master-text {
   margin: 8px 0 0;
   color: #cbd5e1;
-  font-size: 14px;
+  font-size: 14.5px;
 }
 
 .active-master-text strong {
@@ -549,11 +549,11 @@ onMounted(() => {
 
 .existing-vehicle-box strong {
   color: #ffffff;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .existing-vehicle-box span {
   color: #bbf7d0;
-  font-size: 13px;
+  font-size: 14px;
 }
 </style>

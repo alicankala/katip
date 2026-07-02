@@ -275,8 +275,8 @@ onMounted(() => {
   gap: 5px;
 }
 .form-group label {
-  font-size: 0.9rem;
-  color: #ccc;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
 }
 .p-input-icon-left {
   position: relative;

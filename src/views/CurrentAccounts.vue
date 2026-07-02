@@ -562,7 +562,7 @@ onMounted(async () => {
             </template>
           </Column>
           
-          <Column header="Toplam Borç / Ödeme" style="text-align: right; width: 160px; font-size: 0.85rem;">
+          <Column header="Toplam Borç / Ödeme" style="text-align: right; width: 160px; font-size: 0.92rem;">
             <template #body="slotProps">
               <div class="borc-odeme-detay">
                 <span class="borc">B: {{ tlFormatla(slotProps.data.total_debt) }}</span>
@@ -987,7 +987,7 @@ onMounted(async () => {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 4px;
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   font-weight: 700;
   text-transform: uppercase;
   margin-top: 4px;
@@ -996,7 +996,7 @@ onMounted(async () => {
   display: inline-block;
   padding: 3px 10px;
   border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   font-weight: 700;
   text-transform: uppercase;
   margin-bottom: 8px;
@@ -1044,7 +1044,7 @@ onMounted(async () => {
 
 /* Transaction List Inner styling */
 .islem-type-tag {
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   background: #334155;
   color: #e2e8f0;
   padding: 2px 6px;
@@ -1058,7 +1058,7 @@ onMounted(async () => {
   flex-wrap: wrap;
 }
 .iliskili-etiket {
-  font-size: 0.72rem;
+  font-size: 0.82rem;
   background: rgba(56, 189, 248, 0.08);
   color: #38bdf8;
   border: 1px solid rgba(56, 189, 248, 0.2);
@@ -1071,13 +1071,13 @@ onMounted(async () => {
 }
 .islem-not {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: #64748b;
   margin-top: 4px;
   font-style: italic;
 }
 .bagli-islem-bilgi {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   color: #64748b;
   margin-top: 3px;
   display: flex;
@@ -1102,7 +1102,7 @@ onMounted(async () => {
   border-radius: 6px;
   color: #f1f5f9;
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: 1rem;
   outline: none;
 }
 .tarih-input:focus {
@@ -1111,7 +1111,7 @@ onMounted(async () => {
 }
 
 .odeme-yontem-tag {
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   background: rgba(16, 185, 129, 0.1);
   color: #34d399;
   border: 1px solid rgba(16, 185, 129, 0.2);
@@ -1161,7 +1161,7 @@ onMounted(async () => {
   display: block;
   margin-top: 4px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -1227,7 +1227,7 @@ onMounted(async () => {
 .cari-liste-ad {
   font-weight: 600;
   color: #f8fafc;
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   margin-bottom: 3px;
 }
 :global(html[data-theme="light"] .cari-liste-ad) {
@@ -1242,7 +1242,7 @@ onMounted(async () => {
 }
 
 .cari-liste-tel {
-  font-size: 0.78rem;
+  font-size: 0.88rem;
   color: #94a3b8;
   display: inline-flex;
   align-items: center;
@@ -1254,7 +1254,7 @@ onMounted(async () => {
 
 .bakiye-deger {
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 1.05rem;
 }
 .bakiye-deger.borclu {
   color: #f87171;
@@ -1266,7 +1266,7 @@ onMounted(async () => {
 .borc-odeme-detay {
   display: flex;
   flex-direction: column;
-  font-size: 0.82rem;
+  font-size: 0.9rem;
   gap: 2px;
 }
 .borc-odeme-detay .borc {
@@ -1336,7 +1336,7 @@ onMounted(async () => {
 }
 
 .fallback-panel p {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   max-width: 320px;
   line-height: 1.5;
   color: #64748b;
@@ -1362,7 +1362,7 @@ onMounted(async () => {
   align-items: center;
   gap: 8px;
   color: #94a3b8;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
 }
 :global(html[data-theme="light"] .detay-iletisim),
 :global(html[data-theme="light"] .detay-not) {
@@ -1373,7 +1373,7 @@ onMounted(async () => {
   border-left: 3px solid #3b82f6;
   padding: 6px 12px;
   border-radius: 4px;
-  font-size: 0.85rem;
+  font-size: 0.95rem;
   color: #cbd5e1;
   align-items: flex-start;
 }
@@ -1417,7 +1417,7 @@ onMounted(async () => {
 }
 
 .bakiye-sutun .baslik {
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   text-transform: uppercase;
   color: #94a3b8;
   letter-spacing: 0.5px;
@@ -1483,7 +1483,7 @@ onMounted(async () => {
   border-bottom: 2px solid transparent;
   color: #94a3b8;
   padding: 10px 18px;
-  font-size: 0.88rem;
+  font-size: 0.98rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1519,7 +1519,7 @@ onMounted(async () => {
   font-weight: bold;
 }
 .form-helper {
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   color: #64748b;
   margin-top: 3px;
   line-height: 1.3;

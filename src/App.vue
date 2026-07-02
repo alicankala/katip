@@ -319,7 +319,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 9px;
   padding-left: 12px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text-title);
 }
@@ -403,7 +403,7 @@ onUnmounted(() => {
 .form-group label {
   color: var(--text-secondary);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .login-error {
@@ -412,7 +412,7 @@ onUnmounted(() => {
   color: #fecaca;
   border-radius: 8px;
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .login-button {
@@ -465,7 +465,7 @@ onUnmounted(() => {
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
   color: var(--accent-color);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -534,7 +534,7 @@ onUnmounted(() => {
 
 .active-master-box span {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: 13px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-weight: 600;
@@ -542,7 +542,7 @@ onUnmounted(() => {
 
 .active-master-box strong {
   color: var(--text-title);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
 }
 
@@ -576,7 +576,7 @@ onUnmounted(() => {
 :global(.app-sidebar .p-menu-item-link) {
   background: transparent !important;
   color: var(--text-secondary) !important;
-  padding: 10px 12px !important;
+  padding: 12px 14px !important;
 }
 
 :global(.app-sidebar .p-menuitem-link:hover),
@@ -587,8 +587,8 @@ onUnmounted(() => {
 :global(.app-sidebar .p-menuitem-icon),
 :global(.app-sidebar .p-menu-item-icon) {
   color: var(--text-muted) !important;
-  margin-right: 10px !important;
-  font-size: 14px !important;
+  margin-right: 12px !important;
+  font-size: 15px !important;
 }
 
 :global(.app-sidebar .p-menuitem-content:hover .p-menuitem-icon) {
@@ -598,8 +598,8 @@ onUnmounted(() => {
 :global(.app-sidebar .p-menuitem-text),
 :global(.app-sidebar .p-menu-item-label) {
   color: var(--text-secondary) !important;
-  font-size: 14px !important;
-  font-weight: 500 !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
 }
 
 :global(.app-sidebar .p-menuitem-content:hover .p-menuitem-text) {
