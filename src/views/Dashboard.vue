@@ -154,13 +154,6 @@ onMounted(() => {
     severity="success"
     @click="servisKabuleGit"
   />
-
-  <Button
-    label="İş Emirleri"
-    icon="pi pi-wrench"
-    severity="info"
-    @click="isEmirlerineGit"
-  />
 </div>
     </div>
 
@@ -279,13 +272,14 @@ onMounted(() => {
       </div>
 
 <div class="info-panel quick-panel">
-  <div class="quick-actions">
-    <Button
-      label="Müşteri Geçmişi"
-      icon="pi pi-search"
-      severity="secondary"
-      @click="gecmisDialogAc"
-    />
+  <div class="customer-history-box" @click="gecmisDialogAc">
+    <div class="box-icon">
+      <i class="pi pi-search" style="font-size: 1.3rem"></i>
+    </div>
+    <div class="box-content">
+      <h3>Müşteri Geçmişi Ara</h3>
+      <span>Plaka, tel, ad soyad veya iş emri metinleri ile hızlı sorgulama</span>
+    </div>
   </div>
         <div
   v-if="dusukStokParcalari.length > 0"
@@ -328,7 +322,7 @@ onMounted(() => {
       <InputText
         v-model="gecmisAramaMetni"
         class="history-search-input"
-        placeholder="Müşteri adı, telefon veya plaka yazın..."
+        placeholder="Ad soyad, telefon, plaka, marka/model veya iş emri/şikayet detayı..."
         @keyup.enter="gecmisSorgula"
       />
 
@@ -349,7 +343,7 @@ onMounted(() => {
     </div>
 
     <p class="history-helper">
-      Örnek: Ahmet Yılmaz, 34ABC123, 34 ABC 123 veya telefon numarası ile arayabilirsiniz.
+      Örnek: Ahmet Yılmaz, 34ABC123, Megane, fren balatası, tekleme şikayeti veya telefon numarası ile arayabilirsiniz.
     </p>
 
     <div
@@ -623,10 +617,55 @@ onMounted(() => {
   gap: 18px;
 }
 
-.quick-actions {
+.customer-history-box {
+  background: linear-gradient(135deg, #1e1b4b, #311042);
+  border: 1px solid #6366f1;
+  color: #e0e7ff;
+  padding: 16px;
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+}
+
+.customer-history-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.2);
+  border-color: #818cf8;
+}
+
+.customer-history-box .box-icon {
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+  padding: 12px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.customer-history-box .box-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.customer-history-box h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.customer-history-box span {
+  font-size: 12px;
+  color: #c7d2fe;
+  line-height: 1.4;
 }
 
 .note-box {
@@ -671,6 +710,7 @@ onMounted(() => {
   color: #fde68a;
   padding: 14px;
   border-radius: 10px;
+  text-align: center;
 }
 
 .low-stock-box h3 {
@@ -726,6 +766,9 @@ onMounted(() => {
   border-radius: 10px;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
   gap: 4px;
 }
 
@@ -893,5 +936,24 @@ onMounted(() => {
   .history-card-header {
     flex-direction: column;
   }
+}
+
+:global(html[data-theme="light"] .customer-history-box) {
+  background: linear-gradient(135deg, #e0e7ff, #f3e8ff) !important;
+  border-color: #a5b4fc !important;
+  color: #312e81 !important;
+}
+
+:global(html[data-theme="light"] .customer-history-box .box-icon) {
+  background: rgba(99, 102, 241, 0.15) !important;
+  color: #4f46e5 !important;
+}
+
+:global(html[data-theme="light"] .customer-history-box h3) {
+  color: #312e81 !important;
+}
+
+:global(html[data-theme="light"] .customer-history-box span) {
+  color: #4f46e5 !important;
 }
 </style>

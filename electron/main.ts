@@ -1943,38 +1943,72 @@ ORDER BY work_orders.id DESC
 kanalEkle('servis-gecmisi-ara', (_event, aramaMetni: any) => {
   try {
     const arama = String(aramaMetni || '').trim()
-    const aramaLike = `%${arama}%`
-    const plakaArama = `%${arama.toUpperCase().replace(/\s+/g, '')}%`
+
+    // Turkish character and case insensitive normalization function
+    const normalizeString = (str: string) => {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/İ/g, 'i')
+        .replace(/I/g, 'ı')
+        .toLowerCase()
+        .replace(/ı/g, 'i')
+        .replace(/ş/g, 's')
+        .replace(/ç/g, 'c')
+        .replace(/ğ/g, 'g')
+        .replace(/ü/g, 'u')
+        .replace(/ö/g, 'o');
+    }
+
+    const temizArama = normalizeString(arama)
+    const temizAramaLike = `%${temizArama}%`
+    const plakaTemizArama = `%${temizArama.replace(/\s+/g, '')}%`
 
     const kayitlar = db.prepare(`
-SELECT
-  work_orders.*,
-  vehicles.plate,
-  vehicles.brand,
-  vehicles.model,
-  vehicles.chassis,
-  vehicles.mileage AS vehicle_mileage,
-  customers.id AS customer_id,
-  customers.name AS customer_name,
-  customers.phone AS customer_phone,
-  opened_master.name AS opened_by_master_name,
-  closed_master.name AS closed_by_master_name
-FROM work_orders
-JOIN vehicles ON work_orders.vehicle_id = vehicles.id
-JOIN customers ON vehicles.customer_id = customers.id
-LEFT JOIN masters opened_master ON work_orders.opened_by_master_id = opened_master.id
-LEFT JOIN masters closed_master ON work_orders.closed_by_master_id = closed_master.id
+      SELECT
+        work_orders.*,
+        vehicles.plate,
+        vehicles.brand,
+        vehicles.model,
+        vehicles.chassis,
+        vehicles.mileage AS vehicle_mileage,
+        customers.id AS customer_id,
+        customers.name AS customer_name,
+        customers.phone AS customer_phone,
+        opened_master.name AS opened_by_master_name,
+        closed_master.name AS closed_by_master_name
+      FROM work_orders
+      JOIN vehicles ON work_orders.vehicle_id = vehicles.id
+      JOIN customers ON vehicles.customer_id = customers.id
+      LEFT JOIN masters opened_master ON work_orders.opened_by_master_id = opened_master.id
+      LEFT JOIN masters closed_master ON work_orders.closed_by_master_id = closed_master.id
       WHERE
         ? = ''
-        OR customers.name LIKE ?
-        OR customers.phone LIKE ?
-        OR REPLACE(UPPER(TRIM(vehicles.plate)), ' ', '') LIKE ?
+        OR normalize_text(customers.name) LIKE ?
+        OR normalize_text(customers.phone) LIKE ?
+        OR normalize_text(REPLACE(vehicles.plate, ' ', '')) LIKE ?
+        OR normalize_text(vehicles.brand) LIKE ?
+        OR normalize_text(vehicles.model) LIKE ?
+        OR normalize_text(work_orders.description) LIKE ?
+        OR work_orders.id IN (
+          SELECT DISTINCT work_order_id
+          FROM work_order_items
+          LEFT JOIN parts ON work_order_items.part_id = parts.id
+          WHERE normalize_text(work_order_items.description) LIKE ?
+             OR normalize_text(parts.name) LIKE ?
+             OR normalize_text(parts.code) LIKE ?
+        )
       ORDER BY work_orders.created_at DESC, work_orders.id DESC
     `).all(
-      arama,
-      aramaLike,
-      aramaLike,
-      plakaArama
+      temizArama,
+      temizAramaLike,
+      temizAramaLike,
+      plakaTemizArama,
+      temizAramaLike,
+      temizAramaLike,
+      temizAramaLike,
+      temizAramaLike,
+      temizAramaLike,
+      temizAramaLike
     ) as any[]
 
     const kalemleriGetir = db.prepare(`

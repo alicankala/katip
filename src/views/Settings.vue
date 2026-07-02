@@ -17,6 +17,7 @@ const temaDegistir = () => {
   tema.value = tema.value === 'dark' ? 'light' : 'dark'
   localStorage.setItem('uygulamaTema', tema.value)
   document.documentElement.setAttribute('data-theme', tema.value)
+  document.documentElement.style.colorScheme = tema.value
 }
 
 const pinForm = reactive({
@@ -208,6 +209,7 @@ const veritabaniBilgileriniGetir = async () => {
 onMounted(() => {
   tema.value = localStorage.getItem('uygulamaTema') || 'dark'
   document.documentElement.setAttribute('data-theme', tema.value)
+  document.documentElement.style.colorScheme = tema.value
 
   aktifUsta.value = JSON.parse(localStorage.getItem('aktifUsta') || 'null')
   veritabaniBilgileriniGetir()

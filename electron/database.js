@@ -8,6 +8,25 @@ const Database = require('better-sqlite3')
 const dbPath = path.join(app.getPath('userData'), 'otoservis.db')
 const db = new Database(dbPath)
 
+// Turkish character and case insensitive normalization function
+function normalizeString(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/İ/g, 'i')
+    .replace(/I/g, 'ı')
+    .toLowerCase()
+    .replace(/ı/g, 'i')
+    .replace(/ş/g, 's')
+    .replace(/ç/g, 'c')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ö/g, 'o');
+}
+
+db.function('normalize_text', (val) => {
+  return normalizeString(val);
+});
+
 function schemaVersionTablosuHazirla() {
   db.exec(`
     CREATE TABLE IF NOT EXISTS schema_version (

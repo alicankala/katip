@@ -2565,4 +2565,18 @@ onMounted(() => {
   font-size: 11px;
   font-weight: 500;
 }
+
+:global(html[data-theme="light"] .extra-info-panel) {
+  background: #ffffff !important;
+  border-color: #d1d5db !important;
+  color: #111827 !important;
+}
+
+:global(html[data-theme="light"] .extra-info-panel h3) {
+  color: #111827 !important;
+}
+
+:global(html[data-theme="light"] .extra-info-panel p) {
+  color: #374151 !important;
+}
 </style>

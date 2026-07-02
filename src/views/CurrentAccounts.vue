@@ -471,20 +471,33 @@ onMounted(async () => {
     </div>
 
     <!-- İstatistik Kartları -->
-    <div class="stat-grid" style="margin-bottom: 20px;">
+    <div class="stat-grid">
       <div class="stat-box">
-        <h3>{{ tlFormatla(genelOzet.totalDebt) }}</h3>
-        <span>Toplam Cari Borç</span>
+        <div class="stat-info">
+          <h3>{{ tlFormatla(genelOzet.totalDebt) }}</h3>
+          <span>Toplam Cari Borç</span>
+        </div>
+        <div class="stat-icon-wrapper red">
+          <i class="pi pi-arrow-up-right" />
+        </div>
       </div>
       <div class="stat-box">
-        <h3 style="color: #10b981;">{{ tlFormatla(genelOzet.totalPaid) }}</h3>
-        <span>Toplam Yapılan Ödeme</span>
+        <div class="stat-info">
+          <h3 style="color: #10b981;">{{ tlFormatla(genelOzet.totalPaid) }}</h3>
+          <span>Toplam Yapılan Ödeme</span>
+        </div>
+        <div class="stat-icon-wrapper green">
+          <i class="pi pi-arrow-down-left" />
+        </div>
       </div>
-      <div class="stat-box" :style="{ borderLeft: genelOzet.remainingDebt > 0 ? '4px solid #ef4444' : '4px solid #10b981' }">
-        <h3 :style="{ color: genelOzet.remainingDebt > 0 ? '#ef4444' : '#10b981' }">
-          {{ tlFormatla(genelOzet.remainingDebt) }}
-        </h3>
-        <span>Kalan Net Borç</span>
+      <div class="stat-box remaining-debt-box" :class="{ 'has-debt': genelOzet.remainingDebt > 0.01 }">
+        <div class="stat-info">
+          <h3>{{ tlFormatla(genelOzet.remainingDebt) }}</h3>
+          <span>Kalan Net Borç</span>
+        </div>
+        <div class="stat-icon-wrapper" :class="genelOzet.remainingDebt > 0.01 ? 'red' : 'green'">
+          <i class="pi pi-wallet" />
+        </div>
       </div>
     </div>
 
@@ -531,26 +544,30 @@ onMounted(async () => {
         >
           <Column field="name" header="Cari Adı / Firma">
             <template #body="slotProps">
-              <div style="font-weight: 600; color: #f8fafc;">{{ slotProps.data.name }}</div>
-              <span class="cari-badge" :class="slotProps.data.type.toLowerCase()">{{ slotProps.data.type }}</span>
+              <div class="cari-liste-ad">{{ slotProps.data.name }}</div>
+              <div class="cari-liste-alt">
+                <span class="cari-badge" :class="slotProps.data.type.toLowerCase()">{{ slotProps.data.type }}</span>
+                <span v-if="slotProps.data.phone" class="cari-liste-tel">
+                  <i class="pi pi-phone" /> {{ slotProps.data.phone }}
+                </span>
+              </div>
             </template>
           </Column>
           
-          <Column field="remaining_debt" header="Net Kalan" style="text-align: right;">
+          <Column field="remaining_debt" header="Net Bakiye" style="text-align: right; width: 130px;">
             <template #body="slotProps">
-              <span :style="{ 
-                color: slotProps.data.remaining_debt > 0.01 ? '#f87171' : '#34d399', 
-                fontWeight: '700' 
-              }">
+              <span class="bakiye-deger" :class="slotProps.data.remaining_debt > 0.01 ? 'borclu' : 'borcsuz'">
                 {{ tlFormatla(slotProps.data.remaining_debt) }}
               </span>
             </template>
           </Column>
           
-          <Column header="Borç / Ödeme" style="text-align: right; width: 160px; font-size: 0.85rem;">
+          <Column header="Toplam Borç / Ödeme" style="text-align: right; width: 160px; font-size: 0.85rem;">
             <template #body="slotProps">
-              <div style="color: #94a3b8;">Borç: {{ tlFormatla(slotProps.data.total_debt) }}</div>
-              <div style="color: #34d399;">Ödeme: {{ tlFormatla(slotProps.data.total_paid) }}</div>
+              <div class="borc-odeme-detay">
+                <span class="borc">B: {{ tlFormatla(slotProps.data.total_debt) }}</span>
+                <span class="odeme">Ö: {{ tlFormatla(slotProps.data.total_paid) }}</span>
+              </div>
             </template>
           </Column>
         </DataTable>
@@ -561,7 +578,9 @@ onMounted(async () => {
         
         <!-- Cari Seçilmediyse Fallback Görünümü -->
         <div v-if="!seciliCari" class="fallback-panel">
-          <i class="pi pi-wallet" style="font-size: 3.5rem; color: #475569; margin-bottom: 15px;" />
+          <div class="fallback-icon-frame">
+            <i class="pi pi-wallet" />
+          </div>
           <h3>Cari Hesap Seçilmedi</h3>
           <p>Detayları, işlem geçmişini ve ödeme hareketlerini görüntülemek için sol taraftaki listeden bir cari hesap seçin.</p>
         </div>
@@ -569,36 +588,38 @@ onMounted(async () => {
         <!-- Cari Detay Arayüzü -->
         <div v-else class="detay-panel">
           <div class="detay-header">
-            <div>
+            <div class="detay-header-info">
               <span class="cari-badge-buyuk" :class="seciliCari.type.toLowerCase()">{{ seciliCari.type }}</span>
               <h3 class="detay-title">{{ seciliCari.name }}</h3>
-              <div class="detay-iletisim" v-if="seciliCari.phone">
-                <i class="pi pi-phone" /> {{ seciliCari.phone }}
-              </div>
-              <div class="detay-not" v-if="seciliCari.note">
-                <strong>Not:</strong> {{ seciliCari.note }}
+              <div class="detay-meta">
+                <div class="detay-iletisim" v-if="seciliCari.phone">
+                  <i class="pi pi-phone" /> <span>{{ seciliCari.phone }}</span>
+                </div>
+                <div class="detay-not" v-if="seciliCari.note">
+                  <i class="pi pi-info-circle" /> <span><strong>Not:</strong> {{ seciliCari.note }}</span>
+                </div>
               </div>
             </div>
             
             <div class="detay-header-actions">
-              <Button icon="pi pi-pencil" outlined rounded severity="info" @click="cariDuzenle(seciliCari)" style="margin-right: 8px;" />
-              <Button icon="pi pi-trash" outlined rounded severity="danger" @click="cariSil(seciliCari)" />
+              <Button icon="pi pi-pencil" outlined rounded severity="info" @click="cariDuzenle(seciliCari)" title="Cariyi Düzenle" />
+              <Button icon="pi pi-trash" outlined rounded severity="danger" @click="cariSil(seciliCari)" title="Cariyi Sil" />
             </div>
           </div>
 
           <!-- Seçili Cari Bakiyesi -->
           <div class="bakiye-kart">
-            <div class="bakiye-sutun">
+            <div class="bakiye-sutun total-debt">
               <span class="baslik">Toplam Borç</span>
               <span class="tutar">{{ tlFormatla(seciliCari.total_debt) }}</span>
             </div>
-            <div class="bakiye-sutun">
+            <div class="bakiye-sutun total-paid">
               <span class="baslik">Yapılan Ödeme</span>
-              <span class="tutar" style="color: #34d399;">{{ tlFormatla(seciliCari.total_paid) }}</span>
+              <span class="tutar">{{ tlFormatla(seciliCari.total_paid) }}</span>
             </div>
-            <div class="bakiye-sutun">
+            <div class="bakiye-sutun remaining-debt">
               <span class="baslik">Kalan Borç</span>
-              <span class="tutar" :style="{ color: seciliCari.remaining_debt > 0.01 ? '#f87171' : '#34d399' }">
+              <span class="tutar" :class="{ 'has-debt': seciliCari.remaining_debt > 0.01 }">
                 {{ tlFormatla(seciliCari.remaining_debt) }}
               </span>
             </div>
@@ -734,28 +755,38 @@ onMounted(async () => {
     <Dialog 
       v-model:visible="cariDialogAcik" 
       :header="cariForm.id ? 'Cari Hesap Bilgilerini Düzenle' : 'Yeni Cari Hesap Kaydı'" 
-      :style="{ width: '450px' }" 
+      :style="{ width: '460px' }" 
       modal
     >
       <div class="dialog-form">
         <div class="form-group">
-          <label>Firma / Kişi Adı <span style="color: #ef4444;">*</span></label>
-          <InputText v-model="cariForm.name" placeholder="Örn: Öz Hilal Rektefiye Sanayi" autofocus />
+          <label>Firma / Kişi Adı <span class="zorunlu-alan">*</span></label>
+          <InputText v-model="cariForm.name" placeholder="Örn: Öz Hilal Rektefiye Sanayi veya Ahmet Demir" autofocus />
+          <span class="form-helper">Cari firmanın resmi adını ya da kişinin adını ve soyadını yazın.</span>
         </div>
         
         <div class="form-group">
-          <label>Cari Tipi <span style="color: #ef4444;">*</span></label>
-          <InputText v-model="cariForm.type" placeholder="Örn: Turbocu, Rektefiyeci, Lastikçi" />
+          <label>Cari Tipi <span class="zorunlu-alan">*</span></label>
+          <Dropdown 
+            v-model="cariForm.type" 
+            :options="dinamikCariTipleri" 
+            editable 
+            placeholder="Cari tipi seçin veya yazın (Örn: Parçacı)" 
+            style="width: 100%;"
+          />
+          <span class="form-helper">Tedarikçinin kategorisi (Örn: Parçacı, Kaportacı). Seçebilir ya da yeni yazabilirsiniz.</span>
         </div>
         
         <div class="form-group">
           <label>Telefon Numarası</label>
           <InputText v-model="cariForm.phone" placeholder="Örn: 0555 123 4567" />
+          <span class="form-helper">İletişim için cep veya iş telefonu numarası.</span>
         </div>
         
         <div class="form-group">
           <label>Açıklama / Özel Not</label>
-          <InputText v-model="cariForm.note" placeholder="Örn: Vade toleransı var, motor rektefiye işi" />
+          <InputText v-model="cariForm.note" placeholder="Örn: Ödemeler ay sonu yapılır, motor rektefiye iş ortağı" />
+          <span class="form-helper">Cari hesaba dair özel vade anlaşmaları, fatura detayları veya genel notlar.</span>
         </div>
       </div>
       
@@ -765,39 +796,43 @@ onMounted(async () => {
       </template>
     </Dialog>
 
-    <!-- DIALOG 2: İşlem Ekle -->
+    <!-- DIALOG 2: Cari İşlem Ekle (Borç Kaydı) -->
     <Dialog 
       v-model:visible="islemDialogAcik" 
       header="Cari İşlem Ekle (Borç Kaydı)" 
-      :style="{ width: '500px' }" 
+      :style="{ width: '520px' }" 
       modal
     >
       <div class="dialog-form" v-if="seciliCari">
         <div class="form-group">
           <label>Cari Hesap</label>
-          <InputText :value="seciliCari.name" readonly style="background-color: #1e293b; color: #94a3b8;" />
+          <InputText :value="seciliCari.name" readonly style="background-color: #1e293b; color: #94a3b8;" class="form-readonly-input" />
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div class="form-row-two">
           <div class="form-group">
-            <label>Fiş / İşlem Tarihi <span style="color: #ef4444;">*</span></label>
+            <label>Fiş / İşlem Tarihi <span class="zorunlu-alan">*</span></label>
             <input type="date" v-model="islemForm.date" class="tarih-input" />
+            <span class="form-helper">İşlemin yapıldığı fatura/fiş tarihi.</span>
           </div>
           
           <div class="form-group">
-            <label>İşlem Tipi <span style="color: #ef4444;">*</span></label>
-            <Dropdown v-model="islemForm.transaction_type" :options="islemTipleri" />
+            <label>İşlem Tipi <span class="zorunlu-alan">*</span></label>
+            <Dropdown v-model="islemForm.transaction_type" :options="islemTipleri" style="width: 100%;" />
+            <span class="form-helper">İşlemin finansal kategorisi.</span>
           </div>
         </div>
 
         <div class="form-group">
-          <label>Tutar (TL) <span style="color: #ef4444;">*</span></label>
-          <input type="number" step="0.01" v-model="islemForm.amount" class="tarih-input" placeholder="Tutar girin" />
+          <label>Tutar (TL) <span class="zorunlu-alan">*</span></label>
+          <input type="number" step="0.01" v-model="islemForm.amount" class="tarih-input" placeholder="0.00" />
+          <span class="form-helper">Borç olarak kaydedilecek tutar (KDV dahil).</span>
         </div>
 
         <div class="form-group">
-          <label>Yapılan İş / Alınan Mal (Açıklama) <span style="color: #ef4444;">*</span></label>
-          <InputText v-model="islemForm.description" placeholder="Örn: Motor rektefiye & kapak taşlama" />
+          <label>Yapılan İş / Alınan Mal (Açıklama) <span class="zorunlu-alan">*</span></label>
+          <InputText v-model="islemForm.description" placeholder="Örn: Motor rektefiye & kapak taşlama veya 4 Adet Lastik Alımı" />
+          <span class="form-helper">Alınan hizmetin veya parçanın kısa detayı.</span>
         </div>
 
         <div class="form-group">
@@ -810,11 +845,13 @@ onMounted(async () => {
             placeholder="Araç plaka seçin"
             filter
             showClear
+            style="width: 100%;"
           >
             <template #option="slotProps">
               {{ slotProps.option.plate }} - {{ slotProps.option.brand }} {{ slotProps.option.model }} ({{ slotProps.option.customer_name }})
             </template>
           </Dropdown>
+          <span class="form-helper">Bu borç belirli bir araca aitse seçebilirsiniz.</span>
         </div>
 
         <div class="form-group">
@@ -827,16 +864,19 @@ onMounted(async () => {
             placeholder="İş emri seçin"
             filter
             showClear
+            style="width: 100%;"
           >
             <template #option="slotProps">
               İş Emri #{{ slotProps.option.id }} - {{ slotProps.option.plate }} ({{ slotProps.option.customer_name }}) [{{ slotProps.option.status }}]
             </template>
           </Dropdown>
+          <span class="form-helper">Bu işlem aktif bir servis iş emri ile ilgiliyse finansal eşleşme sağlar.</span>
         </div>
 
         <div class="form-group">
           <label>Not / Ekstra Açıklama</label>
-          <InputText v-model="islemForm.note" placeholder="Örn: 2 gün sürdü, garanti verildi" />
+          <InputText v-model="islemForm.note" placeholder="Örn: Fatura No: 12345, Garanti verildi" />
+          <span class="form-helper">Varsa fatura no, teslimat detayları veya diğer notlar.</span>
         </div>
       </div>
       
@@ -846,34 +886,37 @@ onMounted(async () => {
       </template>
     </Dialog>
 
-    <!-- DIALOG 3: Ödeme Ekle -->
+    <!-- DIALOG 3: Ödeme Kaydet -->
     <Dialog 
       v-model:visible="odemeDialogAcik" 
       header="Ödeme Kaydet" 
-      :style="{ width: '480px' }" 
+      :style="{ width: '500px' }" 
       modal
     >
       <div class="dialog-form" v-if="seciliCari">
         <div class="form-group">
           <label>Cari Hesap</label>
-          <InputText :value="seciliCari.name" readonly style="background-color: #1e293b; color: #94a3b8;" />
+          <InputText :value="seciliCari.name" readonly style="background-color: #1e293b; color: #94a3b8;" class="form-readonly-input" />
         </div>
 
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div class="form-row-two">
           <div class="form-group">
-            <label>Ödeme Tarihi <span style="color: #ef4444;">*</span></label>
+            <label>Ödeme Tarihi <span class="zorunlu-alan">*</span></label>
             <input type="date" v-model="odemeForm.date" class="tarih-input" />
+            <span class="form-helper">Ödemenin fiili yapıldığı tarih.</span>
           </div>
           
           <div class="form-group">
-            <label>Ödeme Yöntemi <span style="color: #ef4444;">*</span></label>
-            <Dropdown v-model="odemeForm.payment_method" :options="odemeYontemleri" />
+            <label>Ödeme Yöntemi <span class="zorunlu-alan">*</span></label>
+            <Dropdown v-model="odemeForm.payment_method" :options="odemeYontemleri" style="width: 100%;" />
+            <span class="form-helper">Yapılan ödeme kanalı.</span>
           </div>
         </div>
 
         <div class="form-group">
-          <label>Ödeme Tutarı (TL) <span style="color: #ef4444;">*</span></label>
-          <input type="number" step="0.01" v-model="odemeForm.amount" class="tarih-input" placeholder="Ödeme tutarı girin" />
+          <label>Ödeme Tutarı (TL) <span class="zorunlu-alan">*</span></label>
+          <input type="number" step="0.01" v-model="odemeForm.amount" class="tarih-input" placeholder="0.00" />
+          <span class="form-helper">Yapılan ödemenin tutarı.</span>
         </div>
 
         <div class="form-group">
@@ -885,16 +928,19 @@ onMounted(async () => {
             optionValue="id" 
             placeholder="Belirli bir borç fişiyle eşleştirin"
             showClear
+            style="width: 100%;"
           >
             <template #option="slotProps">
               {{ tarihFormatla(slotProps.option.date) }} - {{ slotProps.option.description }} ({{ tlFormatla(slotProps.option.amount) }})
             </template>
           </Dropdown>
+          <span class="form-helper">Bu ödemeyi belirli bir borç faturasına bağlayarak o faturayı kapatabilirsiniz.</span>
         </div>
 
         <div class="form-group">
           <label>Ödeme Açıklaması</label>
-          <InputText v-model="odemeForm.description" placeholder="Örn: Nakit elden ödendi, EFT yapıldı" />
+          <InputText v-model="odemeForm.description" placeholder="Örn: Vakıfbank EFT - Dekont No: 98765 veya Nakit elden" />
+          <span class="form-helper">Banka adı, dekont numarası, parayı teslim alan kişi vb. detaylar.</span>
         </div>
       </div>
       
@@ -934,27 +980,6 @@ onMounted(async () => {
 .cari-tablo {
   flex: 1;
   overflow-y: auto;
-}
-
-/* Fallback panel styling */
-.fallback-panel {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  color: #64748b;
-  padding: 30px;
-}
-.fallback-panel h3 {
-  margin: 10px 0 5px;
-  color: #cbd5e1;
-}
-.fallback-panel p {
-  font-size: 0.9rem;
-  max-width: 320px;
-  line-height: 1.4;
 }
 
 /* Badges for Cari types */
@@ -1003,52 +1028,6 @@ onMounted(async () => {
   font-size: 1.4rem;
   color: #f9fafb;
 }
-.detay-iletisim {
-  color: #94a3b8;
-  font-size: 0.9rem;
-  margin-top: 5px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.detay-not {
-  background: #1e293b;
-  border-left: 3px solid #3b82f6;
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin-top: 8px;
-  font-size: 0.85rem;
-  color: #cbd5e1;
-}
-
-/* Balance Card layout */
-.bakiye-kart {
-  background: #1e293b;
-  border: 1px solid #334155;
-  border-radius: 8px;
-  padding: 15px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  text-align: center;
-  gap: 10px;
-  margin-bottom: 15px;
-}
-.bakiye-sutun {
-  display: flex;
-  flex-direction: column;
-}
-.bakiye-sutun .baslik {
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  color: #94a3b8;
-  letter-spacing: 0.5px;
-}
-.bakiye-sutun .tutar {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: #ef4444;
-  margin-top: 4px;
-}
 
 .eylem-satiri {
   display: flex;
@@ -1057,38 +1036,6 @@ onMounted(async () => {
 }
 .flex-1 {
   flex: 1;
-}
-
-/* Detail Tabs */
-.detay-sekmeler {
-  display: flex;
-  gap: 5px;
-  border-bottom: 1px solid #1f2937;
-  margin-bottom: 12px;
-}
-.sekme-btn {
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: #94a3b8;
-  padding: 8px 16px;
-  font-size: 0.9rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-  transition: all 0.2s;
-  border-radius: 4px 4px 0 0;
-}
-.sekme-btn:hover {
-  color: #f1f5f9;
-  background: rgba(255, 255, 255, 0.03);
-}
-.sekme-btn.aktif {
-  color: #3b82f6;
-  border-bottom-color: #3b82f6;
-  background: rgba(59, 130, 246, 0.05);
 }
 
 .sekme-icerik {
@@ -1112,14 +1059,15 @@ onMounted(async () => {
 }
 .iliskili-etiket {
   font-size: 0.72rem;
-  background: #020617;
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.2);
-  padding: 1px 6px;
+  background: rgba(56, 189, 248, 0.08);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  padding: 2px 6px;
   border-radius: 4px;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
+  font-weight: 600;
 }
 .islem-not {
   display: block;
@@ -1170,5 +1118,496 @@ onMounted(async () => {
   padding: 2px 6px;
   border-radius: 4px;
   font-weight: 600;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-box {
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+}
+
+.stat-box:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  border-color: #3b82f6;
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-info h3 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  color: #f9fafb;
+}
+
+.stat-info span {
+  display: block;
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.stat-icon-wrapper {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+}
+
+.stat-icon-wrapper.red {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.stat-icon-wrapper.green {
+  background: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.stat-box.remaining-debt-box {
+  border-left: 4px solid #34d399;
+}
+
+.stat-box.remaining-debt-box.has-debt {
+  border-left: 4px solid #f87171;
+}
+
+.stat-box.remaining-debt-box h3 {
+  color: #34d399;
+}
+
+.stat-box.remaining-debt-box.has-debt h3 {
+  color: #f87171;
+}
+
+/* Light Theme overrides for statistics */
+:global(html[data-theme="light"] .stat-box) {
+  background: #ffffff !important;
+  border-color: #e5e7eb !important;
+  color: #111827 !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05) !important;
+}
+:global(html[data-theme="light"] .stat-box:hover) {
+  border-color: #3b82f6 !important;
+}
+:global(html[data-theme="light"] .stat-info h3) {
+  color: #111827 !important;
+}
+:global(html[data-theme="light"] .stat-box.remaining-debt-box h3) {
+  color: #166534 !important;
+}
+:global(html[data-theme="light"] .stat-box.remaining-debt-box.has-debt h3) {
+  color: #b91c1c !important;
+}
+
+/* List item improvements */
+.cari-liste-ad {
+  font-weight: 600;
+  color: #f8fafc;
+  font-size: 0.95rem;
+  margin-bottom: 3px;
+}
+:global(html[data-theme="light"] .cari-liste-ad) {
+  color: #111827;
+}
+
+.cari-liste-alt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cari-liste-tel {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+:global(html[data-theme="light"] .cari-liste-tel) {
+  color: #4b5563;
+}
+
+.bakiye-deger {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.bakiye-deger.borclu {
+  color: #f87171;
+}
+.bakiye-deger.borcsuz {
+  color: #34d399;
+}
+
+.borc-odeme-detay {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.82rem;
+  gap: 2px;
+}
+.borc-odeme-detay .borc {
+  color: #94a3b8;
+}
+:global(html[data-theme="light"] .borc-odeme-detay .borc) {
+  color: #4b5563;
+}
+.borc-odeme-detay .odeme {
+  color: #34d399;
+}
+
+/* Highlighted Row */
+:global(.cari-tablo .p-datatable-tbody > tr.p-highlight) {
+  background: rgba(56, 189, 248, 0.08) !important;
+  color: #38bdf8 !important;
+  border-left: 3px solid #38bdf8;
+}
+:global(html[data-theme="light"] .cari-tablo .p-datatable-tbody > tr.p-highlight) {
+  background: rgba(56, 189, 248, 0.12) !important;
+}
+
+/* Fallback Panel styles */
+.fallback-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+  color: #94a3b8;
+  padding: 40px 20px;
+  border: 2px dashed rgba(148, 163, 184, 0.15);
+  border-radius: 12px;
+  background: rgba(30, 41, 59, 0.2);
+}
+:global(html[data-theme="light"] .fallback-panel) {
+  border-color: rgba(75, 85, 99, 0.2) !important;
+  background: rgba(243, 244, 246, 0.5) !important;
+  color: #4b5563 !important;
+}
+
+.fallback-icon-frame {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: rgba(148, 163, 184, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+}
+.fallback-icon-frame i {
+  font-size: 2.2rem;
+  color: #64748b;
+}
+
+.fallback-panel h3 {
+  margin: 10px 0 5px;
+  color: #f8fafc;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+:global(html[data-theme="light"] .fallback-panel h3) {
+  color: #111827 !important;
+}
+
+.fallback-panel p {
+  font-size: 0.9rem;
+  max-width: 320px;
+  line-height: 1.5;
+  color: #64748b;
+}
+:global(html[data-theme="light"] .fallback-panel p) {
+  color: #4b5563 !important;
+}
+
+/* Detail Panel and Header */
+.detay-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.detay-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.detay-iletisim, .detay-not {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+:global(html[data-theme="light"] .detay-iletisim),
+:global(html[data-theme="light"] .detay-not) {
+  color: #4b5563 !important;
+}
+.detay-not {
+  background: rgba(59, 130, 246, 0.05);
+  border-left: 3px solid #3b82f6;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  align-items: flex-start;
+}
+.detay-not i {
+  margin-top: 3px;
+  color: #3b82f6;
+}
+.detay-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Balance Card layout */
+.bakiye-kart {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  border: 1px solid #334155;
+  border-radius: 12px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  text-align: center;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+:global(html[data-theme="light"] .bakiye-kart) {
+  background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%) !important;
+  border-color: #cbd5e1 !important;
+}
+
+.bakiye-sutun {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 8px 0;
+}
+.bakiye-sutun:not(:last-child) {
+  border-right: 1px solid #334155;
+}
+:global(html[data-theme="light"] .bakiye-sutun:not(:last-child)) {
+  border-right-color: #cbd5e1 !important;
+}
+
+.bakiye-sutun .baslik {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #94a3b8;
+  letter-spacing: 0.5px;
+  font-weight: 700;
+}
+:global(html[data-theme="light"] .bakiye-sutun .baslik) {
+  color: #4b5563 !important;
+}
+
+.bakiye-sutun .tutar {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #f8fafc;
+  margin-top: 6px;
+}
+:global(html[data-theme="light"] .bakiye-sutun .tutar) {
+  color: #111827 !important;
+}
+
+.bakiye-sutun.total-debt .tutar {
+  color: #f87171;
+}
+:global(html[data-theme="light"] .bakiye-sutun.total-debt .tutar) {
+  color: #dc2626 !important;
+}
+
+.bakiye-sutun.total-paid .tutar {
+  color: #34d399;
+}
+:global(html[data-theme="light"] .bakiye-sutun.total-paid .tutar) {
+  color: #16a34a !important;
+}
+
+.bakiye-sutun.remaining-debt .tutar {
+  color: #34d399;
+}
+:global(html[data-theme="light"] .bakiye-sutun.remaining-debt .tutar) {
+  color: #16a34a !important;
+}
+
+.bakiye-sutun.remaining-debt .tutar.has-debt {
+  color: #f87171;
+}
+:global(html[data-theme="light"] .bakiye-sutun.remaining-debt .tutar.has-debt) {
+  color: #dc2626 !important;
+}
+
+/* Detail Tabs */
+.detay-sekmeler {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid #334155;
+  margin-bottom: 16px;
+  padding-bottom: 1px;
+}
+:global(html[data-theme="light"] .detay-sekmeler) {
+  border-bottom-color: #cbd5e1 !important;
+}
+
+.sekme-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #94a3b8;
+  padding: 10px 18px;
+  font-size: 0.88rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  transition: all 0.2s ease-in-out;
+  border-radius: 8px 8px 0 0;
+}
+.sekme-btn:hover {
+  color: #f1f5f9;
+  background: rgba(148, 163, 184, 0.05);
+}
+:global(html[data-theme="light"] .sekme-btn:hover) {
+  color: #111827 !important;
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+
+.sekme-btn.aktif {
+  color: #38bdf8;
+  border-bottom-color: #38bdf8;
+  background: rgba(56, 189, 248, 0.06);
+}
+:global(html[data-theme="light"] .sekme-btn.aktif) {
+  color: #0284c7 !important;
+  border-bottom-color: #0284c7 !important;
+  background: rgba(2, 132, 199, 0.06) !important;
+}
+
+/* Form layout helpers */
+.zorunlu-alan {
+  color: #ef4444;
+  margin-left: 2px;
+  font-weight: bold;
+}
+.form-helper {
+  font-size: 0.75rem;
+  color: #64748b;
+  margin-top: 3px;
+  line-height: 1.3;
+}
+:global(html[data-theme="light"] .form-helper) {
+  color: #4b5563 !important;
+}
+
+.form-row-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 600px) {
+  .form-row-two {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+.form-readonly-input {
+  background-color: #1e293b !important;
+  color: #94a3b8 !important;
+  border-color: #334155 !important;
+}
+:global(html[data-theme="light"] .form-readonly-input) {
+  background-color: #f3f4f6 !important;
+  color: #4b5563 !important;
+  border-color: #cbd5e1 !important;
+}
+
+:global(html[data-theme="light"] .tarih-input) {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #cbd5e1 !important;
+}
+:global(html[data-theme="light"] .tarih-input:focus) {
+  border-color: #3b82f6 !important;
+}
+
+:global(html[data-theme="light"] .stat-icon-wrapper.red) {
+  background: rgba(239, 68, 68, 0.1) !important;
+  color: #dc2626 !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+}
+:global(html[data-theme="light"] .stat-icon-wrapper.green) {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #16a34a !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+:global(html[data-theme="light"] .bakiye-deger.borclu) {
+  color: #dc2626 !important;
+}
+:global(html[data-theme="light"] .bakiye-deger.borcsuz) {
+  color: #16a34a !important;
+}
+
+:global(html[data-theme="light"] .islem-type-tag) {
+  background: #e5e7eb !important;
+  color: #374151 !important;
+}
+
+:global(html[data-theme="light"] .iliskili-etiket) {
+  background: rgba(2, 132, 199, 0.08) !important;
+  color: #0284c7 !important;
+  border-color: rgba(2, 132, 199, 0.2) !important;
+}
+
+:global(html[data-theme="light"] .odeme-yontem-tag) {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #10b981 !important;
+  border-color: rgba(16, 185, 129, 0.25) !important;
+}
+
+:global(html[data-theme="light"] .parçacı) { background: rgba(59, 130, 246, 0.1) !important; color: #1d4ed8 !important; border-color: rgba(59, 130, 246, 0.25) !important; }
+:global(html[data-theme="light"] .kaportacı) { background: rgba(139, 92, 246, 0.1) !important; color: #6d28d9 !important; border-color: rgba(139, 92, 246, 0.25) !important; }
+:global(html[data-theme="light"] .boyacı) { background: rgba(236, 72, 153, 0.1) !important; color: #be185d !important; border-color: rgba(236, 72, 153, 0.25) !important; }
+:global(html[data-theme="light"] .turbocu) { background: rgba(245, 158, 11, 0.1) !important; color: #b45309 !important; border-color: rgba(245, 158, 11, 0.25) !important; }
+:global(html[data-theme="light"] .rektefiyeci) { background: rgba(239, 68, 68, 0.1) !important; color: #b91c1c !important; border-color: rgba(239, 68, 68, 0.25) !important; }
+:global(html[data-theme="light"] .tornacı) { background: rgba(16, 185, 129, 0.1) !important; color: #047857 !important; border-color: rgba(16, 185, 129, 0.25) !important; }
+:global(html[data-theme="light"] .elektrikçi) { background: rgba(6, 182, 212, 0.1) !important; color: #0e7490 !important; border-color: rgba(6, 182, 212, 0.25) !important; }
+:global(html[data-theme="light"] .egzozcu) { background: rgba(107, 114, 128, 0.1) !important; color: #4b5563 !important; border-color: rgba(107, 114, 128, 0.25) !important; }
+:global(html[data-theme="light"] .döşemeci) { background: rgba(217, 70, 239, 0.1) !important; color: #a21caf !important; border-color: rgba(217, 70, 239, 0.25) !important; }
+:global(html[data-theme="light"] .diğer) { background: rgba(148, 163, 184, 0.1) !important; color: #475569 !important; border-color: rgba(148, 163, 184, 0.25) !important; }
+
+:global(html[data-theme="light"] .cari-tablo .p-datatable-tbody > tr.p-highlight) {
+  background: rgba(56, 189, 248, 0.12) !important;
+  color: #0369a1 !important;
 }
 </style>

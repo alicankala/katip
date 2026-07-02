@@ -19,6 +19,7 @@ const aktifUsta = ref(null)
 const temaUygula = () => {
   const kayitliTema = localStorage.getItem('uygulamaTema') || 'dark'
   document.documentElement.setAttribute('data-theme', kayitliTema)
+  document.documentElement.style.colorScheme = kayitliTema
 }
 
 const menuItems = ref([
@@ -653,10 +654,6 @@ onUnmounted(() => {
 :global(html[data-theme="light"] .login-card),
 :global(html[data-theme="light"] .app-sidebar),
 :global(html[data-theme="light"] .active-master-box),
-:global(html[data-theme="light"] .sidebar-brand),
-:global(html[data-theme="light"] .sidebar-system-title),
-:global(html[data-theme="light"] .brand-hero),
-:global(html[data-theme="light"] .brand-logo-frame),
 :global(html[data-theme="light"] .panel),
 :global(html[data-theme="light"] .stat-card),
 :global(html[data-theme="light"] .info-panel),
@@ -677,6 +674,40 @@ onUnmounted(() => {
   border-color: #d1d5db !important;
   color: #111827 !important;
   box-shadow: none !important;
+}
+
+:global(html[data-theme="light"] .brand-hero) {
+  background:
+    radial-gradient(circle at top, rgba(56, 189, 248, 0.12), transparent 45%),
+    linear-gradient(180deg, #ffffff 0%, #f3f4f6 100%) !important;
+  border: 1px solid rgba(148, 163, 184, 0.3) !important;
+  color: #111827 !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05) !important;
+}
+
+:global(html[data-theme="light"] .brand-logo-frame) {
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(14, 165, 233, 0.05)),
+    #ffffff !important;
+  border: 1px solid rgba(125, 211, 252, 0.5) !important;
+  box-shadow: 0 8px 20px rgba(14, 165, 233, 0.1) !important;
+}
+
+:global(html[data-theme="light"] .sidebar-brand) {
+  background:
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.12), transparent 55%),
+    linear-gradient(180deg, #ffffff 0%, #f3f4f6 100%) !important;
+  border: 1px solid rgba(148, 163, 184, 0.3) !important;
+  color: #111827 !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05) !important;
+}
+
+:global(html[data-theme="light"] .sidebar-system-title) {
+  background:
+    radial-gradient(circle at top, rgba(56, 189, 248, 0.10), transparent 58%),
+    linear-gradient(180deg, #ffffff 0%, #f9fafb 100%) !important;
+  border: 1px solid rgba(96, 165, 250, 0.4) !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05) !important;
 }
 
 :global(html[data-theme="light"] .app-sidebar) {
