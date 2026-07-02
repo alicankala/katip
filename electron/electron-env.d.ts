@@ -62,5 +62,17 @@ veritabaniYedekle: () => Promise<any>
 yedekKlasorunuAc: () => Promise<any>
 yedektenGeriYukle: () => Promise<any>
 veritabaniBilgileriGetir: () => Promise<any>
+
+    // Cari Hesaplar
+    cariHesapleriGetir: () => Promise<any>
+    cariHesapEkle: (hesap: any) => Promise<any>
+    cariHesapGuncelle: (hesap: any) => Promise<any>
+    cariHesapSil: (id: number) => Promise<any>
+    cariIslemleriGetir: (currentAccountId: number) => Promise<any>
+    cariIslemEkle: (islem: any) => Promise<any>
+    cariIslemSil: (id: number) => Promise<any>
+    cariOdemeleriGetir: (currentAccountId: number) => Promise<any>
+    cariOdemeEkle: (odeme: any) => Promise<any>
+    cariOdemeSil: (id: number) => Promise<any>
   }
 }

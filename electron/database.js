@@ -278,6 +278,49 @@ migrationCalistir(14, () => {
   kolonEkleEksikse('stock_movements', 'master_id', 'INTEGER')
 })
 
+migrationCalistir(15, () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS current_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL,
+      phone TEXT,
+      note TEXT,
+      is_active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS account_transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      current_account_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      transaction_type TEXT NOT NULL,
+      description TEXT,
+      amount REAL NOT NULL DEFAULT 0,
+      vehicle_id INTEGER,
+      work_order_id INTEGER,
+      note TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(current_account_id) REFERENCES current_accounts(id),
+      FOREIGN KEY(vehicle_id) REFERENCES vehicles(id),
+      FOREIGN KEY(work_order_id) REFERENCES work_orders(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS account_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      current_account_id INTEGER NOT NULL,
+      transaction_id INTEGER,
+      date TEXT NOT NULL,
+      amount REAL NOT NULL DEFAULT 0,
+      payment_method TEXT NOT NULL,
+      description TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(current_account_id) REFERENCES current_accounts(id),
+      FOREIGN KEY(transaction_id) REFERENCES account_transactions(id) ON DELETE SET NULL
+    );
+  `)
+})
+
 console.log('Veritabanı hazır ve tablolar oluşturuldu! Yol:', dbPath)
 }
 

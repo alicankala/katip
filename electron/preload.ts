@@ -53,5 +53,17 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   yedekKlasorunuAc: () => ipcRenderer.invoke('yedek-klasoru-ac'),
   yedekKlasoruAc: () => ipcRenderer.invoke('yedek-klasoru-ac'),
   yedektenGeriYukle: () => ipcRenderer.invoke('yedekten-geri-yukle'),
-  veritabaniBilgileriGetir: () => ipcRenderer.invoke('veritabani-bilgileri-getir')
+  veritabaniBilgileriGetir: () => ipcRenderer.invoke('veritabani-bilgileri-getir'),
+
+  // Cari Hesaplar
+  cariHesapleriGetir: () => ipcRenderer.invoke('cari-hesaplari-getir'),
+  cariHesapEkle: (hesap) => ipcRenderer.invoke('cari-hesap-ekle', hesap),
+  cariHesapGuncelle: (hesap) => ipcRenderer.invoke('cari-hesap-guncelle', hesap),
+  cariHesapSil: (id) => ipcRenderer.invoke('cari-hesap-sil', id),
+  cariIslemleriGetir: (currentAccountId) => ipcRenderer.invoke('cari-islemleri-getir', currentAccountId),
+  cariIslemEkle: (islem) => ipcRenderer.invoke('cari-islem-ekle', islem),
+  cariIslemSil: (id) => ipcRenderer.invoke('cari-islem-sil', id),
+  cariOdemeleriGetir: (currentAccountId) => ipcRenderer.invoke('cari-odemeleri-getir', currentAccountId),
+  cariOdemeEkle: (odeme) => ipcRenderer.invoke('cari-odeme-ekle', odeme),
+  cariOdemeSil: (id) => ipcRenderer.invoke('cari-odeme-sil', id)
 })

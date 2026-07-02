@@ -27,9 +27,10 @@ const menuItems = ref([
   { label: 'İş Emirleri', icon: 'pi pi-wrench', command: () => router.push('/work-orders') },
   { label: 'Müşteriler', icon: 'pi pi-users', command: () => router.push('/customers') },
   { label: 'Araçlar', icon: 'pi pi-car', command: () => router.push('/vehicles') },
-{ label: 'Parça / Stok', icon: 'pi pi-box', command: () => router.push('/parts') },
-{ label: 'İç Kâr Raporu', icon: 'pi pi-chart-line', command: () => router.push('/profit-report') },
-{ label: 'Ayarlar', icon: 'pi pi-cog', command: () => router.push('/settings') }
+  { label: 'Parça / Stok', icon: 'pi pi-box', command: () => router.push('/parts') },
+  { label: 'Cari Hesap', icon: 'pi pi-wallet', command: () => router.push('/current-accounts') },
+  { label: 'İç Kâr Raporu', icon: 'pi pi-chart-line', command: () => router.push('/profit-report') },
+  { label: 'Ayarlar', icon: 'pi pi-cog', command: () => router.push('/settings') }
 ])
 
 const ustalariYukle = async () => {
