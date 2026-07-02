@@ -337,26 +337,27 @@ migrationCalistir(15, () => {
       FOREIGN KEY(current_account_id) REFERENCES current_accounts(id),
       FOREIGN KEY(transaction_id) REFERENCES account_transactions(id) ON DELETE SET NULL
     );
-  })
-  
-  migrationCalistir(16, () => {
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS general_expenses (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        expense_type TEXT NOT NULL,
-        company_name TEXT,
-        period TEXT,
-        expense_date TEXT NOT NULL,
-        due_date TEXT,
-        amount REAL NOT NULL DEFAULT 0,
-        status TEXT NOT NULL DEFAULT 'Ödenmedi',
-        payment_date TEXT,
-        payment_method TEXT,
-        note TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `)
-  })
+  `)
+})
+
+migrationCalistir(16, () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS general_expenses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      expense_type TEXT NOT NULL,
+      company_name TEXT,
+      period TEXT,
+      expense_date TEXT NOT NULL,
+      due_date TEXT,
+      amount REAL NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'Ödenmedi',
+      payment_date TEXT,
+      payment_method TEXT,
+      note TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `)
+})
 
   console.log('Veritabanı hazır ve tablolar oluşturuldu! Yol:', dbPath)
 }
