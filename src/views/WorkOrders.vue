@@ -1788,7 +1788,7 @@ onMounted(() => {
     </div>
 
     <div
-      style="background: #111827; border: 1px solid #374151; padding: 12px; border-radius: 8px; color: #cbd5e1;"
+      style="background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; color: var(--text-secondary);"
     >
       Parça miktarı veya parça seçimi değişirse stok hareketi otomatik güncellenir.
     </div>
@@ -1817,7 +1817,7 @@ onMounted(() => {
     </div>
   </div>
       <div v-if="seciliIsEmri" style="display: flex; flex-direction: column; gap: 20px;">
-        <div style="background: #111827; border: 1px solid #374151; padding: 15px; border-radius: 8px;">
+        <div style="background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; color: var(--text-primary);">
           <div style="display: flex; justify-content: space-between; gap: 20px;">
             <div>
 <strong>Plaka:</strong> {{ seciliIsEmri.plate }} <br>
@@ -2134,9 +2134,9 @@ onMounted(() => {
 }
 .inline-empty-panel {
   margin-top: 18px;
-  background: #111827;
-  border: 1px dashed #374151;
-  color: #94a3b8;
+  background: var(--bg-active-box);
+  border: 1px dashed var(--border-color);
+  color: var(--text-secondary);
   padding: 18px;
   border-radius: 8px;
   text-align: center;
@@ -2144,8 +2144,8 @@ onMounted(() => {
 
 .inline-kalem-panel {
   margin-top: 18px;
-  background: #111827;
-  border: 1px solid #374151;
+  background: var(--bg-active-box);
+  border: 1px solid var(--border-color);
   padding: 18px;
   border-radius: 10px;
 }
@@ -2159,12 +2159,12 @@ onMounted(() => {
 
 .inline-kalem-header h3 {
   margin: 0;
-  color: #fff;
+  color: var(--text-title);
 }
 
 .inline-kalem-header p {
   margin: 6px 0 0;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 .durum-dropdown {
@@ -2182,8 +2182,8 @@ onMounted(() => {
   margin-bottom: 18px;
 }
 .internal-profit-panel {
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   padding: 15px;
   border-radius: 8px;
 }
@@ -2198,12 +2198,12 @@ onMounted(() => {
 
 .internal-profit-header h3 {
   margin: 0;
-  color: #fff;
+  color: var(--text-title);
 }
 
 .internal-profit-header p {
   margin: 5px 0 0;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
@@ -2214,8 +2214,8 @@ onMounted(() => {
 }
 
 .profit-card {
-  background: #111827;
-  border: 1px solid #374151;
+  background: var(--bg-active-box);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 12px;
   display: flex;
@@ -2224,37 +2224,37 @@ onMounted(() => {
 }
 
 .profit-card span {
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 13px;
 }
 
 .profit-card strong {
-  color: #e5e7eb;
+  color: var(--text-title);
   font-size: 18px;
 }
 
 .profit-card small {
-  color: #cbd5e1;
+  color: var(--text-muted);
 }
 
 .profit-card-main {
   border-color: #22c55e;
 }
 .work-order-log-panel {
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   padding: 15px;
   border-radius: 8px;
 }
 
 .work-order-log-panel h3 {
   margin: 0 0 12px;
-  color: #ffffff;
+  color: var(--text-title);
 }
 
 .work-order-log-item {
-  background: #111827;
-  border: 1px solid #374151;
+  background: var(--bg-active-box);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 12px;
   margin-bottom: 10px;
@@ -2272,38 +2272,17 @@ onMounted(() => {
 }
 
 .work-order-log-item strong {
-  color: #f8fafc;
+  color: var(--text-title);
 }
 
 .work-order-log-item span {
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 13px;
 }
 
 .work-order-log-item p {
   margin: 0;
-  color: #cbd5e1;
-}
-
-:global(html[data-theme="light"] .work-order-log-panel) {
-  background: #ffffff !important;
-  border-color: #d1d5db !important;
-  color: #111827 !important;
-}
-
-:global(html[data-theme="light"] .work-order-log-panel h3),
-:global(html[data-theme="light"] .work-order-log-item strong) {
-  color: #111827 !important;
-}
-
-:global(html[data-theme="light"] .work-order-log-item) {
-  background: #f8fafc !important;
-  border-color: #d1d5db !important;
-}
-
-:global(html[data-theme="light"] .work-order-log-item span),
-:global(html[data-theme="light"] .work-order-log-item p) {
-  color: #374151 !important;
+  color: var(--text-secondary);
 }
 .work-order-description {
   max-width: 220px;

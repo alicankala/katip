@@ -1128,21 +1128,21 @@ onMounted(async () => {
 }
 
 .stat-box {
-  background: #111827;
-  border: 1px solid #1f2937;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+  box-shadow: var(--shadow-sm);
   transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
 }
 
 .stat-box:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  border-color: #3b82f6;
+  box-shadow: var(--shadow-md);
+  border-color: var(--accent-color);
 }
 
 .stat-info {
@@ -1154,13 +1154,13 @@ onMounted(async () => {
   margin: 0;
   font-size: 24px;
   font-weight: 800;
-  color: #f9fafb;
+  color: var(--text-title);
 }
 
 .stat-info span {
   display: block;
   margin-top: 4px;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
 }

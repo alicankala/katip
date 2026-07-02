@@ -606,11 +606,11 @@ onMounted(() => {
       maximizable
     >
       <div v-if="seciliParca" style="display: flex; flex-direction: column; gap: 15px;">
-        <div style="background: #111827; border: 1px solid #334155; padding: 15px; border-radius: 8px;">
+        <div style="background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; color: var(--text-primary);">
           <strong>Parça:</strong> {{ seciliParca.name }} <br>
           <strong>Kod:</strong> {{ seciliParca.code }} <br>
           <strong>Mevcut Stok:</strong> {{ seciliParca.stock }} <br>
-<strong>Kritik Stok:</strong> {{ seciliParca.critical_stock ?? 5 }}
+          <strong>Kritik Stok:</strong> {{ seciliParca.critical_stock ?? 5 }}
         </div>
 
         <DataTable

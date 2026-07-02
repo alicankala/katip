@@ -18,6 +18,11 @@ const temaDegistir = () => {
   localStorage.setItem('uygulamaTema', tema.value)
   document.documentElement.setAttribute('data-theme', tema.value)
   document.documentElement.style.colorScheme = tema.value
+  if (tema.value === 'dark') {
+    document.documentElement.classList.add('p-dark')
+  } else {
+    document.documentElement.classList.remove('p-dark')
+  }
 }
 
 const pinForm = reactive({
@@ -210,6 +215,11 @@ onMounted(() => {
   tema.value = localStorage.getItem('uygulamaTema') || 'dark'
   document.documentElement.setAttribute('data-theme', tema.value)
   document.documentElement.style.colorScheme = tema.value
+  if (tema.value === 'dark') {
+    document.documentElement.classList.add('p-dark')
+  } else {
+    document.documentElement.classList.remove('p-dark')
+  }
 
   aktifUsta.value = JSON.parse(localStorage.getItem('aktifUsta') || 'null')
   veritabaniBilgileriniGetir()
@@ -373,7 +383,7 @@ onMounted(() => {
 
 <style scoped>
 .settings-page {
-  color: #e5e7eb;
+  color: var(--text-primary);
 }
 
 .settings-grid {
@@ -392,8 +402,8 @@ onMounted(() => {
   width: 52px;
   height: 52px;
   border-radius: 14px;
-  background: #1e293b;
-  border: 1px solid #334155;
+  background: var(--bg-active-box);
+  border: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -402,18 +412,18 @@ onMounted(() => {
 
 .settings-card-icon i {
   font-size: 24px;
-  color: #38bdf8;
+  color: var(--accent-color);
 }
 
 .settings-card h2 {
   margin: 0 0 8px;
-  color: #f9fafb;
+  color: var(--text-title);
   font-size: 21px;
 }
 
 .settings-card p {
   margin: 0 0 16px;
-  color: #cbd5e1;
+  color: var(--text-secondary);
   line-height: 1.5;
 }
 
@@ -424,26 +434,26 @@ onMounted(() => {
 }
 
 .info-box {
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--bg-active-box);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 14px;
-  color: #cbd5e1;
+  color: var(--text-secondary);
   line-height: 1.7;
 }
 .path-box {
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--bg-active-box);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 14px;
-  color: #cbd5e1;
+  color: var(--text-secondary);
   margin-top: 12px;
   line-height: 1.6;
 }
 
 .path-box strong {
   display: block;
-  color: #f9fafb;
+  color: var(--text-title);
   margin-bottom: 6px;
 }
 
@@ -452,7 +462,7 @@ onMounted(() => {
   word-break: break-all;
   font-family: Consolas, Monaco, monospace;
   font-size: 13px;
-  color: #93c5fd;
+  color: var(--accent-color);
 }
 
 .pin-form {
@@ -469,7 +479,7 @@ onMounted(() => {
 }
 
 .form-group label {
-  color: #cbd5e1;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 
@@ -489,11 +499,11 @@ onMounted(() => {
   }
 }
 .theme-box {
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--bg-active-box);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 14px;
-  color: #cbd5e1;
+  color: var(--text-secondary);
   margin-top: 12px;
   display: flex;
   justify-content: space-between;
@@ -503,27 +513,13 @@ onMounted(() => {
 
 .theme-box strong {
   display: block;
-  color: #f9fafb;
+  color: var(--text-title);
   margin-bottom: 4px;
 }
 
 .theme-box span {
   display: block;
-  color: #94a3b8;
+  color: var(--text-muted);
   font-size: 13px;
-}
-
-:global(html[data-theme="light"] .theme-box) {
-  background: #ffffff !important;
-  border-color: #d1d5db !important;
-  color: #111827 !important;
-}
-
-:global(html[data-theme="light"] .theme-box strong) {
-  color: #111827 !important;
-}
-
-:global(html[data-theme="light"] .theme-box span) {
-  color: #374151 !important;
 }
 </style>
