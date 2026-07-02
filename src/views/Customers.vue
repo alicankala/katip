@@ -1,0 +1,211 @@
+<script setup>
+import { ref, reactive, onMounted, computed } from 'vue'
+import DataTable from 'primevue/datatable'
+import Column from 'primevue/column'
+import Button from 'primevue/button'
+import Dialog from 'primevue/dialog'
+import InputText from 'primevue/inputtext'
+import { useToast } from 'primevue/usetoast'
+import { useConfirm } from 'primevue/useconfirm'
+
+const musteriler = ref([])
+const dialogAcik = ref(false)
+const aramaKelimesi = ref('')
+
+const toast = useToast()
+const confirmDialog = useConfirm()
+
+const basariMesaji = (detay) => {
+  toast.add({
+    severity: 'success',
+    summary: 'Başarılı',
+    detail: detay,
+    life: 2500
+  })
+}
+
+const hataMesaji = (detay) => {
+  toast.add({
+    severity: 'error',
+    summary: 'Hata',
+    detail: detay,
+    life: 4000
+  })
+}
+
+const uyariMesaji = (detay) => {
+  toast.add({
+    severity: 'warn',
+    summary: 'Uyarı',
+    detail: detay,
+    life: 3000
+  })
+}
+
+const form = reactive({
+  id: null, // Güncelleme için eklendi
+  name: '',
+  phone: '',
+  note: ''
+})
+
+const listeyiGetir = async () => {
+  musteriler.value = await window.api.musterileriGetir()
+}
+
+const filtrelenmisMusteriler = computed(() => {
+  if (!aramaKelimesi.value) return musteriler.value
+  
+  const aranan = aramaKelimesi.value.toLowerCase()
+  return musteriler.value.filter(m => 
+    (m.name || '').toLowerCase().includes(aranan) || 
+    (m.phone || '').toLowerCase().includes(aranan)
+  )
+})
+
+const sil = (id) => {
+  if (!id) return
+
+  confirmDialog.require({
+    message: 'Bu müşteriyi pasife almak istediğinize emin misiniz?',
+    header: 'Müşteri Pasife Al',
+    icon: 'pi pi-exclamation-triangle',
+    acceptLabel: 'Pasife Al',
+    rejectLabel: 'Vazgeç',
+    acceptClass: 'p-button-danger',
+    rejectClass: 'p-button-secondary p-button-text',
+    accept: async () => {
+      const res = await window.api.musteriSil(id)
+
+      if (res?.success) {
+        basariMesaji('Müşteri pasife alındı.')
+        await listeyiGetir()
+      } else {
+        hataMesaji(res?.error || 'Müşteri pasife alınamadı.')
+      }
+    }
+  })
+}
+const duzenle = (musteri) => {
+  Object.assign(form, { id: musteri.id, name: musteri.name, phone: musteri.phone, note: musteri.note })
+  dialogAcik.value = true
+}
+const kaydet = async () => {
+  if (!form.name) {
+    uyariMesaji('Ad/Soyad alanı zorunludur.')
+    return
+  }
+
+  try {
+    const temizVeri = JSON.parse(JSON.stringify(form))
+
+    const res = form.id
+      ? await window.api.musteriGuncelle(temizVeri)
+      : await window.api.musteriEkle(temizVeri)
+
+    if (res && res.success) {
+      basariMesaji(form.id ? 'Müşteri güncellendi.' : 'Müşteri kaydedildi.')
+
+      dialogAcik.value = false
+
+      Object.assign(form, {
+        id: null,
+        name: '',
+        phone: '',
+        note: ''
+      })
+
+      await listeyiGetir()
+    } else {
+      hataMesaji(res?.error || 'İşlem yapılamadı.')
+    }
+  } catch (error) {
+    hataMesaji(error instanceof Error ? error.message : String(error))
+  }
+}
+onMounted(() => {
+  listeyiGetir()
+})
+</script>
+
+<template>
+  <div>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h2>Müşteri Yönetimi</h2>
+      
+      <div style="display: flex; gap: 15px; align-items: center;">
+        <span class="p-input-icon-left">
+          <i class="pi pi-search" style="margin-left: 10px;" />
+          <InputText v-model="aramaKelimesi" placeholder="İsim veya Telefon Ara..." style="width: 300px; padding-left: 35px;" />
+        </span>
+        <Button label="Yeni Müşteri Ekle" icon="pi pi-user-plus" severity="info" @click="Object.assign(form, { id: null, name: '', phone: '', note: '' }); dialogAcik = true" />
+      </div>
+    </div>
+
+    <div class="table-panel">
+      <DataTable :value="filtrelenmisMusteriler" responsiveLayout="scroll" emptyMessage="Kayıtlı müşteri bulunamadı.">
+        <Column field="name" header="Ad Soyad"></Column>
+        <Column field="phone" header="Telefon Numarası"></Column>
+        <Column field="note" header="Müşteri Notu"></Column>
+        <Column header="İşlem" :exportable="false" style="min-width:8rem">
+          <template #body="slotProps">
+            <Button icon="pi pi-pencil" outlined rounded severity="info" @click="duzenle(slotProps.data)" style="margin-right: 8px;" />
+            <Button icon="pi pi-trash" outlined rounded severity="danger" @click="sil(slotProps.data.id)" />
+          </template>
+        </Column>
+      </DataTable>
+    </div>
+
+    <Dialog
+  v-model:visible="dialogAcik"
+  :header="form.id ? 'Müşteri Düzenle' : 'Yeni Müşteri Kaydı'"
+  :style="{ width: '400px' }"
+  modal
+>
+      <div style="display: flex; flex-direction: column; gap: 15px; padding-top: 10px;">
+        
+        <div class="form-group">
+          <label>Ad Soyad</label>
+          <InputText v-model="form.name" placeholder="Örn: Alican Kala" style="width: 100%" autofocus />
+        </div>
+
+        <div class="form-group">
+          <label>Telefon Numarası</label>
+          <InputText v-model="form.phone" placeholder="Örn: 0555 123 45 67" style="width: 100%" />
+        </div>
+
+        <div class="form-group">
+          <label>Özel Not / Açıklama</label>
+          <InputText v-model="form.note" placeholder="Örn: Sürekli Müşteri / Titiz" style="width: 100%" />
+        </div>
+
+      </div>
+      <template #footer>
+        <Button label="İptal" icon="pi pi-times" text @click="dialogAcik = false" />
+        <Button label="Kaydet" icon="pi pi-check" @click="kaydet" />
+      </template>
+    </Dialog>
+  </div>
+</template>
+
+<style scoped>
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.form-group label {
+  font-size: 0.9rem;
+  color: #ccc;
+}
+.p-input-icon-left {
+  position: relative;
+  display: inline-block;
+}
+.p-input-icon-left i {
+  position: absolute;
+  top: 50%;
+  margin-top: -0.5rem;
+  color: #999;
+}
+</style>

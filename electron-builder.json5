@@ -1,0 +1,37 @@
+// @see - https://www.electron.build/configuration/configuration
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+
+  "appId": "com.ozgehan.otoservis",
+  "asar": true,
+  "productName": "Özgehan Otomotiv",
+
+  "directories": {
+    "output": "release/${version}"
+  },
+
+  "files": [
+    "dist",
+    "dist-electron"
+  ],
+
+"win": {
+  "icon": "public/icon.ico",
+  "target": [
+    {
+      "target": "nsis",
+      "arch": [
+        "x64"
+      ]
+    }
+  ],
+  "artifactName": "${productName}-Windows-${version}-Setup.${ext}",
+  "signAndEditExecutable": false
+},
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "deleteAppDataOnUninstall": false
+  }
+}
