@@ -2460,6 +2460,122 @@ return {
       return { success: false, error: getErrorMessage(error) }
     }
   })
+
+  // 31. Genel Giderler - Getir
+  kanalEkle('giderleri-getir', () => {
+    try {
+      const giderler = db.prepare(`
+        SELECT * FROM general_expenses
+        ORDER BY expense_date DESC, id DESC
+      `).all()
+      return { success: true, giderler }
+    } catch (error) {
+      console.error('Giderleri getirme hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 32. Genel Gider - Ekle
+  kanalEkle('gider-ekle', (_event, gider: any) => {
+    try {
+      const { expense_type, company_name, period, expense_date, due_date, amount, status, payment_date, payment_method, note } = gider
+
+      if (!expense_type || !String(expense_type).trim()) {
+        throw new Error('Gider türü boş bırakılamaz.')
+      }
+      if (!expense_date || !String(expense_date).trim()) {
+        throw new Error('Gider tarihi boş bırakılamaz.')
+      }
+
+      db.prepare(`
+        INSERT INTO general_expenses (
+          expense_type, company_name, period, expense_date, due_date, amount, status, payment_date, payment_method, note
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        String(expense_type).trim(),
+        company_name ? String(company_name).trim() : null,
+        period ? String(period).trim() : null,
+        String(expense_date).trim(),
+        due_date ? String(due_date).trim() : null,
+        Number(amount) || 0,
+        status || 'Ödenmedi',
+        payment_date ? String(payment_date).trim() : null,
+        payment_method ? String(payment_method).trim() : null,
+        note ? String(note).trim() : null
+      )
+      return { success: true }
+    } catch (error) {
+      console.error('Gider ekleme hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 33. Genel Gider - Güncelle
+  kanalEkle('gider-guncelle', (_event, gider: any) => {
+    try {
+      const { id, expense_type, company_name, period, expense_date, due_date, amount, status, payment_date, payment_method, note } = gider
+
+      if (!id) {
+        throw new Error('Güncellenecek gider kaydı bulunamadı.')
+      }
+      if (!expense_type || !String(expense_type).trim()) {
+        throw new Error('Gider türü boş bırakılamaz.')
+      }
+      if (!expense_date || !String(expense_date).trim()) {
+        throw new Error('Gider tarihi boş bırakılamaz.')
+      }
+
+      db.prepare(`
+        UPDATE general_expenses
+        SET expense_type = ?,
+            company_name = ?,
+            period = ?,
+            expense_date = ?,
+            due_date = ?,
+            amount = ?,
+            status = ?,
+            payment_date = ?,
+            payment_method = ?,
+            note = ?
+        WHERE id = ?
+      `).run(
+        String(expense_type).trim(),
+        company_name ? String(company_name).trim() : null,
+        period ? String(period).trim() : null,
+        String(expense_date).trim(),
+        due_date ? String(due_date).trim() : null,
+        Number(amount) || 0,
+        status || 'Ödenmedi',
+        payment_date ? String(payment_date).trim() : null,
+        payment_method ? String(payment_method).trim() : null,
+        note ? String(note).trim() : null,
+        Number(id)
+      )
+      return { success: true }
+    } catch (error) {
+      console.error('Gider güncelleme hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 34. Genel Gider - Sil
+  kanalEkle('gider-sil', (_event, id: number) => {
+    try {
+      const expenseId = Number(id)
+      if (!expenseId) {
+        throw new Error('Silinecek gider kaydı bulunamadı.')
+      }
+
+      db.prepare(`
+        DELETE FROM general_expenses
+        WHERE id = ?
+      `).run(expenseId)
+      return { success: true }
+    } catch (error) {
+      console.error('Gider silme hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
 }
 
 app.on('window-all-closed', () => {

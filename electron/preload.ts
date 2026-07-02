@@ -65,5 +65,11 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   cariIslemSil: (id) => ipcRenderer.invoke('cari-islem-sil', id),
   cariOdemeleriGetir: (currentAccountId) => ipcRenderer.invoke('cari-odemeleri-getir', currentAccountId),
   cariOdemeEkle: (odeme) => ipcRenderer.invoke('cari-odeme-ekle', odeme),
-  cariOdemeSil: (id) => ipcRenderer.invoke('cari-odeme-sil', id)
+  cariOdemeSil: (id) => ipcRenderer.invoke('cari-odeme-sil', id),
+
+  // Genel Giderler
+  giderleriGetir: () => ipcRenderer.invoke('giderleri-getir'),
+  giderEkle: (gider) => ipcRenderer.invoke('gider-ekle', gider),
+  giderGuncelle: (gider) => ipcRenderer.invoke('gider-guncelle', gider),
+  giderSil: (id) => ipcRenderer.invoke('gider-sil', id)
 })

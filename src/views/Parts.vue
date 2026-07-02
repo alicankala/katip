@@ -301,21 +301,20 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h2>Yedek Parça ve Stok Yönetimi</h2>
-      
-      <div style="display: flex; gap: 15px; align-items: center;">
-        <span class="p-input-icon-left">
-          <i class="pi pi-search" style="margin-left: 10px;" />
-          <InputText v-model="aramaKelimesi" placeholder="Kodu, Adı veya Rafı Ara..." style="width: 300px; padding-left: 35px;" />
-        </span>
-        <Button 
-  label="Yeni Parça Ekle" 
-  icon="pi pi-plus" 
-  severity="success" 
-  @click="formuTemizle(); dialogAcik = true" 
-/>
+  <div class="page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Yedek Parça ve Stok Yönetimi</h1>
+        <p class="page-subtitle">Depo stokunu, kritik parçaları ve hareketleri buradan yönetin.</p>
+      </div>
+      <div style="display: flex; gap: 12px; align-items: center;">
+        <InputText v-model="aramaKelimesi" placeholder="Kodu, Adı veya Rafı Ara..." style="width: 280px;" />
+        <Button
+          label="Yeni Parça Ekle"
+          icon="pi pi-plus"
+          severity="success"
+          @click="formuTemizle(); dialogAcik = true"
+        />
       </div>
     </div>
 
@@ -389,8 +388,17 @@ onMounted(() => {
         </div>
       </div>
 
-      <DataTable :value="filtrelenmisParcalar" responsiveLayout="scroll" emptyMessage="Aradığınız kriterlere uygun parça bulunamadı.">
-<Column field="code" header="Parça Kodu"></Column>
+      <DataTable
+        :value="filtrelenmisParcalar"
+        responsiveLayout="scroll"
+        emptyMessage="Aradığınız kriterlere uygun parça bulunamadı."
+        :rowClass="(row) => Number(row.stock || 0) <= 0 ? 'row-critical' : (Number(row.stock || 0) <= Number(row.critical_stock ?? 5) ? 'row-critical' : '')"
+      >
+<Column field="code" header="Parça Kodu">
+  <template #body="slotProps">
+    <span class="plate-cell">{{ slotProps.data.code }}</span>
+  </template>
+</Column>
 <Column field="name" header="Parça Adı"></Column>
 <Column field="brand" header="Marka"></Column>
 <Column field="category" header="Kategori"></Column>
@@ -466,6 +474,7 @@ onMounted(() => {
   modal
 >
   <div style="display: flex; flex-direction: column; gap: 15px; padding-top: 10px;">
+    <div class="form-section-title"><i class="pi pi-tag"></i> Parça Kimliği</div>
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
       <div class="form-group">
         <label>Parça Kodu</label>
@@ -496,6 +505,7 @@ onMounted(() => {
       />
     </div>
 
+    <div class="form-section-title"><i class="pi pi-box"></i> Sınıflandırma &amp; Konum</div>
     <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
       <div class="form-group">
         <label>Marka</label>
@@ -525,6 +535,7 @@ onMounted(() => {
       </div>
     </div>
 
+    <div class="form-section-title"><i class="pi pi-chart-bar"></i> Stok &amp; Fiyat Bilgileri</div>
     <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
       <div class="form-group">
         <label>Stok</label>
@@ -665,40 +676,28 @@ onMounted(() => {
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 .form-group label {
-  font-size: 0.95rem;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-secondary);
 }
-.p-input-icon-left {
-  position: relative;
-  display: inline-block;
-}
-.p-input-icon-left i {
-  position: absolute;
-  top: 50%;
-  margin-top: -0.5rem;
-  color: #999;
-}
+
 .table-panel {
-  background: #1e293b;
-  padding: 20px;
-  border-radius: 12px;
-  border: 1px solid #334155;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  overflow: hidden;
 }
 
-:global(html[data-theme="light"] .table-panel) {
-  background: #ffffff !important;
-  border: 1px solid #d1d5db !important;
-  color: #111827 !important;
-}
 .stock-filter-panel {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 14px;
-  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-color);
   flex-wrap: wrap;
 }
 

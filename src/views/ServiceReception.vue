@@ -252,7 +252,10 @@ onMounted(() => {
 
     <div class="reception-layout">
       <div class="panel reception-panel">
-        <h2>Müşteri Bilgileri</h2>
+        <div class="form-section-title">
+          <i class="pi pi-user"></i>
+          Müşteri Bilgileri
+        </div>
 
         <div class="form-row">
           <div class="form-group">
@@ -273,7 +276,10 @@ onMounted(() => {
           </div>
         </div>
 
-        <h2>Araç Bilgileri</h2>
+        <div class="form-section-title">
+          <i class="pi pi-car"></i>
+          Araç Bilgileri
+        </div>
 
         <div class="form-row">
           <div class="form-group">
@@ -344,7 +350,10 @@ onMounted(() => {
 </div>
 
 
-        <h2>Servis Bilgileri</h2>
+        <div class="form-section-title">
+          <i class="pi pi-wrench"></i>
+          Servis Bilgileri
+        </div>
 
         <div class="form-group">
           <label>Müşteri Şikayeti / Yapılacak İşlem</label>
@@ -402,7 +411,7 @@ onMounted(() => {
 
 <style scoped>
 .servis-kabul-page {
-  color: #e5e7eb;
+  color: var(--text-primary);
 }
 
 .reception-layout {
@@ -410,17 +419,6 @@ onMounted(() => {
   grid-template-columns: minmax(0, 1fr) 340px;
   gap: 20px;
   align-items: start;
-}
-
-.reception-panel h2,
-.help-panel h2 {
-  margin: 0 0 16px;
-  color: #f9fafb;
-  font-size: 20px;
-}
-
-.reception-panel h2:not(:first-child) {
-  margin-top: 28px;
 }
 
 .form-row {
@@ -433,11 +431,11 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .form-group label {
-  color: #cbd5e1;
+  color: var(--text-secondary);
   font-size: 14px;
   font-weight: 600;
 }
@@ -452,67 +450,67 @@ onMounted(() => {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+}
+
+.help-panel h2 {
+  margin: 0 0 14px;
+  color: var(--text-title);
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .help-panel p {
-  color: #cbd5e1;
-  line-height: 1.5;
-  margin: 0 0 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0 0 12px;
+  font-size: 14.5px;
 }
 
 .hint-box {
-  background: #0f172a;
-  border: 1px solid #334155;
-  border-radius: 10px;
-  padding: 14px;
-  color: #e5e7eb;
-  margin-top: 20px;
-}
-:global(html[data-theme="light"] .servis-kabul-page) {
-  background: #f3f4f6 !important;
-  color: #111827 !important;
-}
-
-:global(html[data-theme="light"] .servis-kabul-page .panel) {
-  background: #ffffff !important;
-  border-color: #d1d5db !important;
-  color: #111827 !important;
+  background: var(--bg-active-box);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--accent-color);
+  border-radius: 8px;
+  padding: 14px 16px;
+  color: var(--text-primary);
+  margin-top: 18px;
+  font-size: 14.5px;
+  line-height: 1.5;
 }
 
-:global(html[data-theme="light"] .reception-panel h2),
-:global(html[data-theme="light"] .help-panel h2) {
-  color: #111827 !important;
+.active-master-text {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 14.5px;
 }
 
-:global(html[data-theme="light"] .help-panel p),
-:global(html[data-theme="light"] .active-master-text),
-:global(html[data-theme="light"] .form-group label) {
-  color: #374151 !important;
+.active-master-text strong {
+  color: var(--text-title);
 }
 
-:global(html[data-theme="light"] .active-master-text strong) {
-  color: #111827 !important;
+.existing-vehicle-box {
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: var(--status-ok);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
 }
 
-:global(html[data-theme="light"] .hint-box) {
-  background: #f8fafc !important;
-  border-color: #cbd5e1 !important;
-  color: #111827 !important;
+.existing-vehicle-box strong {
+  color: var(--text-title);
+  font-size: 14px;
+  font-weight: 700;
 }
 
-:global(html[data-theme="light"] .hint-box strong) {
-  color: #111827 !important;
-}
-
-:global(html[data-theme="light"] .existing-vehicle-box) {
-  background: #f0fdf4 !important;
-  border-color: #22c55e !important;
-  color: #166534 !important;
-}
-
-:global(html[data-theme="light"] .existing-vehicle-box strong),
-:global(html[data-theme="light"] .existing-vehicle-box span) {
-  color: #166534 !important;
+.existing-vehicle-box span {
+  color: var(--text-secondary);
+  font-size: 14px;
 }
 
 @media (max-width: 1100px) {
@@ -526,34 +524,18 @@ onMounted(() => {
     grid-template-columns: 1fr;
   }
 }
-.active-master-text {
-  margin: 8px 0 0;
-  color: #cbd5e1;
-  font-size: 14.5px;
-}
 
-.active-master-text strong {
-  color: #ffffff;
+:global(html[data-theme="light"] .hint-box) {
+  background: #f8fafc !important;
+  border-color: #c8d5e3 !important;
+  border-left-color: #2563eb !important;
+  color: #0f172a !important;
 }
-.existing-vehicle-box {
-  background: #052e16;
-  border: 1px solid #22c55e;
-  color: #bbf7d0;
-  border-radius: 8px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 6px;
+:global(html[data-theme="light"] .existing-vehicle-box) {
+  background: #f0fdf4 !important;
+  border-color: #22c55e !important;
+  color: #166534 !important;
 }
-
-.existing-vehicle-box strong {
-  color: #ffffff;
-  font-size: 14px;
-}
-
-.existing-vehicle-box span {
-  color: #bbf7d0;
-  font-size: 14px;
-}
+:global(html[data-theme="light"] .existing-vehicle-box strong) { color: #14532d !important; }
+:global(html[data-theme="light"] .existing-vehicle-box span)   { color: #166534 !important; }
 </style>

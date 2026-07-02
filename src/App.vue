@@ -28,15 +28,16 @@ const temaUygula = () => {
 }
 
 const menuItems = ref([
-  { label: 'Ana Panel', icon: 'pi pi-home', command: () => router.push('/dashboard') },
-  { label: 'Servis Kabul', icon: 'pi pi-bolt', command: () => router.push('/service-reception') },
-  { label: 'İş Emirleri', icon: 'pi pi-wrench', command: () => router.push('/work-orders') },
-  { label: 'Müşteriler', icon: 'pi pi-users', command: () => router.push('/customers') },
-  { label: 'Araçlar', icon: 'pi pi-car', command: () => router.push('/vehicles') },
-  { label: 'Parça / Stok', icon: 'pi pi-box', command: () => router.push('/parts') },
-  { label: 'Cari Hesap', icon: 'pi pi-wallet', command: () => router.push('/current-accounts') },
-  { label: 'İç Kâr Raporu', icon: 'pi pi-chart-line', command: () => router.push('/profit-report') },
-  { label: 'Ayarlar', icon: 'pi pi-cog', command: () => router.push('/settings') }
+  { label: 'Ana Panel', icon: 'pi pi-home', path: '/dashboard', command: () => router.push('/dashboard') },
+  { label: 'Servis Kabul', icon: 'pi pi-bolt', path: '/service-reception', command: () => router.push('/service-reception') },
+  { label: 'İş Emirleri', icon: 'pi pi-wrench', path: '/work-orders', command: () => router.push('/work-orders') },
+  { label: 'Müşteriler', icon: 'pi pi-users', path: '/customers', command: () => router.push('/customers') },
+  { label: 'Araçlar', icon: 'pi pi-car', path: '/vehicles', command: () => router.push('/vehicles') },
+  { label: 'Parça / Stok', icon: 'pi pi-box', path: '/parts', command: () => router.push('/parts') },
+  { label: 'Cari Hesap', icon: 'pi pi-wallet', path: '/current-accounts', command: () => router.push('/current-accounts') },
+  { label: 'Genel Giderler', icon: 'pi pi-receipt', path: '/general-expenses', command: () => router.push('/general-expenses') },
+  { label: 'İç Kâr Raporu', icon: 'pi pi-chart-line', path: '/profit-report', command: () => router.push('/profit-report') },
+  { label: 'Ayarlar', icon: 'pi pi-cog', path: '/settings', command: () => router.push('/settings') }
 ])
 
 const ustalariYukle = async () => {
@@ -252,31 +253,88 @@ onUnmounted(() => {
     class="app-layout"
   >
     <aside class="app-sidebar">
-<div class="sidebar-brand">
-  <div class="sidebar-system-title">
-    <span>Servis Takip</span>
-    <span>Sistemi</span>
-  </div>
-</div>
-
-      <div class="active-master-box">
-        <span>Aktif Usta</span>
-        <strong>{{ aktifUsta.name }}</strong>
-
-        <Button
-          label="Çıkış"
-          icon="pi pi-sign-out"
-          size="small"
-          severity="secondary"
-          outlined
-          @click="cikisYap"
-        />
+      <!-- Brand Header -->
+      <div class="sidebar-brand">
+        <div class="sidebar-logo-row">
+          <img src="/icon.ico" alt="" class="sidebar-logo-img" />
+          <div class="sidebar-brand-text">
+            <span class="sidebar-brand-name">Özgehan Otomotiv</span>
+            <span class="sidebar-brand-sub">Servis Takip Sistemi</span>
+          </div>
+        </div>
       </div>
 
-      <Menu
-        :model="menuItems"
-        class="app-menu"
-      />
+      <!-- Active Master -->
+      <div class="active-master-box">
+        <div class="master-avatar">{{ aktifUsta.name?.charAt(0)?.toUpperCase() }}</div>
+        <div class="master-info">
+          <span class="master-label">Aktif Usta</span>
+          <strong class="master-name">{{ aktifUsta.name }}</strong>
+        </div>
+        <button class="master-logout-btn" @click="cikisYap" title="Çıkış Yap">
+          <i class="pi pi-sign-out"></i>
+        </button>
+      </div>
+
+      <!-- Navigation -->
+      <nav class="sidebar-nav">
+        <div class="nav-group">
+          <div class="nav-group-label">Operasyon</div>
+          <a
+            v-for="item in menuItems.slice(0, 3)"
+            :key="item.label"
+            class="nav-item"
+            :class="{ active: $route.path === item.path }"
+            @click.prevent="item.command()"
+            href="#"
+          >
+            <i :class="item.icon" class="nav-icon"></i>
+            <span>{{ item.label }}</span>
+          </a>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-label">Kayıtlar</div>
+          <a
+            v-for="item in menuItems.slice(3, 6)"
+            :key="item.label"
+            class="nav-item"
+            :class="{ active: $route.path === item.path }"
+            @click.prevent="item.command()"
+            href="#"
+          >
+            <i :class="item.icon" class="nav-icon"></i>
+            <span>{{ item.label }}</span>
+          </a>
+        </div>
+
+        <div class="nav-group">
+          <div class="nav-group-label">Finans &amp; Raporlar</div>
+          <a
+            v-for="item in menuItems.slice(6, 9)"
+            :key="item.label"
+            class="nav-item"
+            :class="{ active: $route.path === item.path }"
+            @click.prevent="item.command()"
+            href="#"
+          >
+            <i :class="item.icon" class="nav-icon"></i>
+            <span>{{ item.label }}</span>
+          </a>
+        </div>
+
+        <div class="nav-group nav-group-bottom">
+          <a
+            class="nav-item"
+            :class="{ active: $route.path === menuItems[9].path }"
+            @click.prevent="menuItems[9].command()"
+            href="#"
+          >
+            <i :class="menuItems[9].icon" class="nav-icon"></i>
+            <span>{{ menuItems[9].label }}</span>
+          </a>
+        </div>
+      </nav>
     </aside>
 
     <main class="app-content">
@@ -300,11 +358,12 @@ onUnmounted(() => {
   box-sizing: border-box;
 }
 
+/* ── Titlebar ─────────────────────────────────────── */
 .custom-titlebar {
-  height: 38px;
+  height: 36px;
   width: 100vw;
   flex-shrink: 0;
-  background: var(--bg-sidebar);
+  background: var(--bg-active-box);
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
@@ -317,16 +376,17 @@ onUnmounted(() => {
 .custom-titlebar-left {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding-left: 12px;
-  font-size: 14px;
+  gap: 8px;
+  padding-left: 14px;
+  font-size: 13.5px;
   font-weight: 700;
   color: var(--text-title);
+  letter-spacing: 0.01em;
 }
 
 .custom-titlebar-icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   object-fit: contain;
 }
 
@@ -343,29 +403,28 @@ onUnmounted(() => {
 }
 
 .window-btn {
-  width: 46px;
-  height: 38px;
+  width: 44px;
+  height: 36px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  font-size: 15px;
+  font-size: 14px;
   cursor: pointer;
   -webkit-app-region: no-drag;
-  transition: background 0.15s, color 0.15s;
+  transition: background 0.12s, color 0.12s;
 }
-
 .window-btn:hover {
   background: var(--bg-card-hover);
   color: var(--text-title);
 }
-
 .window-btn.close:hover {
   background: #dc2626;
   color: #ffffff;
 }
 
+/* ── Login Page ──────────────────────────────────── */
 .login-page {
-  height: calc(100vh - 38px);
+  height: calc(100vh - 36px);
   background: var(--bg-primary);
   display: flex;
   align-items: center;
@@ -378,7 +437,7 @@ onUnmounted(() => {
   max-width: 400px;
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
-  border-radius: 16px;
+  border-radius: 12px;
   padding: 32px;
   box-shadow: var(--shadow-xl);
 }
@@ -391,7 +450,7 @@ onUnmounted(() => {
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 .form-group {
@@ -408,9 +467,9 @@ onUnmounted(() => {
 
 .login-error {
   background: rgba(239, 68, 68, 0.1);
-  border: 1px solid #ef4444;
-  color: #fecaca;
-  border-radius: 8px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  border-radius: 6px;
   padding: 10px 12px;
   font-size: 14px;
 }
@@ -422,29 +481,28 @@ onUnmounted(() => {
 }
 
 .brand-hero {
-  padding: 24px 16px;
-  border-radius: 12px;
+  padding: 22px 16px;
+  border-radius: 10px;
   background: var(--bg-active-box);
   border: 1px solid var(--border-color);
   text-align: center;
 }
 
 .brand-logo-frame {
-  width: 80px;
-  height: 80px;
-  margin: 0 auto 16px;
-  border-radius: 20px;
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 14px;
+  border-radius: 18px;
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-sm);
 }
 
 .brand-logo {
-  width: 56px;
-  height: 56px;
+  width: 52px;
+  height: 52px;
   object-fit: contain;
   display: block;
 }
@@ -452,7 +510,7 @@ onUnmounted(() => {
 .brand-hero h1 {
   margin: 0;
   color: var(--text-title);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -465,145 +523,245 @@ onUnmounted(() => {
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
   color: var(--accent-color);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.05em;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
+/* ── App Layout ──────────────────────────────────── */
 .app-layout {
-  height: calc(100vh - 38px);
+  height: calc(100vh - 36px);
   width: 100vw;
   overflow: hidden;
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
   background: var(--bg-primary);
 }
 
 .app-sidebar {
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border-color);
-  padding: 20px;
+  padding: 0;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
 .app-content {
   height: 100%;
   overflow-y: auto;
   background: var(--bg-primary);
-  padding: 24px;
+  padding: 22px 24px;
 }
 
+/* ── Sidebar Brand ───────────────────────────────── */
 .sidebar-brand {
-  margin-bottom: 8px;
-  text-align: center;
+  padding: 16px 16px 12px;
+  border-bottom: 1px solid var(--border-color);
 }
 
-.sidebar-system-title {
-  padding: 16px 12px;
-  border-radius: 12px;
+.sidebar-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-logo-img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  border-radius: 8px;
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
+  padding: 4px;
+  flex-shrink: 0;
+}
+
+.sidebar-brand-text {
   display: flex;
   flex-direction: column;
+  line-height: 1.2;
+}
+
+.sidebar-brand-name {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-title);
+  letter-spacing: -0.01em;
+}
+
+.sidebar-brand-sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 1px;
+}
+
+/* ── Active Master Box ───────────────────────────── */
+.active-master-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(45, 125, 210, 0.05);
+}
+
+.master-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  color: #ffffff;
+  display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: var(--shadow-sm);
-}
-
-.sidebar-system-title span {
-  color: var(--text-title);
-  font-size: 20px;
-  line-height: 1.2;
+  font-size: 16px;
   font-weight: 800;
-  letter-spacing: -0.02em;
+  flex-shrink: 0;
+  letter-spacing: 0;
 }
 
-.active-master-box {
-  background: var(--bg-active-box);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 14px;
+.master-info {
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 1px;
 }
 
-.active-master-box span {
+.master-label {
+  font-size: 11px;
   color: var(--text-muted);
-  font-size: 13px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.07em;
   font-weight: 600;
 }
 
-.active-master-box strong {
-  color: var(--text-title);
-  font-size: 16px;
+.master-name {
+  font-size: 14.5px;
   font-weight: 700;
+  color: var(--text-title);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* MENU / SIDEBAR OVERRIDES */
-:global(.app-menu),
-:global(.app-sidebar .p-menu) {
-  background: transparent !important;
-  border: none !important;
-  color: var(--text-primary) !important;
-  padding: 0 !important;
+.master-logout-btn {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.master-logout-btn:hover {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
 }
 
-:global(.app-sidebar .p-menu-list) {
-  background: transparent !important;
-  padding: 0 !important;
+/* ── Sidebar Navigation ──────────────────────────── */
+.sidebar-nav {
+  flex: 1;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
 }
 
-:global(.app-sidebar .p-menuitem-content),
-:global(.app-sidebar .p-menu-item-content) {
-  background: transparent !important;
-  border-radius: 8px !important;
-  transition: all 0.15s ease !important;
+.nav-group {
+  margin-bottom: 4px;
 }
 
-:global(.app-sidebar .p-menuitem-content:hover),
-:global(.app-sidebar .p-menu-item-content:hover) {
-  background: var(--bg-card-hover) !important;
+.nav-group-bottom {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
 }
 
-:global(.app-sidebar .p-menuitem-link),
-:global(.app-sidebar .p-menu-item-link) {
-  background: transparent !important;
-  color: var(--text-secondary) !important;
-  padding: 12px 14px !important;
+.nav-group-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 10px 8px 4px;
 }
 
-:global(.app-sidebar .p-menuitem-link:hover),
-:global(.app-sidebar .p-menu-item-link:hover) {
-  color: var(--text-title) !important;
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 7px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+  margin-bottom: 1px;
 }
 
-:global(.app-sidebar .p-menuitem-icon),
-:global(.app-sidebar .p-menu-item-icon) {
-  color: var(--text-muted) !important;
-  margin-right: 12px !important;
-  font-size: 15px !important;
+.nav-item:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-title);
 }
 
-:global(.app-sidebar .p-menuitem-content:hover .p-menuitem-icon) {
-  color: var(--accent-color) !important;
+.nav-item.active {
+  background: rgba(45, 125, 210, 0.12);
+  color: #5ba4f5;
+  font-weight: 600;
+  border-left: 3px solid var(--accent-color);
+  padding-left: 7px;
 }
 
-:global(.app-sidebar .p-menuitem-text),
-:global(.app-sidebar .p-menu-item-label) {
-  color: var(--text-secondary) !important;
-  font-size: 15px !important;
-  font-weight: 600 !important;
+.nav-icon {
+  font-size: 15px;
+  width: 18px;
+  text-align: center;
+  flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color 0.12s;
+}
+.nav-item:hover .nav-icon,
+.nav-item.active .nav-icon {
+  color: var(--accent-color);
 }
 
-:global(.app-sidebar .p-menuitem-content:hover .p-menuitem-text) {
-  color: var(--text-title) !important;
+/* ── Light theme sidebar overrides ──────────────── */
+:global(html[data-theme="light"] .app-sidebar) {
+  background: #ffffff;
+  border-right-color: var(--border-color);
+}
+:global(html[data-theme="light"] .sidebar-brand) {
+  border-bottom-color: var(--border-color);
+}
+:global(html[data-theme="light"] .active-master-box) {
+  background: rgba(37, 99, 235, 0.04);
+  border-bottom-color: var(--border-color);
+}
+:global(html[data-theme="light"] .nav-item.active) {
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
+  border-left-color: #2563eb;
+}
+:global(html[data-theme="light"] .nav-item:hover) {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+:global(html[data-theme="light"] .nav-group-bottom) {
+  border-top-color: var(--border-color);
 }
 
 /* Specialized state components overrides for light mode */
@@ -636,7 +794,6 @@ onUnmounted(() => {
   .app-layout {
     grid-template-columns: 220px minmax(0, 1fr);
   }
-
   .app-content {
     padding: 16px;
   }
