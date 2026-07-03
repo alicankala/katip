@@ -565,3 +565,29 @@ html[data-theme="light"] .p-datatable-thead > tr > th {
   color: #374151 !important;
   border-bottom-color: #c8d5e3 !important;
 }
+
+/* ── Global Search Input with Left Icon ──────────── */
+.p-input-icon-left {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.p-input-icon-left i,
+.p-input-icon-left .pi {
+  position: absolute;
+  left: 12px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  margin: 0 !important;
+  color: var(--text-muted) !important;
+  pointer-events: none;
+  font-size: 14px;
+  z-index: 10;
+}
+
+.p-input-icon-left input,
+.p-input-icon-left .p-inputtext {
+  padding-left: 36px !important;
+  width: 100%;
+}

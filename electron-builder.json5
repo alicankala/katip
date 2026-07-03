@@ -2,9 +2,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
 
-  "appId": "com.ozgehan.otoservis",
+  "appId": "com.katip.otoservis",
   "asar": true,
-  "productName": "Özgehan Otomotiv",
+  "productName": "Kâtip",
 
   "directories": {
     "output": "release/${version}"

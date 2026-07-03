@@ -134,9 +134,9 @@ onMounted(() => {
       <h2>Müşteri Yönetimi</h2>
       
       <div style="display: flex; gap: 15px; align-items: center;">
-        <span class="p-input-icon-left">
-          <i class="pi pi-search" style="margin-left: 10px;" />
-          <InputText v-model="aramaKelimesi" placeholder="İsim veya Telefon Ara..." style="width: 300px; padding-left: 35px;" />
+        <span class="p-input-icon-left" style="width: 300px;">
+          <i class="pi pi-search" />
+          <InputText v-model="aramaKelimesi" placeholder="İsim veya Telefon Ara..." />
         </span>
         <Button label="Yeni Müşteri Ekle" icon="pi pi-user-plus" severity="info" @click="Object.assign(form, { id: null, name: '', phone: '', note: '' }); dialogAcik = true" />
       </div>
@@ -197,15 +197,5 @@ onMounted(() => {
 .form-group label {
   font-size: 0.95rem;
   color: var(--text-secondary);
-}
-.p-input-icon-left {
-  position: relative;
-  display: inline-block;
-}
-.p-input-icon-left i {
-  position: absolute;
-  top: 50%;
-  margin-top: -0.5rem;
-  color: #999;
 }
 </style>

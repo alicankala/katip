@@ -16,6 +16,12 @@ const pin = ref('')
 const girisHatasi = ref('')
 const girisYukleniyor = ref(false)
 const aktifUsta = ref(null)
+const isAdminLogin = ref(false)
+const toggleAdminLogin = () => {
+  isAdminLogin.value = !isAdminLogin.value
+  pin.value = ''
+  girisHatasi.value = ''
+}
 const temaUygula = () => {
   const kayitliTema = localStorage.getItem('uygulamaTema') || 'dark'
   document.documentElement.setAttribute('data-theme', kayitliTema)
@@ -62,6 +68,38 @@ const ustalariYukle = async () => {
 const girisYap = async () => {
   girisHatasi.value = ''
 
+  if (isAdminLogin.value) {
+    if (!pin.value.trim()) {
+      girisHatasi.value = 'Lütfen admin PIN girin.'
+      return
+    }
+    if (pin.value.length !== 4) {
+      girisHatasi.value = 'PIN 4 haneli olmalıdır.'
+      return
+    }
+
+    girisYukleniyor.value = true
+    try {
+      const storedAdminPin = localStorage.getItem('uygulamaAdminPin') || '0000'
+      if (pin.value === storedAdminPin) {
+        const adminUser = { id: 'admin', name: 'Alican Kala', role: 'admin' }
+        aktifUsta.value = adminUser
+        localStorage.setItem('aktifUsta', JSON.stringify(adminUser))
+        pin.value = ''
+        router.push('/dashboard')
+      } else {
+        girisHatasi.value = 'Hatalı Admin PIN.'
+      }
+    } catch (e) {
+      console.error('Admin giriş hatası:', e)
+      girisHatasi.value = 'Giriş hatası.'
+    } finally {
+      girisYukleniyor.value = false
+    }
+    return
+  }
+
+  // Normal login
   if (!seciliUstaId.value) {
     girisHatasi.value = 'Lütfen usta seçin.'
     return
@@ -72,9 +110,9 @@ const girisYap = async () => {
     return
   }
   if (pin.value.length !== 4) {
-  girisHatasi.value = 'PIN 4 haneli olmalıdır.'
-  return
-}
+    girisHatasi.value = 'PIN 4 haneli olmalıdır.'
+    return
+  }
 
   girisYukleniyor.value = true
 
@@ -147,10 +185,12 @@ onUnmounted(() => {
     <div class="custom-titlebar-left">
       <img
         src="/icon.ico"
-        alt="Özgehan Otomotiv"
+        alt="Kâtip"
         class="custom-titlebar-icon"
       />
-      <span>Özgehan Otomotiv</span>
+      <span class="custom-titlebar-title">Kâtip</span>
+      <span class="custom-titlebar-separator">|</span>
+      <span class="custom-titlebar-subtitle">Servis Takip Sistemi</span>
     </div>
 
     <div class="custom-titlebar-actions">
@@ -185,26 +225,27 @@ onUnmounted(() => {
     class="login-page"
   >
     <div class="login-card">
-<div class="login-logo">
-  <div class="brand-hero">
-    <div class="brand-logo-frame">
-      <img
-        src="/icon.ico"
-        alt="Özgehan Otomotiv"
-        class="brand-logo"
-      />
-    </div>
+      <div class="login-logo">
+        <div class="brand-hero">
+          <div class="brand-logo-frame">
+            <img
+              src="/icon.ico"
+              alt="Kâtip"
+              class="brand-logo"
+            />
+          </div>
 
-    <h1>Özgehan Otomotiv</h1>
+          <h1>Kâtip</h1>
 
-    <div class="brand-subtitle">
-      Servis Takip Sistemi
-    </div>
-  </div>
-</div>
+          <div class="brand-subtitle">
+            {{ isAdminLogin ? 'Destek ve Bakım' : 'Servis Takip Sistemi' }}
+          </div>
+        </div>
+      </div>
 
       <div class="login-form">
-        <div class="form-group">
+        <!-- Normal Usta Giriş Alanı -->
+        <div v-if="!isAdminLogin" class="form-group">
           <label>Usta Seçin</label>
           <Dropdown
             v-model="seciliUstaId"
@@ -216,18 +257,25 @@ onUnmounted(() => {
           />
         </div>
 
+        <!-- Admin Başlık Göstergesi -->
+        <div v-else class="form-group admin-login-indicator">
+          <i class="pi pi-shield"></i>
+          <span>Sistem Destek Girişi</span>
+        </div>
+
+        <!-- PIN Giriş Alanı (Ortak) -->
         <div class="form-group">
-          <label>PIN</label>
-<InputText
-  v-model="pin"
-  type="password"
-  maxlength="4"
-  inputmode="numeric"
-  placeholder="PIN girin"
-  style="width: 100%;"
-  @input="pinInputDuzenle"
-  @keyup.enter="girisYap"
-/>
+          <label>{{ isAdminLogin ? 'Admin PIN' : 'PIN' }}</label>
+          <InputText
+            v-model="pin"
+            type="password"
+            maxlength="4"
+            inputmode="numeric"
+            placeholder="PIN girin"
+            style="width: 100%;"
+            @input="pinInputDuzenle"
+            @keyup.enter="girisYap"
+          />
         </div>
 
         <div
@@ -238,12 +286,19 @@ onUnmounted(() => {
         </div>
 
         <Button
-          label="Giriş Yap"
+          :label="isAdminLogin ? 'Destek Girişi Yap' : 'Giriş Yap'"
           icon="pi pi-sign-in"
           :loading="girisYukleniyor"
           class="login-button"
           @click="girisYap"
         />
+
+        <!-- Giriş Tipi Değiştirme Linki -->
+        <div class="login-toggle-wrapper">
+          <a href="#" @click.prevent="toggleAdminLogin" class="login-toggle-link">
+            {{ isAdminLogin ? 'Normal Girişe Dön' : 'Destek Girişi' }}
+          </a>
+        </div>
       </div>
     </div>
   </div>
@@ -253,23 +308,14 @@ onUnmounted(() => {
     class="app-layout"
   >
     <aside class="app-sidebar">
-      <!-- Brand Header -->
-      <div class="sidebar-brand">
-        <div class="sidebar-logo-row">
-          <img src="/icon.ico" alt="" class="sidebar-logo-img" />
-          <div class="sidebar-brand-text">
-            <span class="sidebar-brand-name">Özgehan Otomotiv</span>
-            <span class="sidebar-brand-sub">Servis Takip Sistemi</span>
-          </div>
-        </div>
-      </div>
-
       <!-- Active Master -->
-      <div class="active-master-box">
-        <div class="master-avatar">{{ aktifUsta.name?.charAt(0)?.toUpperCase() }}</div>
+      <div class="active-master-box" :class="{ 'admin-mode-box': aktifUsta?.role === 'admin' }">
+        <div class="master-avatar" :class="{ 'admin-avatar': aktifUsta?.role === 'admin' }">
+          {{ aktifUsta?.name?.charAt(0)?.toUpperCase() }}
+        </div>
         <div class="master-info">
-          <span class="master-label">Aktif Usta</span>
-          <strong class="master-name">{{ aktifUsta.name }}</strong>
+          <span class="master-label">{{ aktifUsta?.role === 'admin' ? 'Destek Modu' : 'Aktif Usta' }}</span>
+          <strong class="master-name">{{ aktifUsta?.name }}</strong>
         </div>
         <button class="master-logout-btn" @click="cikisYap" title="Çıkış Yap">
           <i class="pi pi-sign-out"></i>
@@ -360,7 +406,7 @@ onUnmounted(() => {
 
 /* ── Titlebar ─────────────────────────────────────── */
 .custom-titlebar {
-  height: 36px;
+  height: 52px;
   width: 100vw;
   flex-shrink: 0;
   background: var(--bg-active-box);
@@ -376,18 +422,38 @@ onUnmounted(() => {
 .custom-titlebar-left {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding-left: 14px;
-  font-size: 13.5px;
-  font-weight: 700;
+  gap: 12px;
+  padding-left: 16px;
   color: var(--text-title);
-  letter-spacing: 0.01em;
+  letter-spacing: -0.01em;
+}
+
+.custom-titlebar-separator {
+  color: var(--border-color);
+  font-weight: 300;
+  user-select: none;
+}
+
+.custom-titlebar-subtitle {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .custom-titlebar-icon {
-  width: 18px;
-  height: 18px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 3px;
+  border: 1px solid var(--border-color-soft);
+}
+
+.custom-titlebar-title {
+  font-size: 17px;
+  font-weight: 800;
 }
 
 .custom-titlebar-actions {
@@ -404,7 +470,7 @@ onUnmounted(() => {
 
 .window-btn {
   width: 44px;
-  height: 36px;
+  height: 52px;
   border: none;
   background: transparent;
   color: var(--text-secondary);
@@ -424,7 +490,7 @@ onUnmounted(() => {
 
 /* ── Login Page ──────────────────────────────────── */
 .login-page {
-  height: calc(100vh - 36px);
+  height: calc(100vh - 52px);
   background: var(--bg-primary);
   display: flex;
   align-items: center;
@@ -434,17 +500,17 @@ onUnmounted(() => {
 
 .login-card {
   width: 100%;
-  max-width: 400px;
+  max-width: 390px;
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 32px;
-  box-shadow: var(--shadow-xl);
+  border-radius: 16px;
+  padding: 36px 32px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
 }
 
 .login-logo {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .login-form {
@@ -478,60 +544,75 @@ onUnmounted(() => {
   width: 100%;
   justify-content: center;
   font-weight: 600;
+  height: 42px;
+  background: linear-gradient(135deg, var(--accent-color), var(--accent-color-hover)) !important;
+  border: none !important;
+  box-shadow: 0 4px 12px rgba(45, 125, 210, 0.2);
+  transition: all 0.2s ease;
+}
+.login-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(45, 125, 210, 0.3);
 }
 
 .brand-hero {
-  padding: 22px 16px;
-  border-radius: 10px;
-  background: var(--bg-active-box);
-  border: 1px solid var(--border-color);
+  padding: 8px 0 16px;
   text-align: center;
 }
 
 .brand-logo-frame {
-  width: 76px;
-  height: 76px;
-  margin: 0 auto 14px;
-  border-radius: 18px;
-  background: var(--bg-panel);
+  width: 110px;
+  height: 110px;
+  margin: 0 auto 18px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, var(--bg-panel), var(--bg-active-box));
   border: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.25), 0 0 25px rgba(45, 125, 210, 0.18);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+.brand-logo-frame:hover {
+  transform: scale(1.05);
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.3), 0 0 30px rgba(45, 125, 210, 0.28);
 }
 
 .brand-logo {
-  width: 52px;
-  height: 52px;
+  width: 76px;
+  height: 76px;
   object-fit: contain;
   display: block;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.2));
 }
 
 .brand-hero h1 {
   margin: 0;
-  color: var(--text-title);
-  font-size: 22px;
+  font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.02em;
+  background: linear-gradient(to right, #ffffff, #8fa5be);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .brand-subtitle {
   display: inline-flex;
-  margin-top: 10px;
+  margin-top: 8px;
   padding: 4px 12px;
   border-radius: 999px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-color);
-  color: var(--accent-color);
-  font-size: 12px;
+  background: rgba(45, 125, 210, 0.1);
+  border: 1px solid rgba(45, 125, 210, 0.25);
+  color: #5ba4f5;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
 /* ── App Layout ──────────────────────────────────── */
 .app-layout {
-  height: calc(100vh - 36px);
+  height: calc(100vh - 52px);
   width: 100vw;
   overflow: hidden;
   display: grid;
@@ -555,72 +636,41 @@ onUnmounted(() => {
   padding: 22px 24px;
 }
 
-/* ── Sidebar Brand ───────────────────────────────── */
-.sidebar-brand {
-  padding: 16px 16px 12px;
-  border-bottom: 1px solid var(--border-color);
-}
 
-.sidebar-logo-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.sidebar-logo-img {
-  width: 34px;
-  height: 34px;
-  object-fit: contain;
-  border-radius: 8px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-color);
-  padding: 4px;
-  flex-shrink: 0;
-}
-
-.sidebar-brand-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-}
-
-.sidebar-brand-name {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--text-title);
-  letter-spacing: -0.01em;
-}
-
-.sidebar-brand-sub {
-  font-size: 11.5px;
-  color: var(--text-muted);
-  font-weight: 500;
-  margin-top: 1px;
-}
 
 /* ── Active Master Box ───────────────────────────── */
 .active-master-box {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--border-color);
-  background: rgba(45, 125, 210, 0.05);
+  background: transparent;
+}
+
+.admin-mode-box {
+  border-bottom: 1px solid rgba(245, 158, 11, 0.3) !important;
+  background: rgba(245, 158, 11, 0.02) !important;
 }
 
 .master-avatar {
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: var(--accent-color);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 16px;
-  font-weight: 800;
+  font-size: 12.5px;
+  font-weight: 700;
   flex-shrink: 0;
   letter-spacing: 0;
+}
+
+.admin-avatar {
+  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+  box-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
 }
 
 .master-info {
@@ -628,20 +678,21 @@ onUnmounted(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 0px;
+  line-height: 1.25;
 }
 
 .master-label {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.05em;
   font-weight: 600;
 }
 
 .master-name {
-  font-size: 14.5px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--text-title);
   white-space: nowrap;
   overflow: hidden;
@@ -649,8 +700,8 @@ onUnmounted(() => {
 }
 
 .master-logout-btn {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   background: transparent;
@@ -659,7 +710,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  font-size: 12px;
   flex-shrink: 0;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
@@ -695,14 +746,14 @@ onUnmounted(() => {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  padding: 10px 8px 4px;
+  padding: 14px 12px 6px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 10px;
+  gap: 12px;
+  padding: 10px 12px;
   border-radius: 7px;
   color: var(--text-secondary);
   font-size: 14px;
@@ -710,7 +761,7 @@ onUnmounted(() => {
   text-decoration: none;
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
-  margin-bottom: 1px;
+  margin-bottom: 2px;
 }
 
 .nav-item:hover {
@@ -719,11 +770,11 @@ onUnmounted(() => {
 }
 
 .nav-item.active {
-  background: rgba(45, 125, 210, 0.12);
+  background: rgba(45, 125, 210, 0.1);
   color: #5ba4f5;
   font-weight: 600;
   border-left: 3px solid var(--accent-color);
-  padding-left: 7px;
+  padding-left: 9px;
 }
 
 .nav-icon {
@@ -744,11 +795,9 @@ onUnmounted(() => {
   background: #ffffff;
   border-right-color: var(--border-color);
 }
-:global(html[data-theme="light"] .sidebar-brand) {
-  border-bottom-color: var(--border-color);
-}
+
 :global(html[data-theme="light"] .active-master-box) {
-  background: rgba(37, 99, 235, 0.04);
+  background: transparent;
   border-bottom-color: var(--border-color);
 }
 :global(html[data-theme="light"] .nav-item.active) {
@@ -797,5 +846,40 @@ onUnmounted(() => {
   .app-content {
     padding: 16px;
   }
+}
+
+.login-toggle-wrapper {
+  text-align: center;
+  margin-top: 8px;
+}
+
+.login-toggle-link {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.15s ease;
+}
+
+.login-toggle-link:hover {
+  color: var(--accent-color);
+}
+
+.admin-login-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(245, 158, 11, 0.05);
+  border: 1px dashed rgba(245, 158, 11, 0.25);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #f59e0b;
+  font-size: 13.5px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.admin-login-indicator i {
+  font-size: 15px;
 }
 </style>

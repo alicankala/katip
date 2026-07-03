@@ -179,12 +179,11 @@ onMounted(() => {
 
     <div class="table-panel">
       <div class="filter-row">
-        <span class="p-input-icon-left">
-          <i class="pi pi-search" style="margin-left: 10px;" />
+        <span class="p-input-icon-left" style="width: 320px;">
+          <i class="pi pi-search" />
           <InputText
             v-model="aramaKelimesi"
             placeholder="İş emri, plaka, müşteri ara..."
-            style="width: 320px; padding-left: 35px;"
           />
         </span>
 
@@ -345,17 +344,7 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.p-input-icon-left {
-  position: relative;
-  display: inline-block;
-}
 
-.p-input-icon-left i {
-  position: absolute;
-  top: 50%;
-  margin-top: -0.5rem;
-  color: #999;
-}
 
 :global(html[data-theme="light"] .page-header h2),
 :global(html[data-theme="light"] .summary-card strong) {

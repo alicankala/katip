@@ -12,6 +12,7 @@ const veritabaniBilgileri = ref({
 })
 const aktifUsta = ref(null)
 const tema = ref(localStorage.getItem('uygulamaTema') || 'dark')
+const sonYedekTarihi = ref(localStorage.getItem('sonYedekTarihi') || 'Yapılmadı')
 
 const temaDegistir = () => {
   tema.value = tema.value === 'dark' ? 'light' : 'dark'
@@ -31,6 +32,12 @@ const pinForm = reactive({
   yeniPinTekrar: ''
 })
 
+const adminPinForm = reactive({
+  eskiPin: '',
+  yeniPin: '',
+  yeniPinTekrar: ''
+})
+
 const yakinda = () => {
   alert('Bu özellik sonraki adımda eklenecek.')
 }
@@ -39,10 +46,59 @@ const pinTemizle = (deger) => {
   return String(deger || '').replace(/\D/g, '').slice(0, 4)
 }
 
+const adminPinDegistir = () => {
+  adminPinForm.eskiPin = pinTemizle(adminPinForm.eskiPin)
+  adminPinForm.yeniPin = pinTemizle(adminPinForm.yeniPin)
+  adminPinForm.yeniPinTekrar = pinTemizle(adminPinForm.yeniPinTekrar)
+
+  const currentAdminPin = localStorage.getItem('uygulamaAdminPin') || '0000'
+
+  if (adminPinForm.eskiPin !== currentAdminPin) {
+    alert('Eski Admin PIN hatalı.')
+    return
+  }
+
+  if (adminPinForm.yeniPin.length !== 4) {
+    alert('Yeni PIN 4 haneli olmalıdır.')
+    return
+  }
+
+  if (adminPinForm.yeniPin !== adminPinForm.yeniPinTekrar) {
+    alert('Yeni PIN tekrarı aynı değil.')
+    return
+  }
+
+  localStorage.setItem('uygulamaAdminPin', adminPinForm.yeniPin)
+  alert(
+    'Admin PIN başarıyla değiştirildi.\n\n' +
+    'Güvenlik için uygulama şimdi kapanacak.\n' +
+    'Lütfen uygulamayı tekrar açıp yeni PIN ile giriş yapın.'
+  )
+
+  Object.assign(adminPinForm, {
+    eskiPin: '',
+    yeniPin: '',
+    yeniPinTekrar: ''
+  })
+
+  localStorage.removeItem('aktifUsta')
+
+  if (window.api?.pencereKapat) {
+    window.api.pencereKapat()
+  } else {
+    window.close()
+  }
+}
+
 const pinDegistir = async () => {
   pinForm.eskiPin = pinTemizle(pinForm.eskiPin)
   pinForm.yeniPin = pinTemizle(pinForm.yeniPin)
   pinForm.yeniPinTekrar = pinTemizle(pinForm.yeniPinTekrar)
+
+  if (aktifUsta.value?.id === 'admin') {
+    alert('Destek/Admin PIN kodu bu arayüzden değiştirilemez.')
+    return
+  }
 
   if (!aktifUsta.value?.id) {
     alert('Aktif usta bulunamadı. Lütfen çıkış yapıp tekrar giriş yapın.')
@@ -112,6 +168,8 @@ const veritabaniYedekle = async () => {
     const res = await window.api.veritabaniYedekle()
 
     if (res && res.success) {
+      localStorage.setItem('sonYedekTarihi', new Date().toLocaleString('tr-TR'))
+      sonYedekTarihi.value = localStorage.getItem('sonYedekTarihi') || 'Yapılmadı'
       alert(
         'Veritabanı başarıyla yedeklendi!\n\n' +
         'Yedek Yolu:\n' +
@@ -238,90 +296,49 @@ onMounted(() => {
     </div>
 
     <div class="settings-grid">
-      <div class="panel settings-card">
-        <div class="settings-card-icon">
-          <i class="pi pi-database"></i>
-        </div>
-
-        <div>
-          <h2>Veritabanı ve Yedekleme</h2>
-
-          <div class="settings-actions">
-<Button
-  label="Verileri Yedekle"
-  icon="pi pi-download"
-  severity="info"
-  :loading="yedekleniyor"
-  @click="veritabaniYedekle"
-/>
-
-<Button
-  label="Yedek Klasörünü Aç"
-  icon="pi pi-folder-open"
-  severity="secondary"
-  outlined
-  :loading="klasorAciliyor"
-  @click="yedekKlasorunuAc"
-/>
-
-<Button
-  label="Yedekten Geri Yükle"
-  icon="pi pi-upload"
-  severity="warning"
-  outlined
-  :loading="geriYukleniyor"
-  @click="yedektenGeriYukle"
-/>
-          </div>
-        </div>
-      </div>
-
+      <!-- 1. GENEL BİLGİLER (Visible to Everyone) -->
       <div class="panel settings-card">
         <div class="settings-card-icon">
           <i class="pi pi-info-circle"></i>
         </div>
 
         <div>
-          <h2>Uygulama Bilgileri</h2>
+          <h2>Genel Bilgiler</h2>
 
+          <div class="info-box">
+            <strong>Uygulama:</strong> Kâtip<br />
+            <strong>Tür:</strong> Servis Takip Sistemi<br />
+            <strong>Not:</strong> Bu uygulama fatura kesmez.
+          </div>
 
-<div class="info-box">
-  <strong>Uygulama:</strong> Özgehan Otomotiv<br />
-  <strong>Tür:</strong> Servis Takip Sistemi<br />
-  <strong>Not:</strong> Bu uygulama fatura kesmez.
-</div>
+          <div class="theme-box">
+            <div>
+              <strong>Tema</strong>
+              <span>
+                Şu an:
+                {{ tema === 'dark' ? 'Koyu Tema' : 'Açık Tema' }}
+              </span>
+            </div>
 
-<div class="theme-box">
-  <div>
-    <strong>Tema</strong>
-    <span>
-      Şu an:
-      {{ tema === 'dark' ? 'Koyu Tema' : 'Açık Tema' }}
-    </span>
-  </div>
+            <Button
+              :label="tema === 'dark' ? 'Açık Temaya Geç' : 'Koyu Temaya Geç'"
+              :icon="tema === 'dark' ? 'pi pi-sun' : 'pi pi-moon'"
+              severity="secondary"
+              outlined
+              @click="temaDegistir"
+            />
+          </div>
 
-  <Button
-    :label="tema === 'dark' ? 'Açık Temaya Geç' : 'Koyu Temaya Geç'"
-    :icon="tema === 'dark' ? 'pi pi-sun' : 'pi pi-moon'"
-    severity="secondary"
-    outlined
-    @click="temaDegistir"
-  />
-</div>
-
-<div class="path-box">
-  <strong>Veritabanı Yolu:</strong>
-  <span>{{ veritabaniBilgileri.dbPath || 'Yükleniyor...' }}</span>
-</div>
-
-<div class="path-box">
-  <strong>Yedek Klasörü:</strong>
-  <span>{{ veritabaniBilgileri.backupDir || 'Yükleniyor...' }}</span>
-</div>
+          <!-- Bilgi Mesajı (Normal Usta/Personel Görebilir) -->
+          <div v-if="aktifUsta?.role !== 'admin'" class="normal-user-note">
+            <i class="pi pi-shield"></i>
+            <span>Teknik bakım ve yedekleme araçları destek kullanıcısına özeldir.</span>
+          </div>
         </div>
       </div>
 
-      <div class="panel settings-card">
+      <!-- 2. PIN DEĞİŞTİR (Normal Usta/Personel Görebilir) -->
+      <div v-if="aktifUsta?.role !== 'admin'" class="panel settings-card">
         <div class="settings-card-icon">
           <i class="pi pi-key"></i>
         </div>
@@ -377,6 +394,181 @@ onMounted(() => {
           </div>
         </div>
       </div>
+
+      <!-- Admin PIN Değiştir (Sadece Admin Görebilir) -->
+      <div v-if="aktifUsta?.role === 'admin'" class="panel settings-card">
+        <div class="settings-card-icon">
+          <i class="pi pi-key"></i>
+        </div>
+
+        <div style="width: 100%;">
+          <h2>Admin PIN Değiştir</h2>
+
+          <div class="info-box" style="margin-bottom: 14px; background: rgba(245, 158, 11, 0.03); border-color: rgba(245, 158, 11, 0.2);">
+            <strong style="color: #f59e0b;">Aktif Destek Yetkilisi:</strong>
+            Alican Kala
+          </div>
+
+          <div class="pin-form">
+            <div class="form-group">
+              <label>Eski Admin PIN</label>
+              <InputText
+                v-model="adminPinForm.eskiPin"
+                type="password"
+                maxlength="4"
+                placeholder="4 haneli"
+                @input="adminPinForm.eskiPin = pinTemizle(adminPinForm.eskiPin)"
+              />
+            </div>
+
+            <div class="form-group">
+              <label>Yeni Admin PIN</label>
+              <InputText
+                v-model="adminPinForm.yeniPin"
+                type="password"
+                maxlength="4"
+                placeholder="4 haneli"
+                @input="adminPinForm.yeniPin = pinTemizle(adminPinForm.yeniPin)"
+              />
+            </div>
+
+            <div class="form-group">
+              <label>Yeni Admin PIN Tekrar</label>
+              <InputText
+                v-model="adminPinForm.yeniPinTekrar"
+                type="password"
+                maxlength="4"
+                placeholder="4 haneli"
+                @input="adminPinForm.yeniPinTekrar = pinTemizle(adminPinForm.yeniPinTekrar)"
+              />
+            </div>
+
+            <Button
+              label="Admin PIN Değiştir"
+              icon="pi pi-key"
+              severity="warning"
+              @click="adminPinDegistir"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. YEDEKLEME VE SİSTEM (Sadece Admin Görebilir) -->
+      <div v-if="aktifUsta?.role === 'admin'" class="panel settings-card">
+        <div class="settings-card-icon">
+          <i class="pi pi-database"></i>
+        </div>
+
+        <div style="width: 100%;">
+          <h2>Yedekleme ve Sistem</h2>
+          <p style="margin: 0 0 16px; color: var(--text-secondary); font-size: 13.5px;">
+            Veritabanı dosyalarını yedekleyebilir, geri yükleyebilir ve konumlarını inceleyebilirsiniz.
+          </p>
+
+          <div class="settings-actions" style="margin-bottom: 18px;">
+            <Button
+              label="Verileri Yedekle"
+              icon="pi pi-download"
+              severity="info"
+              :loading="yedekleniyor"
+              @click="veritabaniYedekle"
+            />
+
+            <Button
+              label="Yedek Klasörünü Aç"
+              icon="pi pi-folder-open"
+              severity="secondary"
+              outlined
+              :loading="klasorAciliyor"
+              @click="yedekKlasorunuAc"
+            />
+
+            <Button
+              label="Yedekten Geri Yükle"
+              icon="pi pi-upload"
+              severity="warning"
+              outlined
+              :loading="geriYukleniyor"
+              @click="yedektenGeriYukle"
+            />
+          </div>
+
+          <div class="path-grid">
+            <div class="path-box" style="margin-top: 0;">
+              <strong>Veritabanı Yolu:</strong>
+              <span>{{ veritabaniBilgileri.dbPath || 'Yükleniyor...' }}</span>
+            </div>
+
+            <div class="path-box" style="margin-top: 0;">
+              <strong>Yedek Klasörü:</strong>
+              <span>{{ veritabaniBilgileri.backupDir || 'Yükleniyor...' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. DESTEK & BAKIM PANELİ (Sadece Admin Görebilir) -->
+      <div v-if="aktifUsta?.role === 'admin'" class="panel settings-card admin-support-card">
+        <div class="settings-card-icon admin-support-icon">
+          <i class="pi pi-shield"></i>
+        </div>
+
+        <div style="width: 100%;">
+          <h2>Destek &amp; Bakım Paneli</h2>
+          <p style="margin: 0 0 14px; color: var(--text-secondary); font-size: 13.5px;">
+            Sistem durumu, aktif oturum yetkisi ve son işlemler teşhis ekranı.
+          </p>
+
+          <div class="admin-panel-grid">
+            <div class="admin-info-group">
+              <h4><i class="pi pi-info-circle"></i> Sistem Durumu</h4>
+              <div class="status-indicator-row">
+                <span class="status-indicator-label">Aktif Kullanıcı:</span>
+                <span class="status-indicator-value">Alican Kala</span>
+              </div>
+              <div class="status-indicator-row">
+                <span class="status-indicator-label">Uygulama Modu:</span>
+                <span class="status-indicator-value text-amber">Destek Modu</span>
+              </div>
+              <div class="status-indicator-row">
+                <span class="status-indicator-label">Veritabanı Bağlantısı:</span>
+                <span class="status-indicator-value text-green">
+                  <span class="status-dot dot-green"></span> Aktif
+                </span>
+              </div>
+              <div class="status-indicator-row">
+                <span class="status-indicator-label">Uygulama Durumu:</span>
+                <span class="status-indicator-value text-green">
+                  <span class="status-dot dot-green"></span> Çalışıyor
+                </span>
+              </div>
+            </div>
+
+            <div class="admin-info-group">
+              <h4><i class="pi pi-clock"></i> Zaman &amp; Yetki</h4>
+              <div class="status-indicator-row">
+                <span class="status-indicator-label">Son Yedekleme:</span>
+                <span class="status-indicator-value text-amber">{{ sonYedekTarihi }}</span>
+              </div>
+              <div class="status-indicator-row">
+                <span class="status-indicator-label">Oturum Tipi:</span>
+                <span class="status-indicator-value">Sanal Destek Yetkisi</span>
+              </div>
+              <div class="status-indicator-row">
+                <span class="status-indicator-label">Uzaktan Bağlantı:</span>
+                <span class="status-indicator-value">Kullanıma Hazır (Dış Araçlar)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Hakkında Bölümü -->
+    <div class="settings-about-footer">
+      <h3>Kâtip</h3>
+      <p>Oto Servis Takip Sistemi</p>
+      <span>Alican Kala tarafından hazırlanmıştır.</span>
     </div>
   </div>
 </template>
@@ -521,5 +713,129 @@ onMounted(() => {
   display: block;
   color: var(--text-muted);
   font-size: 14px;
+}
+
+.settings-about-footer {
+  margin-top: 36px;
+  padding-top: 20px;
+  border-top: 1px dashed var(--border-color-soft);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.settings-about-footer h3 {
+  margin: 0 0 4px;
+  color: var(--text-secondary);
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.settings-about-footer p {
+  margin: 0 0 2px;
+  font-weight: 500;
+}
+
+.settings-about-footer span {
+  font-size: 11.5px;
+  opacity: 0.85;
+}
+
+/* ── Destek & Bakım Paneli ─────────────────────── */
+.admin-support-card {
+  border-left: 4px solid #f59e0b !important;
+  background: rgba(245, 158, 11, 0.01) !important;
+}
+
+.admin-support-icon i {
+  color: #f59e0b !important;
+}
+
+.admin-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-top: 14px;
+}
+
+.admin-info-group h4 {
+  margin: 0 0 10px;
+  color: var(--text-title);
+  font-size: 13.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-indicator-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-color-soft);
+  font-size: 13px;
+}
+.status-indicator-row:last-child {
+  border-bottom: none;
+}
+
+.status-indicator-label {
+  color: var(--text-muted);
+}
+
+.status-indicator-value {
+  font-weight: 600;
+}
+
+.text-amber {
+  color: #f59e0b;
+}
+
+.text-green {
+  color: #10b981;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  position: relative;
+}
+
+.dot-green {
+  background-color: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.path-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 12px;
+}
+
+.normal-user-note {
+  background: var(--bg-active-box);
+  border: 1px dashed var(--border-color);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--text-muted);
+  margin-top: 12px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.4;
+}
+
+.normal-user-note i {
+  color: var(--accent-color);
+  font-size: 16px;
 }
 </style>

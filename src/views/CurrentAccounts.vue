@@ -507,12 +507,11 @@ onMounted(async () => {
       <!-- Sol Cari Hesap Listesi Bölümü -->
       <div class="cari-sol-panel panel">
         <div class="filtre-row" style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
-          <span class="p-input-icon-left" style="flex: 1; min-width: 200px; position: relative;">
-            <i class="pi pi-search" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #64748b;" />
+          <span class="p-input-icon-left" style="flex: 1; min-width: 200px;">
+            <i class="pi pi-search" />
             <InputText 
               v-model="aramaKelimesi" 
               placeholder="Cari Hesap Ara (Firma, not...)" 
-              style="width: 100%; padding-left: 35px;" 
             />
           </span>
           

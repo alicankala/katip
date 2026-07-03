@@ -308,7 +308,10 @@ onMounted(() => {
         <p class="page-subtitle">Depo stokunu, kritik parçaları ve hareketleri buradan yönetin.</p>
       </div>
       <div style="display: flex; gap: 12px; align-items: center;">
-        <InputText v-model="aramaKelimesi" placeholder="Kodu, Adı veya Rafı Ara..." style="width: 280px;" />
+        <span class="p-input-icon-left" style="width: 280px;">
+          <i class="pi pi-search" />
+          <InputText v-model="aramaKelimesi" placeholder="Kodu, Adı veya Rafı Ara..." />
+        </span>
         <Button
           label="Yeni Parça Ekle"
           icon="pi pi-plus"

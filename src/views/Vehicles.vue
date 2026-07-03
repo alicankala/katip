@@ -164,13 +164,12 @@ onMounted(() => {
       <h2>Araç Yönetimi</h2>
       
       <div style="display: flex; gap: 15px; align-items: center;">
-        <span class="p-input-icon-left">
-          <i class="pi pi-search" style="margin-left: 10px;" />
+        <span class="p-input-icon-left" style="width: 360px;">
+          <i class="pi pi-search" />
           <InputText
-  v-model="aramaKelimesi"
-  placeholder="Plaka, Müşteri, Marka, Model veya Şase Ara..."
-  style="width: 360px; padding-left: 35px;"
-/>
+            v-model="aramaKelimesi"
+            placeholder="Plaka, Müşteri, Marka, Model veya Şase Ara..."
+          />
         </span>
         <Button 
   label="Yeni Araç Ekle" 
@@ -277,15 +276,5 @@ onMounted(() => {
 .form-group label {
   font-size: 0.95rem;
   color: var(--text-secondary);
-}
-.p-input-icon-left {
-  position: relative;
-  display: inline-block;
-}
-.p-input-icon-left i {
-  position: absolute;
-  top: 50%;
-  margin-top: -0.5rem;
-  color: #999;
 }
 </style>

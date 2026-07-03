@@ -21,7 +21,7 @@ let win: BrowserWindow | null = null
 
 function createWindow() {
 win = new BrowserWindow({
-  title: 'Özgehan Otomotiv',
+  title: 'Kâtip',
   width: 1440,
   height: 900,
   minWidth: 1180,

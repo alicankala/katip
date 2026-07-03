@@ -799,8 +799,8 @@ const servisFisiYazdirGercek = () => {
   const isEmri = seciliIsEmri.value
 
   const firma = {
-    unvan: 'Özgehan Otomotiv',
-    altBaslik: 'Servis Takip Sistemi',
+    unvan: 'Kâtip',
+    altBaslik: 'Oto Servis Takip Sistemi',
     aciklama: 'Bakım, onarım ve servis takip fişi'
   }
 
@@ -1287,12 +1287,11 @@ onMounted(() => {
       <h2>İş Emirleri (Tamir Fişleri)</h2>
 
       <div style="display: flex; gap: 15px; align-items: center;">
-        <span class="p-input-icon-left">
-          <i class="pi pi-search" style="margin-left: 10px;" />
+        <span class="p-input-icon-left" style="width: 300px;">
+          <i class="pi pi-search" />
           <InputText
             v-model="aramaKelimesi"
             placeholder="Plaka, Müşteri veya İşlem Ara..."
-            style="width: 300px; padding-left: 35px;"
           />
         </span>
 
@@ -1563,8 +1562,8 @@ onMounted(() => {
         <div class="preview-sheet">
           <div class="top-header">
             <div class="company-box">
-              <h1 class="company-name">Özgehan Otomotiv</h1>
-              <div class="company-subtitle">Servis Takip Sistemi</div>
+              <h1 class="company-name">Kâtip</h1>
+              <div class="company-subtitle">Oto Servis Takip Sistemi</div>
               <div class="company-desc">Bakım, onarım ve servis takip fişi</div>
             </div>
 
@@ -2121,17 +2120,7 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.p-input-icon-left {
-  position: relative;
-  display: inline-block;
-}
 
-.p-input-icon-left i {
-  position: absolute;
-  top: 50%;
-  margin-top: -0.5rem;
-  color: #999;
-}
 .inline-empty-panel {
   margin-top: 18px;
   background: var(--bg-active-box);
