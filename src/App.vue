@@ -165,10 +165,65 @@ const cikisYap = () => {
 const disaridanCikisYap = () => {
   cikisYap()
 }
+const showPhoneAccessModal = ref(false)
+const togglePhoneAccessModal = () => {
+  showPhoneAccessModal.value = !showPhoneAccessModal.value
+}
+const telefonErisimi = ref({
+  running: false,
+  port: 4317,
+  ip: '',
+  ips: []
+})
+
+const telefonErisimiDurumGetir = async () => {
+  if (window.api?.telefonErisimiDurumGetir) {
+    const res = await window.api.telefonErisimiDurumGetir()
+    if (res?.success) {
+      telefonErisimi.value.running = res.running
+      telefonErisimi.value.port = res.port
+      telefonErisimi.value.ip = res.ip
+      telefonErisimi.value.ips = res.ips || []
+    }
+  }
+}
+
+const telefonErisimiBaslat = async () => {
+  if (!window.api?.telefonErisimiBaslat) return
+  try {
+    const res = await window.api.telefonErisimiBaslat(Number(telefonErisimi.value.port))
+    if (res?.success) {
+      telefonErisimi.value.running = true
+      telefonErisimi.value.port = res.port
+      telefonErisimi.value.ip = res.ip
+      telefonErisimi.value.ips = res.ips || []
+    } else {
+      alert('Telefon erişimi başlatılamadı: ' + (res?.error || 'Bilinmeyen hata'))
+    }
+  } catch (error) {
+    console.error('Telefon erişimi başlatma hatası:', error)
+  }
+}
+
+const telefonErisimiDurdur = async () => {
+  if (!window.api?.telefonErisimiDurdur) return
+  try {
+    const res = await window.api.telefonErisimiDurdur()
+    if (res?.success) {
+      telefonErisimi.value.running = false
+    } else {
+      alert('Telefon erişimi durdurulamadı.')
+    }
+  } catch (error) {
+    console.error('Telefon erişimi durdurma hatası:', error)
+  }
+}
+
 onMounted(() => {
   temaUygula()
   localStorage.removeItem('aktifUsta')
   ustalariYukle()
+  telefonErisimiDurumGetir()
   window.addEventListener('usta-cikis-yapildi', disaridanCikisYap)
 })
 
@@ -298,6 +353,56 @@ onUnmounted(() => {
           <a href="#" @click.prevent="toggleAdminLogin" class="login-toggle-link">
             {{ isAdminLogin ? 'Normal Girişe Dön' : 'Destek Girişi' }}
           </a>
+          <span class="login-toggle-separator">|</span>
+          <a href="#" @click.prevent="togglePhoneAccessModal" class="login-toggle-link">
+            Telefon Erişimi
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Telefon Erişimi Modalı -->
+    <div v-if="showPhoneAccessModal" class="phone-modal-overlay" @click.self="showPhoneAccessModal = false">
+      <div class="phone-modal-content">
+        <div class="phone-card-header">
+          <i class="pi pi-mobile phone-icon"></i>
+          <h3>Telefon Erişimi</h3>
+          <span class="status-badge" :class="{ 'status-active': telefonErisimi.running }">
+            {{ telefonErisimi.running ? 'Açık' : 'Kapalı' }}
+          </span>
+        </div>
+        
+        <div class="phone-card-body">
+          <div v-if="telefonErisimi.running" class="phone-address-box">
+            <span class="address-label">Bağlantı Adresi:</span>
+            <code class="address-value">http://{{ telefonErisimi.ip }}:{{ telefonErisimi.port }}</code>
+          </div>
+          <div v-else class="phone-info-text">
+            Telefon bağlantısı için servisi başlatın.
+          </div>
+        </div>
+        
+        <div class="phone-card-actions">
+          <button 
+            v-if="!telefonErisimi.running"
+            class="phone-btn btn-start" 
+            @click="telefonErisimiBaslat"
+          >
+            <i class="pi pi-play"></i> Başlat
+          </button>
+          <button 
+            v-else
+            class="phone-btn btn-stop" 
+            @click="telefonErisimiDurdur"
+          >
+            <i class="pi pi-stop"></i> Durdur
+          </button>
+          <button class="phone-btn btn-refresh" @click="telefonErisimiDurumGetir" title="Yenile">
+            <i class="pi pi-refresh"></i>
+          </button>
+          <button class="phone-btn btn-close" @click="showPhoneAccessModal = false">
+            Kapat
+          </button>
         </div>
       </div>
     </div>
@@ -496,6 +601,179 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   padding: 24px;
+}
+
+/* ── Phone Modal Overlay ─────────────────────────── */
+.phone-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.phone-modal-content {
+  width: 100%;
+  max-width: 360px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-color);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.phone-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.phone-icon {
+  font-size: 16px;
+  color: var(--accent-color);
+  background: rgba(45, 125, 210, 0.1);
+  padding: 6px;
+  border-radius: 6px;
+}
+
+.phone-card-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-title);
+  flex: 1;
+}
+
+.status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  color: #fb923c;
+  text-transform: uppercase;
+}
+
+.status-badge.status-active {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.phone-card-body {
+  font-size: 12.5px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+}
+
+.phone-address-box {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.address-label {
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.address-value {
+  display: block;
+  font-family: monospace;
+  font-size: 12.5px;
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.05);
+  border: 1px dashed rgba(16, 185, 129, 0.2);
+  padding: 4px 8px;
+  border-radius: 6px;
+  word-break: break-all;
+  user-select: all;
+}
+
+.phone-info-text {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.phone-card-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.phone-btn {
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.btn-start {
+  flex: 1;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+.btn-start:hover {
+  background: rgba(34, 197, 94, 0.2);
+}
+
+.btn-stop {
+  flex: 1;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+.btn-stop:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.btn-refresh {
+  width: 32px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+.btn-refresh:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-title);
+}
+
+.btn-close {
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+.btn-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-title);
+}
+
+.login-toggle-separator {
+  color: var(--text-muted);
+  font-size: 12px;
+  margin: 0 8px;
+  user-select: none;
 }
 
 .login-card {

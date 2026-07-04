@@ -14,6 +14,66 @@ const aktifUsta = ref(null)
 const tema = ref(localStorage.getItem('uygulamaTema') || 'dark')
 const sonYedekTarihi = ref(localStorage.getItem('sonYedekTarihi') || 'Yapılmadı')
 
+const telefonErisimi = ref({
+  running: false,
+  port: 4317,
+  ip: '',
+  ips: []
+})
+const telefonYukleniyor = ref(false)
+
+const telefonDurumunuGuncelle = async () => {
+  if (window.api?.telefonErisimiDurumGetir) {
+    const res = await window.api.telefonErisimiDurumGetir()
+    if (res?.success) {
+      telefonErisimi.value.running = res.running
+      telefonErisimi.value.port = res.port
+      telefonErisimi.value.ip = res.ip
+      telefonErisimi.value.ips = res.ips || []
+    }
+  }
+}
+
+const telefonErisimiBaslat = async () => {
+  if (!window.api?.telefonErisimiBaslat) return
+  
+  telefonYukleniyor.value = true
+  try {
+    const res = await window.api.telefonErisimiBaslat(Number(telefonErisimi.value.port))
+    if (res?.success) {
+      telefonErisimi.value.running = true
+      telefonErisimi.value.port = res.port
+      telefonErisimi.value.ip = res.ip
+      telefonErisimi.value.ips = res.ips || []
+    } else {
+      alert('Telefon erişimi başlatılamadı: ' + (res?.error || 'Bilinmeyen hata'))
+    }
+  } catch (error) {
+    console.error('Telefon erişimi başlatma hatası:', error)
+    alert('Bir hata oluştu.')
+  } finally {
+    telefonYukleniyor.value = false
+  }
+}
+
+const telefonErisimiDurdur = async () => {
+  if (!window.api?.telefonErisimiDurdur) return
+
+  telefonYukleniyor.value = true
+  try {
+    const res = await window.api.telefonErisimiDurdur()
+    if (res?.success) {
+      telefonErisimi.value.running = false
+    } else {
+      alert('Telefon erişimi durdurulamadı.')
+    }
+  } catch (error) {
+    console.error('Telefon erişimi durdurma hatası:', error)
+  } finally {
+    telefonYukleniyor.value = false
+  }
+}
+
 const temaDegistir = () => {
   tema.value = tema.value === 'dark' ? 'light' : 'dark'
   localStorage.setItem('uygulamaTema', tema.value)
@@ -281,6 +341,7 @@ onMounted(() => {
 
   aktifUsta.value = JSON.parse(localStorage.getItem('aktifUsta') || 'null')
   veritabaniBilgileriniGetir()
+  telefonDurumunuGuncelle()
 })
 </script>
 
@@ -452,6 +513,8 @@ onMounted(() => {
           </div>
         </div>
       </div>
+
+
 
       <!-- 3. YEDEKLEME VE SİSTEM (Sadece Admin Görebilir) -->
       <div v-if="aktifUsta?.role === 'admin'" class="panel settings-card">
@@ -812,6 +875,11 @@ onMounted(() => {
 .dot-green {
   background-color: #10b981;
   box-shadow: 0 0 6px #10b981;
+}
+
+.dot-amber {
+  background-color: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
 }
 
 .path-grid {

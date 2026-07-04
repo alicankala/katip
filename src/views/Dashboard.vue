@@ -271,12 +271,15 @@ onMounted(() => {
             <span>Müşteri / Plaka / Telefon Ara</span>
           </div>
           <div class="search-module-input-row">
-            <InputText
-              v-model="gecmisAramaMetni"
-              placeholder="Plaka, telefon, müşteri adı veya işlem yazın..."
-              class="search-module-input"
-              @keyup.enter="gecmisSorgula"
-            />
+            <span class="p-input-icon-left" style="flex: 1;">
+              <i class="pi pi-search" />
+              <InputText
+                v-model="gecmisAramaMetni"
+                placeholder="Plaka, telefon, müşteri adı veya işlem yazın..."
+                class="search-module-input"
+                @keyup.enter="gecmisSorgula"
+              />
+            </span>
             <Button
               icon="pi pi-search"
               :loading="gecmisYukleniyor"

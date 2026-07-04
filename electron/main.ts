@@ -3,6 +3,7 @@ import { app, BrowserWindow, ipcMain, shell, dialog, Menu, type IpcMainInvokeEve
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import { promises as fs } from 'node:fs'
+import { startPhoneServer, stopPhoneServer, isServerRunning, getCurrentPort, getLocalIPAddress, getLocalIPAddresses } from './phoneServer.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -144,7 +145,7 @@ function ipcKopruleriniKur() {
         ORDER BY id ASC
       `).all()
 
-      return { success: true, ustalar }
+      return { success: true, ustalar, dbPath }
     } catch (error) {
       console.error('Ustaları getirme hatası:', error)
       return { success: false, error: getErrorMessage(error) }
@@ -2573,6 +2574,50 @@ return {
       return { success: true }
     } catch (error) {
       console.error('Gider silme hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 35. Telefon Erişimi - Başlat
+  kanalEkle('telefon-erisimi-baslat', async (_event, port: number) => {
+    try {
+      const res = await startPhoneServer(Number(port || 4317))
+      if (res.success) {
+        return {
+          ...res,
+          ips: getLocalIPAddresses()
+        }
+      }
+      return res
+    } catch (error) {
+      console.error('[PhoneServer] Start handler error:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 36. Telefon Erişimi - Durdur
+  kanalEkle('telefon-erisimi-durdur', async () => {
+    try {
+      await stopPhoneServer()
+      return { success: true }
+    } catch (error) {
+      console.error('[PhoneServer] Stop handler error:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 37. Telefon Erişimi - Durum Getir
+  kanalEkle('telefon-erisimi-durum-getir', () => {
+    try {
+      return {
+        success: true,
+        running: isServerRunning(),
+        port: getCurrentPort(),
+        ip: getLocalIPAddress(),
+        ips: getLocalIPAddresses()
+      }
+    } catch (error) {
+      console.error('[PhoneServer] Status handler error:', error)
       return { success: false, error: getErrorMessage(error) }
     }
   })

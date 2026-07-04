@@ -71,5 +71,10 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   giderleriGetir: () => ipcRenderer.invoke('giderleri-getir'),
   giderEkle: (gider) => ipcRenderer.invoke('gider-ekle', gider),
   giderGuncelle: (gider) => ipcRenderer.invoke('gider-guncelle', gider),
-  giderSil: (id) => ipcRenderer.invoke('gider-sil', id)
+  giderSil: (id) => ipcRenderer.invoke('gider-sil', id),
+
+  // Telefon Erişimi
+  telefonErisimiBaslat: (port) => ipcRenderer.invoke('telefon-erisimi-baslat', port),
+  telefonErisimiDurdur: () => ipcRenderer.invoke('telefon-erisimi-durdur'),
+  telefonErisimiDurumGetir: () => ipcRenderer.invoke('telefon-erisimi-durum-getir')
 })
