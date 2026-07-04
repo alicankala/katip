@@ -2,11 +2,17 @@ import http from 'node:http'
 import os from 'node:os'
 import db from './database.js'
 
-// Data migration for existing mobile work orders
+// Data migration for existing mobile work orders and items
 try {
   db.prepare("UPDATE work_orders SET status = 'Açık' WHERE status = 'Acik'").run()
   db.prepare("UPDATE work_orders SET status = 'Tamamlandı' WHERE status = 'Tamamlandi'").run()
   db.prepare("UPDATE work_orders SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL").run()
+  
+  db.prepare("UPDATE work_order_items SET type = 'İşçilik' WHERE type = 'Iscilik'").run()
+  db.prepare("UPDATE work_order_items SET type = 'Parça' WHERE type = 'Parca'").run()
+  
+  db.prepare("UPDATE stock_movements SET type = 'Çıkış' WHERE type = 'Cikis'").run()
+  db.prepare("UPDATE stock_movements SET type = 'Giriş' WHERE type = 'Giris'").run()
 } catch (e) {
   console.error('[PhoneServer] Existing work orders migration error:', e)
 }
@@ -205,7 +211,7 @@ const addLaborTransaction = db.transaction((data: any) => {
   db.prepare(`
     INSERT INTO work_order_items 
     (work_order_id, type, part_id, description, quantity, unit_price, total_price)
-    VALUES (?, 'Iscilik', NULL, ?, ?, ?, ?)
+    VALUES (?, 'İşçilik', NULL, ?, ?, ?, ?)
   `).run(
     Number(work_order_id),
     String(description || '').trim(),
@@ -234,7 +240,7 @@ const addPartTransaction = db.transaction((data: any) => {
   db.prepare(`
     INSERT INTO work_order_items 
     (work_order_id, type, part_id, description, quantity, unit_price, total_price)
-    VALUES (?, 'Parca', ?, ?, ?, ?, ?)
+    VALUES (?, 'Parça', ?, ?, ?, ?, ?)
   `).run(
     Number(work_order_id),
     Number(part_id),
@@ -253,7 +259,7 @@ const addPartTransaction = db.transaction((data: any) => {
   stokHareketiKaydet({
     partId: Number(part_id),
     workOrderId: Number(work_order_id),
-    type: 'Cikis',
+    type: 'Çıkış',
     quantity: qty,
     oldStock,
     newStock,
@@ -277,7 +283,7 @@ const deleteItemTransaction = db.transaction((data: any) => {
 
   const workOrderId = Number(kalem.work_order_id)
 
-  if (kalem.type === 'Parca' && kalem.part_id) {
+  if ((kalem.type === 'Parça' || kalem.type === 'Parca') && kalem.part_id) {
     const part = db.prepare('SELECT stock FROM parts WHERE id = ?').get(Number(kalem.part_id)) as any
     const eskiStok = Number(part?.stock || 0)
     const miktar = Number(kalem.quantity || 0)
@@ -292,7 +298,7 @@ const deleteItemTransaction = db.transaction((data: any) => {
     stokHareketiKaydet({
       partId: Number(kalem.part_id),
       workOrderId,
-      type: 'Giris',
+      type: 'Giriş',
       quantity: miktar,
       oldStock: eskiStok,
       newStock: yeniStok,
@@ -766,9 +772,14 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
           <strong id="user-display-name">Usta Adi</strong>
         </div>
       </div>
-      <button id="logout-btn" class="logout-btn" title="Cikis Yap">
-        <i class="pi pi-sign-out"></i>
-      </button>
+      <div style="display: flex; gap: 8px;">
+        <button id="refresh-dashboard-btn" class="logout-btn" style="background: rgba(255, 255, 255, 0.05); color: var(--text-secondary);" title="Yenile">
+          <i class="pi pi-refresh"></i>
+        </button>
+        <button id="logout-btn" class="logout-btn" title="Cikis Yap">
+          <i class="pi pi-sign-out"></i>
+        </button>
+      </div>
     </div>
 
     <!-- Prominent Service Reception Button -->
@@ -1175,6 +1186,10 @@ async function loadMasters() {
       }
     });
 
+    document.getElementById('refresh-dashboard-btn').addEventListener('click', () => {
+      loadDashboard();
+    });
+
     async function loadDashboard() {
       try {
         const statsRes = await fetch('/api/dashboard');
@@ -1276,8 +1291,8 @@ itemsList.innerHTML = items.map(item => {
       '<span class="color-accent">' + tlFormat(item.total_price) + '</span>' +
     '</div>' +
     '<div class="item-row-sub">' +
-      '<span>' + (item.type === 'Parca' ? 'Yedek Parca' : 'Iscilik') + '</span>' +
-      '<span>' + item.quantity + ' ' + (item.type === 'Parca' ? 'Adet' : 'Saat') + ' x ' + tlFormat(item.unit_price) + '</span>' +
+      '<span>' + (item.type === 'Parça' || item.type === 'Parca' ? 'Yedek Parca' : 'Iscilik') + '</span>' +
+      '<span>' + item.quantity + ' ' + (item.type === 'Parça' || item.type === 'Parca' ? 'Adet' : 'Saat') + ' x ' + tlFormat(item.unit_price) + '</span>' +
     '</div>' +
   '</div>';
 }).join('');
@@ -1743,7 +1758,7 @@ itemsList.innerHTML = items.map(item => {
               FROM work_order_items 
               WHERE work_order_id = ?
               ORDER BY id ASC
-            `).all()
+            `).all(id)
  
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
             res.end(JSON.stringify({
