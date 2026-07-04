@@ -1203,6 +1203,7 @@ async function loadMasters() {
       if (confirm('Cikis yapmak istediginize emin misiniz?')) {
         localStorage.removeItem('mobActiveUser');
         activeUser = null;
+        currentTab = 'open';
         loadMasters();
         showScreen('login');
       }
@@ -1215,32 +1216,43 @@ async function loadMasters() {
     document.getElementById('tab-open').addEventListener('click', () => {
       if (currentTab === 'open') return;
       currentTab = 'open';
-      document.getElementById('tab-open').className = 'tab-btn active';
-      document.getElementById('tab-open').style.background = 'var(--bg-active)';
-      document.getElementById('tab-open').style.color = 'var(--accent)';
-      
-      document.getElementById('tab-completed').className = 'tab-btn';
-      document.getElementById('tab-completed').style.background = 'transparent';
-      document.getElementById('tab-completed').style.color = 'var(--text-secondary)';
-      
-      document.getElementById('list-title-lbl').textContent = 'Acik Is Emirleri';
+      document.getElementById('search-input').value = '';
       loadTabOrders();
     });
 
     document.getElementById('tab-completed').addEventListener('click', () => {
       if (currentTab === 'completed') return;
       currentTab = 'completed';
-      document.getElementById('tab-completed').className = 'tab-btn active';
-      document.getElementById('tab-completed').style.background = 'var(--bg-active)';
-      document.getElementById('tab-completed').style.color = 'var(--accent)';
-      
-      document.getElementById('tab-open').className = 'tab-btn';
-      document.getElementById('tab-open').style.background = 'transparent';
-      document.getElementById('tab-open').style.color = 'var(--text-secondary)';
-      
-      document.getElementById('list-title-lbl').textContent = 'Tamamlanan Is Emirleri';
+      document.getElementById('search-input').value = '';
       loadTabOrders();
     });
+
+    function updateTabVisuals() {
+      const openBtn = document.getElementById('tab-open');
+      const compBtn = document.getElementById('tab-completed');
+      const lbl = document.getElementById('list-title-lbl');
+      if (currentTab === 'open') {
+        openBtn.className = 'tab-btn active';
+        openBtn.style.background = 'var(--bg-active)';
+        openBtn.style.color = 'var(--accent)';
+        
+        compBtn.className = 'tab-btn';
+        compBtn.style.background = 'transparent';
+        compBtn.style.color = 'var(--text-secondary)';
+        
+        if (lbl) lbl.textContent = 'Acik Is Emirleri';
+      } else {
+        compBtn.className = 'tab-btn active';
+        compBtn.style.background = 'var(--bg-active)';
+        compBtn.style.color = 'var(--accent)';
+        
+        openBtn.className = 'tab-btn';
+        openBtn.style.background = 'transparent';
+        openBtn.style.color = 'var(--text-secondary)';
+        
+        if (lbl) lbl.textContent = 'Tamamlanan Is Emirleri';
+      }
+    }
 
     async function loadDashboard() {
       try {
@@ -1258,6 +1270,11 @@ async function loadMasters() {
     }
 
     async function loadTabOrders() {
+      const container = document.getElementById('orders-list');
+      if (container) {
+        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px; font-size: 14px;">Yukleniyor...</div>';
+      }
+      updateTabVisuals();
       try {
         const url = currentTab === 'open' ? '/api/work-orders' : '/api/work-orders/completed';
         const listRes = await fetch(url);
@@ -1265,6 +1282,9 @@ async function loadMasters() {
         renderWorkOrders(workOrders);
       } catch (e) {
         console.error('Is emirleri yukleme hatasi:', e);
+        if (container) {
+          container.innerHTML = '<div style="text-align: center; color: var(--warning); padding: 20px; font-size: 14px;">Liste yuklenemedi.</div>';
+        }
       }
     }
 
@@ -1273,7 +1293,8 @@ async function loadMasters() {
       document.getElementById('open-count-lbl').textContent = list.length;
 
       if (list.length === 0) {
-        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px; font-size: 14px;">Is emri bulunamadi.</div>';
+        const msg = currentTab === 'open' ? 'Acik is emri bulunamadi.' : 'Tamamlanan is emri bulunamadi.';
+        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px; font-size: 14px;">' + msg + '</div>';
         return;
       }
 

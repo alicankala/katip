@@ -169,6 +169,22 @@ const showPhoneAccessModal = ref(false)
 const togglePhoneAccessModal = () => {
   showPhoneAccessModal.value = !showPhoneAccessModal.value
 }
+const kopyalaAdres = async (text: string) => {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const input = document.createElement('input')
+      input.value = text
+      document.body.appendChild(input)
+      input.select()
+      document.execCommand('copy')
+      document.body.removeChild(input)
+    }
+  } catch (err) {
+    console.error('Kopyalama hatasi:', err)
+  }
+}
 const telefonErisimi = ref({
   running: false,
   port: 4317,
@@ -375,7 +391,17 @@ onUnmounted(() => {
         <div class="phone-card-body">
           <div v-if="telefonErisimi.running" class="phone-address-box">
             <span class="address-label">Bağlantı Adresi:</span>
-            <code class="address-value">http://{{ telefonErisimi.ip }}:{{ telefonErisimi.port }}</code>
+            <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+              <code class="address-value" style="flex: 1;">http://{{ telefonErisimi.ip }}:{{ telefonErisimi.port }}</code>
+              <button 
+                class="phone-btn btn-refresh" 
+                style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"
+                @click="kopyalaAdres('http://' + telefonErisimi.ip + ':' + telefonErisimi.port)"
+                title="Adresi Kopyala"
+              >
+                <i class="pi pi-copy"></i>
+              </button>
+            </div>
           </div>
           <div v-else class="phone-info-text">
             Telefon bağlantısı için servisi başlatın.
