@@ -664,6 +664,12 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       color: var(--accent);
       border: 1px solid rgba(56, 189, 248, 0.2);
     }
+    
+    .badge-status.tamamlandi {
+      background-color: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
 
     /* Detail View Styles */
     .detail-card {
@@ -873,12 +879,17 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
         <span id="det-total" class="color-accent">0.00 TL</span>
       </div>
 
-      <div style="display: flex; gap: 10px;">
-        <button id="add-labor-btn" class="btn btn-secondary" style="flex: 1; height: 42px; font-size: 14px; background-color: var(--bg-active);">
-          <i class="pi pi-briefcase"></i> Iscilik Ekle
-        </button>
-        <button id="add-part-btn" class="btn btn-secondary" style="flex: 1; height: 42px; font-size: 14px; background-color: var(--bg-active);">
-          <i class="pi pi-cog"></i> Parca Ekle
+      <div id="detail-actions-wrapper" style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; gap: 10px;">
+          <button id="add-labor-btn" class="btn btn-secondary" style="flex: 1; height: 42px; font-size: 14px; background-color: var(--bg-active);">
+            <i class="pi pi-briefcase"></i> Iscilik Ekle
+          </button>
+          <button id="add-part-btn" class="btn btn-secondary" style="flex: 1; height: 42px; font-size: 14px; background-color: var(--bg-active);">
+            <i class="pi pi-cog"></i> Parca Ekle
+          </button>
+        </div>
+        <button id="complete-order-btn" class="btn btn-primary" style="width: 100%; height: 42px; font-size: 14px; background-color: var(--success); color: #000; border: none; font-weight: 600;">
+          <i class="pi pi-check-circle"></i> Isi Tamamla
         </button>
       </div>
     </div>
@@ -1276,7 +1287,15 @@ async function loadMasters() {
         document.getElementById('det-master').textContent = wo.master_name || '-';
         document.getElementById('det-date').textContent = dateFormat(wo.created_at);
         const statusText = wo.status === 'Açık' ? 'Acik' : (wo.status === 'Tamamlandı' ? 'Tamamlandi' : (wo.status || 'Acik'));
-        document.getElementById('det-status').textContent = statusText;
+        const statusBadge = document.getElementById('det-status');
+        statusBadge.textContent = statusText;
+        if (wo.status === 'Açık' || wo.status === 'Acik') {
+          statusBadge.className = 'badge-status acik';
+          document.getElementById('detail-actions-wrapper').style.display = 'flex';
+        } else {
+          statusBadge.className = 'badge-status tamamlandi';
+          document.getElementById('detail-actions-wrapper').style.display = 'none';
+        }
         document.getElementById('det-desc').textContent = wo.description || 'Aciklama girilmemis.';
         document.getElementById('det-total').textContent = tlFormat(wo.total_price);
 
@@ -1313,6 +1332,37 @@ itemsList.innerHTML = items.map(item => {
     document.getElementById('detail-back-btn').addEventListener('click', () => {
       showScreen('dashboard');
       loadDashboard();
+    });
+
+    document.getElementById('complete-order-btn').addEventListener('click', async () => {
+      const curId = document.getElementById('detail-back-btn').dataset.orderId;
+      if (!activeUser || !activeUser.id) {
+        alert('Kapatacak usta bilgisi bulunamadi. Lutfen cikis yapip tekrar girin.');
+        return;
+      }
+      const ustaName = activeUser.name || 'Bilinmeyen Usta';
+      if (!confirm('Bu is emrini ' + ustaName + ' adina tamamlandi olarak kapatmak istiyor musunuz?')) {
+        return;
+      }
+      try {
+        const res = await fetch('/api/work-orders/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            work_order_id: curId,
+            master_id: activeUser.id
+          })
+        });
+        const result = await res.json();
+        if (result.success) {
+          showScreen('dashboard');
+          loadDashboard();
+        } else {
+          alert(result.error || 'Is emri kapatilamadi.');
+        }
+      } catch (e) {
+        alert('Sunucuyla baglanti kurulamadi.');
+      }
     });
 
     // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ NEW RECEPTION FLOW Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
@@ -1721,7 +1771,7 @@ itemsList.innerHTML = items.map(item => {
         }
  
         // 6. API: Get Work Order Detail and Items
-        if (pathName.startsWith('/api/work-orders/')) {
+        if (pathName.startsWith('/api/work-orders/') && pathName !== '/api/work-orders/complete') {
           try {
             const idStr = pathName.substring('/api/work-orders/'.length)
             const id = parseInt(idStr, 10)
@@ -1903,6 +1953,65 @@ itemsList.innerHTML = items.map(item => {
               console.error('[PhoneServer] Delete item error:', err)
               res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
               res.end(JSON.stringify({ success: false, error: err.message || 'Kalem silinemedi.' }))
+            }
+          })
+          return
+        }
+
+        // 13. API: Complete work order
+        if (pathName === '/api/work-orders/complete' && req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => body += chunk)
+          req.on('end', () => {
+            try {
+              const data = JSON.parse(body)
+              const { work_order_id, master_id } = data
+              
+              console.log('[PhoneServer] Complete request received - WorkOrderId:', work_order_id, 'MasterId:', master_id)
+
+              if (!work_order_id) {
+                res.writeHead(400, { 'Content-Type': 'application/json' })
+                res.end(JSON.stringify({ success: false, error: 'Is emri ID bilgisi bulunamadi.' }))
+                return
+              }
+
+              if (!master_id) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+                res.end(JSON.stringify({ success: false, error: 'Kapatacak usta bilgisi bulunamadi.' }))
+                return
+              }
+
+              const masterIdNum = Number(master_id)
+              if (isNaN(masterIdNum) || masterIdNum <= 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+                res.end(JSON.stringify({ success: false, error: 'Kapatacak usta ID bilgisi gecersiz.' }))
+                return
+              }
+
+              const masterExists = db.prepare("SELECT name FROM masters WHERE id = ?").get(masterIdNum) as any
+              if (!masterExists) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+                res.end(JSON.stringify({ success: false, error: 'Kapatacak usta sistemde bulunamadi.' }))
+                return
+              }
+
+              console.log('[PhoneServer] Kapatan Usta:', masterExists.name)
+
+              db.prepare(`
+                UPDATE work_orders
+                SET 
+                  status = 'Tamamlandı',
+                  closed_at = CURRENT_TIMESTAMP,
+                  closed_by_master_id = ?
+                WHERE id = ? AND status = 'Açık'
+              `).run(masterIdNum, Number(work_order_id))
+
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: true }))
+            } catch (err: any) {
+              console.error('[PhoneServer] Complete work order error:', err)
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: false, error: err.message || 'Is emri kapatilamadi.' }))
             }
           })
           return
