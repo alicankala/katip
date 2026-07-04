@@ -809,13 +809,23 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       </div>
     </div>
 
+    <!-- Tabs Selector -->
+    <div class="tabs-container" style="display: flex; background-color: var(--bg-card); border-radius: 10px; padding: 4px; margin-bottom: 16px; border: 1px solid var(--border);">
+      <button id="tab-open" class="tab-btn active" style="flex: 1; height: 36px; border: none; border-radius: 8px; font-weight: 600; font-size: 13.5px; cursor: pointer; transition: all 0.15s ease; background: var(--bg-active); color: var(--accent);">
+        Acik Isler
+      </button>
+      <button id="tab-completed" class="tab-btn" style="flex: 1; height: 36px; border: none; border-radius: 8px; font-weight: 600; font-size: 13.5px; cursor: pointer; transition: all 0.15s ease; background: transparent; color: var(--text-secondary);">
+        Tamamlananlar
+      </button>
+    </div>
+
     <!-- Live Search -->
     <div class="search-container">
       <i class="pi pi-search"></i>
       <input id="search-input" type="text" placeholder="Plaka, musteri veya islem ara...">
     </div>
 
-    <div class="section-title">Acik Is Emirleri (<span id="open-count-lbl">0</span>)</div>
+    <div class="section-title"><span id="list-title-lbl">Acik Is Emirleri</span> (<span id="open-count-lbl">0</span>)</div>
     <div id="orders-list" class="list-container">
       <!-- Loaded dynamically -->
     </div>
@@ -1057,6 +1067,7 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     let activeUser = null;
     let workOrders = [];
     let selectedPart = null;
+    let currentTab = 'open';
 
     const screens = {
       login: document.getElementById('screen-login'),
@@ -1201,6 +1212,36 @@ async function loadMasters() {
       loadDashboard();
     });
 
+    document.getElementById('tab-open').addEventListener('click', () => {
+      if (currentTab === 'open') return;
+      currentTab = 'open';
+      document.getElementById('tab-open').className = 'tab-btn active';
+      document.getElementById('tab-open').style.background = 'var(--bg-active)';
+      document.getElementById('tab-open').style.color = 'var(--accent)';
+      
+      document.getElementById('tab-completed').className = 'tab-btn';
+      document.getElementById('tab-completed').style.background = 'transparent';
+      document.getElementById('tab-completed').style.color = 'var(--text-secondary)';
+      
+      document.getElementById('list-title-lbl').textContent = 'Acik Is Emirleri';
+      loadTabOrders();
+    });
+
+    document.getElementById('tab-completed').addEventListener('click', () => {
+      if (currentTab === 'completed') return;
+      currentTab = 'completed';
+      document.getElementById('tab-completed').className = 'tab-btn active';
+      document.getElementById('tab-completed').style.background = 'var(--bg-active)';
+      document.getElementById('tab-completed').style.color = 'var(--accent)';
+      
+      document.getElementById('tab-open').className = 'tab-btn';
+      document.getElementById('tab-open').style.background = 'transparent';
+      document.getElementById('tab-open').style.color = 'var(--text-secondary)';
+      
+      document.getElementById('list-title-lbl').textContent = 'Tamamlanan Is Emirleri';
+      loadTabOrders();
+    });
+
     async function loadDashboard() {
       try {
         const statsRes = await fetch('/api/dashboard');
@@ -1210,11 +1251,20 @@ async function loadMasters() {
         document.getElementById('stat-completed').textContent = stats.completedCount || 0;
         document.getElementById('stat-critical').textContent = stats.lowStockCount || 0;
 
-        const listRes = await fetch('/api/work-orders');
+        await loadTabOrders();
+      } catch (e) {
+        console.error('Yukleme hatasi:', e);
+      }
+    }
+
+    async function loadTabOrders() {
+      try {
+        const url = currentTab === 'open' ? '/api/work-orders' : '/api/work-orders/completed';
+        const listRes = await fetch(url);
         workOrders = await listRes.json();
         renderWorkOrders(workOrders);
       } catch (e) {
-        console.error('Yukleme hatasi:', e);
+        console.error('Is emirleri yukleme hatasi:', e);
       }
     }
 
@@ -1223,11 +1273,13 @@ async function loadMasters() {
       document.getElementById('open-count-lbl').textContent = list.length;
 
       if (list.length === 0) {
-        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px; font-size: 14px;">Acik is emri bulunamadi.</div>';
+        container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px; font-size: 14px;">Is emri bulunamadi.</div>';
         return;
       }
 
       container.innerHTML = list.map(item => {
+        const badgeClass = (item.status === 'Açık' || item.status === 'Acik') ? 'acik' : 'tamamlandi';
+        const badgeText = (item.status === 'Açık' || item.status === 'Acik') ? 'Acik' : 'Tamamlandi';
         return '<div class="list-item" onclick="viewDetails(' + item.id + ')">' +
           '<div class="item-header">' +
             '<span class="plate-badge">' + (item.plate || 'PLAKASIZ') + '</span>' +
@@ -1239,7 +1291,7 @@ async function loadMasters() {
             '<i class="pi pi-tag" style="font-size: 11px;"></i> ' + (item.brand || '') + ' ' + (item.model || '') +
           '</div>' +
           '<div class="item-header" style="margin-top: 4px;">' +
-            '<span class="badge-status acik">Acik</span>' +
+            '<span class="badge-status ' + badgeClass + '">' + badgeText + '</span>' +
             '<span style="font-size: 11px; color: var(--text-muted);">' + dateFormat(item.created_at) + '</span>' +
           '</div>' +
         '</div>';
@@ -1770,8 +1822,36 @@ itemsList.innerHTML = items.map(item => {
           return
         }
  
+        // 5.5 API: Get Completed Work Orders List (limited to last 100)
+        if (pathName === '/api/work-orders/completed') {
+          try {
+            const rows = db.prepare(`
+              SELECT wo.*, 
+                     v.plate, 
+                     v.brand, 
+                     v.model,
+                     c.name AS customer_name, 
+                     c.phone AS customer_phone, 
+                     m.name AS master_name 
+              FROM work_orders wo 
+              JOIN vehicles v ON wo.vehicle_id = v.id 
+              JOIN customers c ON v.customer_id = c.id 
+              LEFT JOIN masters m ON wo.opened_by_master_id = m.id 
+              WHERE wo.status = 'Tamamlandı' 
+              ORDER BY wo.id DESC
+              LIMIT 100
+            `).all()
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify(rows))
+          } catch (err: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: false, error: err.message }))
+          }
+          return
+        }
+
         // 6. API: Get Work Order Detail and Items
-        if (pathName.startsWith('/api/work-orders/') && pathName !== '/api/work-orders/complete') {
+        if (pathName.startsWith('/api/work-orders/') && pathName !== '/api/work-orders/complete' && pathName !== '/api/work-orders/completed') {
           try {
             const idStr = pathName.substring('/api/work-orders/'.length)
             const id = parseInt(idStr, 10)
