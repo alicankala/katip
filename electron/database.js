@@ -371,5 +371,42 @@ migrationCalistir(18, () => {
   console.log('Veritabanı hazır ve tablolar oluşturuldu! Yol:', dbPath)
 }
 
+export function verifyBackupDatabase(filePath) {
+  let tempDb;
+  try {
+    tempDb = new Database(filePath, { readonly: true });
+    const integrity = tempDb.prepare('PRAGMA integrity_check').get();
+    const integrityOk = integrity && Object.values(integrity)[0] === 'ok';
+    if (!integrityOk) {
+      return { valid: false, error: 'Veritabanı bütünlük kontrolü başarısız veya dosya bozuk.' };
+    }
+
+    const tables = tempDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
+    const tableNames = tables.map(t => t.name);
+
+    const essentialTables = ['customers', 'vehicles', 'work_orders', 'parts'];
+    const missingTables = essentialTables.filter(t => !tableNames.includes(t));
+
+    if (missingTables.length > 0) {
+      return {
+        valid: false,
+        error: `Geçersiz veritabanı şeması. Eksik tablolar: ${missingTables.join(', ')}`
+      };
+    }
+
+    return { valid: true };
+  } catch (err) {
+    return { valid: false, error: err instanceof Error ? err.message : String(err) };
+  } finally {
+    if (tempDb) {
+      try {
+        tempDb.close();
+      } catch (e) {
+        console.error('Geçici yedek veritabanı kapatılırken hata oluştu:', e);
+      }
+    }
+  }
+}
+
 export default db
 export { dbPath }

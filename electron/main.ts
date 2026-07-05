@@ -1,4 +1,4 @@
-import db, { initDB, dbPath } from './database.js'
+import db, { initDB, dbPath, verifyBackupDatabase } from './database.js'
 import { app, BrowserWindow, ipcMain, shell, dialog, Menu, type IpcMainInvokeEvent } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -692,6 +692,20 @@ stokHareketiKaydet({
 kanalEkle('parca-guncelle', (_event, parca: any) => {
   const transaction = db.transaction(() => {
     const partId = Number(parca.id)
+    if (!partId) {
+      throw new Error('Güncellenecek parça bulunamadı.')
+    }
+
+    const eskiParca = db.prepare(`
+      SELECT *
+      FROM parts
+      WHERE id = ?
+    `).get(partId) as any
+
+    if (!eskiParca) {
+      throw new Error('Güncellenecek parça bulunamadı.')
+    }
+
     const code = String(parca.code || '').trim().toUpperCase()
     const name = String(parca.name || '').trim()
     const brand = String(parca.brand || '').trim()
@@ -723,10 +737,6 @@ kanalEkle('parca-guncelle', (_event, parca: any) => {
         ? Number(parca.active_master_id)
         : null
 
-    if (!partId) {
-      throw new Error('Güncellenecek parça bulunamadı.')
-    }
-
     if (!code) {
       throw new Error('Parça kodu boş bırakılamaz.')
     }
@@ -753,16 +763,6 @@ kanalEkle('parca-guncelle', (_event, parca: any) => {
 
     if (kodKontrol) {
       throw new Error(`Bu parça kodu başka bir parçada kayıtlı: ${kodKontrol.code} - ${kodKontrol.name}`)
-    }
-
-    const eskiParca = db.prepare(`
-      SELECT *
-      FROM parts
-      WHERE id = ?
-    `).get(partId) as any
-
-    if (!eskiParca) {
-      throw new Error('Güncellenecek parça bulunamadı.')
     }
 
     const eskiStok = Number(eskiParca.stock) || 0
@@ -2159,9 +2159,22 @@ kanalEkle('servis-gecmisi-ara', (_event, aramaMetni: any) => {
 
       const secilenYedek = secim.filePaths[0]
 
+      const stat = await fs.stat(secilenYedek)
+      if (!stat.isFile()) {
+        throw new Error('Seçilen yol geçerli bir dosya değil.')
+      }
+
       if (!secilenYedek.toLowerCase().endsWith('.db')) {
         throw new Error('Lütfen .db uzantılı bir yedek dosyası seçin.')
       }
+
+      console.log('[Geri Yukleme] Secilen yedek doğrulaniyor...')
+      const dogrulama = verifyBackupDatabase(secilenYedek)
+      if (!dogrulama.valid) {
+        console.error('[Geri Yukleme] Dogrulama basarisiz:', dogrulama.error)
+        throw new Error(`Seçilen yedek dosyası geçersiz veya bozuk: ${dogrulama.error}`)
+      }
+      console.log('[Geri Yukleme] Dogrulama basarili.')
 
       const now = new Date()
       const year = now.getFullYear()
