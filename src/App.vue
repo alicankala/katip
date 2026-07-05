@@ -34,7 +34,7 @@ const temaUygula = () => {
 }
 
 const menuItems = ref([
-  { label: 'Ana Panel', icon: 'pi pi-home', path: '/dashboard', command: () => router.push('/dashboard') },
+  { label: 'Ana Sayfa', icon: 'pi pi-home', path: '/dashboard', command: () => router.push('/dashboard') },
   { label: 'Servis Kabul', icon: 'pi pi-bolt', path: '/service-reception', command: () => router.push('/service-reception') },
   { label: 'İş Emirleri', icon: 'pi pi-wrench', path: '/work-orders', command: () => router.push('/work-orders') },
   { label: 'Müşteriler', icon: 'pi pi-users', path: '/customers', command: () => router.push('/customers') },
@@ -65,40 +65,34 @@ const ustalariYukle = async () => {
 }
 
 const girisYap = async () => {
-  // Zaten yükleniyorsa ikinci kez çalışmasın (Enter tuşu veya çift tıklama)
   if (girisYukleniyor.value) return
 
   girisHatasi.value = ''
 
+  // Admin girişi
   if (isAdminLogin.value) {
-    if (!pin.value.trim()) {
-      girisHatasi.value = 'Lütfen admin PIN girin.'
+    if (!pin.value.trim() || pin.value.length !== 4) {
+      girisHatasi.value = 'Admin PIN 4 haneli olmalıdır.'
       return
     }
-    if (pin.value.length !== 4) {
-      girisHatasi.value = 'PIN 4 haneli olmalıdır.'
-      return
-    }
-
     girisYukleniyor.value = true
     try {
-      const storedAdminPin = localStorage.getItem('uygulamaAdminPin') || '0000'
-      if (pin.value === storedAdminPin) {
+      const storedPin = localStorage.getItem('uygulamaAdminPin') || '0000'
+      if (pin.value === storedPin) {
         const adminUser = { id: 'admin', name: 'Alican Kala', role: 'admin' }
         aktifUsta.value = adminUser
         localStorage.setItem('aktifUsta', JSON.stringify(adminUser))
         pin.value = ''
-        girisYukleniyor.value = false
-        router.push('/dashboard')
       } else {
         girisHatasi.value = 'Hatalı Admin PIN.'
-        girisYukleniyor.value = false
       }
     } catch (e) {
       console.error('Admin giriş hatası:', e)
       girisHatasi.value = 'Giriş hatası.'
+    } finally {
       girisYukleniyor.value = false
     }
+    if (aktifUsta.value) router.push('/dashboard')
     return
   }
 
@@ -107,58 +101,60 @@ const girisYap = async () => {
     girisHatasi.value = 'Lütfen usta seçin.'
     return
   }
-
-  if (!pin.value.trim()) {
-    girisHatasi.value = 'Lütfen PIN girin.'
-    return
-  }
-  if (pin.value.length !== 4) {
+  if (!pin.value.trim() || pin.value.length !== 4) {
     girisHatasi.value = 'PIN 4 haneli olmalıdır.'
     return
   }
-
-  if (!window.api || !window.api.ustaGirisYap) {
+  if (!window.api || typeof window.api.ustaGirisYap !== 'function') {
     girisHatasi.value = 'Uygulama hazır değil. Lütfen kapatıp yeniden açın.'
     return
   }
 
   girisYukleniyor.value = true
+  let timerHandle = null
 
   try {
-    // 8 saniyelik timeout: IPC hiç cevap vermezse loading açık kalmaz
     const zamanAsimi = new Promise(function(_, reject) {
-      setTimeout(function() { reject(new Error('Sunucu yanıt vermedi. Uygulamayı yeniden başlatın.')) }, 8000)
+      timerHandle = setTimeout(function() {
+        reject(new Error('Bağlantı zaman aşımı. Uygulamayı yeniden başlatın.'))
+      }, 10000)
     })
 
     const res = await Promise.race([
-      window.api.ustaGirisYap({
-        master_id: seciliUstaId.value,
-        pin: pin.value
-      }),
+      window.api.ustaGirisYap({ master_id: seciliUstaId.value, pin: pin.value }),
       zamanAsimi
     ])
 
-    if (!res || !res.success) {
-      girisHatasi.value = (res && res.error) ? res.error : 'Giriş yapılamadı.'
-      girisYukleniyor.value = false
+    if (timerHandle) { clearTimeout(timerHandle); timerHandle = null }
+
+    // Çoklu format desteği: success / ok
+    const basarili = res && (res.success === true || res.ok === true)
+    if (!basarili) {
+      girisHatasi.value = (res && (res.error || res.message || res.hata)) || 'Usta veya PIN hatalı.'
       return
     }
 
-    const usta = res.usta
-    if (!usta || !usta.id) {
-      girisHatasi.value = 'Usta bilgisi alınamadı.'
-      girisYukleniyor.value = false
+    // Çoklu format desteği: usta / user / master
+    let ustaObj = res.usta || res.user || res.master || null
+    if (!ustaObj && res.id) {
+      ustaObj = { id: res.id, name: res.name || '' }
+    }
+
+    if (!ustaObj || !ustaObj.id) {
+      girisHatasi.value = 'Sunucudan geçersiz kullanıcı bilgisi döndü.'
       return
     }
 
-    aktifUsta.value = usta
-    localStorage.setItem('aktifUsta', JSON.stringify(usta))
+    const ustaBilgisi = { id: Number(ustaObj.id), name: String(ustaObj.name || '') }
+    aktifUsta.value = ustaBilgisi
+    localStorage.setItem('aktifUsta', JSON.stringify(ustaBilgisi))
     pin.value = ''
-    girisYukleniyor.value = false
     router.push('/dashboard')
-  } catch (error) {
-    console.error('Usta giriş hatası:', error)
-    girisHatasi.value = (error && error.message) ? error.message : 'Giriş yapılamadı. Lütfen tekrar deneyin.'
+  } catch (err) {
+    if (timerHandle) { clearTimeout(timerHandle); timerHandle = null }
+    console.error('Usta giriş hatası:', err)
+    girisHatasi.value = (err && err.message) ? err.message : 'Giriş yapılamadı.'
+  } finally {
     girisYukleniyor.value = false
   }
 }
@@ -258,12 +254,35 @@ const telefonErisimiDurdur = async () => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   temaUygula()
   localStorage.removeItem('aktifUsta')
   ustalariYukle()
-  telefonErisimiDurumGetir()
   window.addEventListener('usta-cikis-yapildi', disaridanCikisYap)
+  
+  if (window.api?.telefonErisimiDurumGetir) {
+    try {
+      const res = await window.api.telefonErisimiDurumGetir()
+      if (res?.success) {
+        telefonErisimi.value.running = res.running
+        telefonErisimi.value.port = res.port || 4317
+        telefonErisimi.value.ip = res.ip
+        telefonErisimi.value.ips = res.ips || []
+        
+        if (!res.running && window.api?.telefonErisimiBaslat) {
+          const startRes = await window.api.telefonErisimiBaslat(Number(telefonErisimi.value.port))
+          if (startRes?.success) {
+            telefonErisimi.value.running = true
+            telefonErisimi.value.port = startRes.port
+            telefonErisimi.value.ip = startRes.ip
+            telefonErisimi.value.ips = startRes.ips || []
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Telefon erişimi otomatik başlatılamadı:', error)
+    }
+  }
 })
 
 onUnmounted(() => {
@@ -288,6 +307,15 @@ onUnmounted(() => {
     </div>
 
     <div class="custom-titlebar-actions">
+      <button
+        type="button"
+        class="window-btn phone-btn-titlebar"
+        @click.stop="togglePhoneAccessModal"
+        title="Telefon Erişimi"
+      >
+        <i class="pi pi-mobile"></i>
+      </button>
+
       <button
         type="button"
         class="window-btn"
@@ -392,66 +420,6 @@ onUnmounted(() => {
           <a href="#" @click.prevent="toggleAdminLogin" class="login-toggle-link">
             {{ isAdminLogin ? 'Normal Girişe Dön' : 'Destek Girişi' }}
           </a>
-          <span class="login-toggle-separator">|</span>
-          <a href="#" @click.prevent="togglePhoneAccessModal" class="login-toggle-link">
-            Telefon Erişimi
-          </a>
-        </div>
-      </div>
-    </div>
-
-    <!-- Telefon Erişimi Modalı -->
-    <div v-if="showPhoneAccessModal" class="phone-modal-overlay" @click.self="showPhoneAccessModal = false">
-      <div class="phone-modal-content">
-        <div class="phone-card-header">
-          <i class="pi pi-mobile phone-icon"></i>
-          <h3>Telefon Erişimi</h3>
-          <span class="status-badge" :class="{ 'status-active': telefonErisimi.running }">
-            {{ telefonErisimi.running ? 'Açık' : 'Kapalı' }}
-          </span>
-        </div>
-        
-        <div class="phone-card-body">
-          <div v-if="telefonErisimi.running" class="phone-address-box">
-            <span class="address-label">Bağlantı Adresi:</span>
-            <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
-              <code class="address-value" style="flex: 1;">http://{{ telefonErisimi.ip }}:{{ telefonErisimi.port }}</code>
-              <button 
-                class="phone-btn btn-refresh" 
-                style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"
-                @click="kopyalaAdres('http://' + telefonErisimi.ip + ':' + telefonErisimi.port)"
-                title="Adresi Kopyala"
-              >
-                <i class="pi pi-copy"></i>
-              </button>
-            </div>
-          </div>
-          <div v-else class="phone-info-text">
-            Telefon bağlantısı için servisi başlatın.
-          </div>
-        </div>
-        
-        <div class="phone-card-actions">
-          <button 
-            v-if="!telefonErisimi.running"
-            class="phone-btn btn-start" 
-            @click="telefonErisimiBaslat"
-          >
-            <i class="pi pi-play"></i> Başlat
-          </button>
-          <button 
-            v-else
-            class="phone-btn btn-stop" 
-            @click="telefonErisimiDurdur"
-          >
-            <i class="pi pi-stop"></i> Durdur
-          </button>
-          <button class="phone-btn btn-refresh" @click="telefonErisimiDurumGetir" title="Yenile">
-            <i class="pi pi-refresh"></i>
-          </button>
-          <button class="phone-btn btn-close" @click="showPhoneAccessModal = false">
-            Kapat
-          </button>
         </div>
       </div>
     </div>
@@ -462,20 +430,6 @@ onUnmounted(() => {
     class="app-layout"
   >
     <aside class="app-sidebar">
-      <!-- Active Master -->
-      <div class="active-master-box" :class="{ 'admin-mode-box': aktifUsta?.role === 'admin' }">
-        <div class="master-avatar" :class="{ 'admin-avatar': aktifUsta?.role === 'admin' }">
-          {{ aktifUsta?.name?.charAt(0)?.toUpperCase() }}
-        </div>
-        <div class="master-info">
-          <span class="master-label">{{ aktifUsta?.role === 'admin' ? 'Destek Modu' : 'Aktif Usta' }}</span>
-          <strong class="master-name">{{ aktifUsta?.name }}</strong>
-        </div>
-        <button class="master-logout-btn" @click="cikisYap" title="Çıkış Yap">
-          <i class="pi pi-sign-out"></i>
-        </button>
-      </div>
-
       <!-- Navigation -->
       <nav class="sidebar-nav">
         <div class="nav-group">
@@ -511,7 +465,7 @@ onUnmounted(() => {
         <div class="nav-group">
           <div class="nav-group-label">Finans &amp; Raporlar</div>
           <a
-            v-for="item in menuItems.slice(6, 9)"
+v-for="item in menuItems.slice(6, 8)"
             :key="item.label"
             class="nav-item"
             :class="{ active: $route.path === item.path }"
@@ -523,23 +477,93 @@ onUnmounted(() => {
           </a>
         </div>
 
-        <div class="nav-group nav-group-bottom">
-          <a
-            class="nav-item"
-            :class="{ active: $route.path === menuItems[9].path }"
-            @click.prevent="menuItems[9].command()"
-            href="#"
-          >
-            <i :class="menuItems[9].icon" class="nav-icon"></i>
-            <span>{{ menuItems[9].label }}</span>
-          </a>
-        </div>
+<div class="nav-group nav-group-bottom">
+  <!-- Active Master -->
+  <div class="active-master-box" :class="{ 'admin-mode-box': aktifUsta?.role === 'admin' }">
+    <div class="master-avatar" :class="{ 'admin-avatar': aktifUsta?.role === 'admin' }">
+      {{ aktifUsta?.name?.charAt(0)?.toUpperCase() }}
+    </div>
+    <div class="master-info">
+      <span class="master-label">{{ aktifUsta?.role === 'admin' ? 'Destek Modu' : 'Aktif Usta' }}</span>
+      <strong class="master-name">{{ aktifUsta?.name }}</strong>
+    </div>
+    <button class="master-logout-btn" @click="cikisYap" title="Çıkış Yap">
+      <i class="pi pi-sign-out"></i>
+    </button>
+  </div>
+
+  <a
+    class="nav-item"
+    :class="{ active: $route.path === menuItems[8].path }"
+    @click.prevent="menuItems[8].command()"
+    href="#"
+  >
+    <i :class="menuItems[8].icon" class="nav-icon"></i>
+    <span>{{ menuItems[8].label }}</span>
+  </a>
+</div>
       </nav>
     </aside>
 
     <main class="app-content">
       <router-view />
     </main>
+  </div>
+
+  <!-- Telefon Erişimi Modalı -->
+  <div v-if="showPhoneAccessModal" class="phone-modal-overlay" @click.self="showPhoneAccessModal = false">
+    <div class="phone-modal-content">
+      <div class="phone-card-header">
+        <i class="pi pi-mobile phone-icon"></i>
+        <h3>Telefon Erişimi</h3>
+        <span class="status-badge" :class="{ 'status-active': telefonErisimi.running }">
+          {{ telefonErisimi.running ? 'Açık' : 'Kapalı' }}
+        </span>
+      </div>
+      
+      <div class="phone-card-body">
+        <div v-if="telefonErisimi.running" class="phone-address-box">
+          <span class="address-label">Bağlantı Adresi:</span>
+          <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+            <code class="address-value" style="flex: 1;">http://{{ telefonErisimi.ip }}:{{ telefonErisimi.port }}</code>
+            <button 
+              class="phone-btn btn-refresh" 
+              style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"
+              @click="kopyalaAdres('http://' + telefonErisimi.ip + ':' + telefonErisimi.port)"
+              title="Adresi Kopyala"
+            >
+              <i class="pi pi-copy"></i>
+            </button>
+          </div>
+        </div>
+        <div v-else class="phone-info-text">
+          Telefon bağlantısı için servisi başlatın.
+        </div>
+      </div>
+      
+      <div class="phone-card-actions">
+        <button 
+          v-if="!telefonErisimi.running"
+          class="phone-btn btn-start" 
+          @click="telefonErisimiBaslat"
+        >
+          <i class="pi pi-play"></i> Başlat
+        </button>
+        <button 
+          v-else
+          class="phone-btn btn-stop" 
+          @click="telefonErisimiDurdur"
+        >
+          <i class="pi pi-stop"></i> Durdur
+        </button>
+        <button class="phone-btn btn-refresh" @click="telefonErisimiDurumGetir" title="Yenile">
+          <i class="pi pi-refresh"></i>
+        </button>
+        <button class="phone-btn btn-close" @click="showPhoneAccessModal = false">
+          Kapat
+        </button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -888,10 +912,10 @@ onUnmounted(() => {
 }
 
 .brand-logo-frame {
-  width: 110px;
-  height: 110px;
-  margin: 0 auto 18px;
-  border-radius: 24px;
+  width: 135px;
+  height: 135px;
+  margin: 0 auto 20px;
+  border-radius: 28px;
   background: linear-gradient(135deg, var(--bg-panel), var(--bg-active-box));
   border: 1px solid var(--border-color);
   display: flex;
@@ -906,8 +930,8 @@ onUnmounted(() => {
 }
 
 .brand-logo {
-  width: 76px;
-  height: 76px;
+  width: 96px;
+  height: 96px;
   object-fit: contain;
   display: block;
   filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.2));
@@ -970,14 +994,17 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border-color);
-  background: transparent;
+  padding: 9px 12px;
+  margin: 0 0 6px 0;
+  border-radius: 7px;
+  min-height: 48px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .admin-mode-box {
-  border-bottom: 1px solid rgba(245, 158, 11, 0.3) !important;
-  background: rgba(245, 158, 11, 0.02) !important;
+  border: 1px dashed rgba(245, 158, 11, 0.25) !important;
+  background: rgba(245, 158, 11, 0.03) !important;
 }
 
 .master-avatar {
@@ -1124,8 +1151,8 @@ onUnmounted(() => {
 }
 
 :global(html[data-theme="light"] .active-master-box) {
-  background: transparent;
-  border-bottom-color: var(--border-color);
+  background: #f8fafc;
+  border-color: var(--border-color);
 }
 :global(html[data-theme="light"] .nav-item.active) {
   background: rgba(37, 99, 235, 0.08);
@@ -1208,5 +1235,12 @@ onUnmounted(() => {
 
 .admin-login-indicator i {
   font-size: 15px;
+}
+
+.phone-btn-titlebar {
+  font-size: 16px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>

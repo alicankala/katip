@@ -1214,29 +1214,55 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     }
 
 window.addEventListener('DOMContentLoaded', () => {
-  try {
-    const stored = localStorage.getItem('mobActiveUser');
-
-    if (stored) {
-      const parsedUser = JSON.parse(stored);
-
-      if (parsedUser && parsedUser.id && parsedUser.name) {
-        activeUser = parsedUser;
-        document.getElementById('user-display-name').textContent = activeUser.name;
-        showScreen('dashboard');
-        loadDashboard();
-        return;
-      }
-
-      localStorage.removeItem('mobActiveUser');
+  // Clear any hashes to force landing on the main screen
+  if (window.location.hash) {
+    try {
+      history.replaceState('', document.title, window.location.pathname + window.location.search);
+    } catch (e) {
+      window.location.hash = '';
     }
-  } catch (e) {
-    console.error('Mobil oturum bilgisi bozuk, temizlendi:', e);
-    localStorage.removeItem('mobActiveUser');
   }
+
+  // Clear all localStorage keys completely to reset any session
+  try {
+    localStorage.clear();
+  } catch (e) {}
+
+  // Clear sessionStorage
+  try {
+    sessionStorage.clear();
+  } catch (e) {}
+
+  // Reset input fields
+  try {
+    const inputs = document.querySelectorAll('input, select, textarea');
+    inputs.forEach(input => {
+      if (input.tagName === 'SELECT') {
+        input.selectedIndex = 0;
+      } else {
+        input.value = '';
+      }
+    });
+  } catch (e) {}
+
+  // Reset active user state variable
+  activeUser = null;
 
   loadMasters();
   showScreen('login');
+});
+
+// Force screen reset on back-forward cache page navigation
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) {
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (e) {}
+    activeUser = null;
+    loadMasters();
+    showScreen('login');
+  }
 });
 
 async function loadMasters() {

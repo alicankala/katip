@@ -639,6 +639,9 @@ onMounted(() => {
 <style scoped>
 .settings-page {
   color: var(--text-primary);
+  min-height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
 }
 
 .settings-grid {
@@ -779,8 +782,8 @@ onMounted(() => {
 }
 
 .settings-about-footer {
-  margin-top: 36px;
-  padding-top: 20px;
+  margin-top: auto;
+  padding-top: 36px;
   border-top: 1px dashed var(--border-color-soft);
   text-align: center;
   color: var(--text-muted);
