@@ -390,13 +390,21 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     /* Login Screen */
     .login-container {
       max-width: 360px;
-      margin: 40px auto 0;
+      width: 100%;
+      min-height: calc(100vh - 32px);
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      padding: 20px 0;
       text-align: center;
     }
     .logo-frame {
       width: 80px;
       height: 80px;
-      margin: 0 auto 20px;
+      margin-bottom: 20px;
       border-radius: 20px;
       background: linear-gradient(135deg, var(--bg-card), var(--bg-active));
       border: 1px solid var(--border);
@@ -429,6 +437,8 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       padding: 24px;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
       text-align: left;
+      width: 100%;
+      box-sizing: border-box;
     }
     .form-group {
       margin-bottom: 18px;
@@ -541,31 +551,86 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     /* Stats Grid */
     .stats-grid {
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 10px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
       margin-bottom: 20px;
+    }
+    @media (min-width: 560px) {
+      .stats-grid {
+        grid-template-columns: repeat(4, 1fr);
+      }
     }
     .stat-card {
       background-color: var(--bg-card);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 12px 8px;
-      text-align: center;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      overflow: hidden;
     }
-    .stat-val {
-      font-size: 22px;
-      font-weight: 800;
-      line-height: 1;
-      margin-bottom: 4px;
+    .stat-card-main {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 8px;
+    }
+    .stat-card-info {
+      display: flex;
+      flex-direction: column;
+      text-align: left;
     }
     .stat-label {
-      font-size: 10.5px;
+      font-size: 11px;
       color: var(--text-secondary);
-      font-weight: 500;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
     }
-    .color-accent { color: var(--accent); }
-    .color-success { color: var(--success); }
-    .color-warning { color: var(--warning); }
+    .stat-val {
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+    .stat-icon {
+      font-size: 18px;
+      opacity: 0.8;
+      padding: 4px;
+    }
+    .stat-sub {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      border-top: 1px dashed var(--border);
+      padding-top: 6px;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    
+    /* Card Accent Colors */
+    .stat-card.accent-blue {
+      border-left: 3px solid #38bdf8;
+    }
+    .stat-card.accent-blue .stat-icon { color: #38bdf8; }
+    
+    .stat-card.accent-green {
+      border-left: 3px solid #34d399;
+    }
+    .stat-card.accent-green .stat-icon { color: #34d399; }
+    
+    .stat-card.accent-amber {
+      border-left: 3px solid #fb923c;
+    }
+    .stat-card.accent-amber .stat-icon { color: #fb923c; }
+    
+    .stat-card.accent-purple {
+      border-left: 3px solid #c084fc;
+    }
+    .stat-card.accent-purple .stat-icon { color: #c084fc; }
 
     /* Search bar with left icon */
     .search-container {
@@ -623,13 +688,16 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     .plate-badge {
       background-color: #f1f5f9;
       color: #0f172a;
-      font-family: 'Courier New', monospace;
+      font-family: 'Courier New', Courier, monospace;
       font-weight: 800;
-      font-size: 13.5px;
-      padding: 2px 8px;
+      font-size: 13px;
+      padding: 2px 6px 2px 10px;
       border-radius: 4px;
       border: 1px solid #cbd5e1;
-      letter-spacing: 0.5px;
+      border-left: 4px solid #1d4ed8;
+      letter-spacing: 0.08em;
+      display: inline-block;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
     }
     
     .item-price {
@@ -739,6 +807,171 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     .part-select-card:active {
       background-color: var(--bg-active);
     }
+
+    /* Modal Backdrop */
+    .modal-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+      box-sizing: border-box;
+      animation: fadeIn 0.2s ease-out;
+    }
+    
+    /* Modal Content Container */
+    .modal-content {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      width: 100%;
+      max-width: 500px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+      animation: slideUp 0.25s ease-out;
+      overflow: hidden;
+    }
+    
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .modal-header h3 {
+      font-size: 16.5px;
+      font-weight: 700;
+      margin: 0;
+      color: var(--text-primary);
+    }
+    .modal-close-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 24px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 4px;
+      transition: color 0.15s;
+    }
+    .modal-close-btn:hover {
+      color: var(--text-primary);
+    }
+    .modal-body {
+      padding: 16px;
+      overflow-y: auto;
+      flex: 1;
+    }
+
+    /* Result Card Styles */
+    .result-card {
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+    .result-card:active {
+      transform: scale(0.98);
+      border-color: var(--accent);
+    }
+    .result-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+      margin-bottom: 8px;
+    }
+    .result-plate {
+      background-color: var(--accent);
+      color: #000;
+      font-weight: 800;
+      font-size: 12px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+    }
+    .result-date {
+      font-size: 11px;
+      color: var(--accent);
+      font-weight: 600;
+    }
+    .result-info-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12.5px;
+      margin-bottom: 4px;
+      line-height: 1.3;
+    }
+    .result-info-row:last-child {
+      margin-bottom: 0;
+    }
+    .result-info-label {
+      color: var(--text-secondary);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .result-info-label i {
+      font-size: 11px;
+    }
+    .result-info-value {
+      color: var(--text-primary);
+      font-weight: 600;
+      text-align: right;
+    }
+
+    /* Visit Card Styles */
+    .visit-card {
+      background-color: var(--bg-primary);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .visit-card:active {
+      border-color: var(--accent);
+    }
+    .visit-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .visit-total {
+      font-weight: 700;
+      color: var(--accent);
+      font-size: 13px;
+    }
+    .visit-complaint {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
   </style>
 </head>
 <body>
@@ -789,28 +1022,70 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     </div>
 
     <!-- Prominent Buttons -->
-    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-      <button id="new-reception-btn" class="btn btn-primary" style="flex: 1; background-color: var(--accent); color: #000; margin: 0;">
-        <i class="pi pi-plus-circle"></i> Yeni Servis Kabul
+    <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+      <button id="new-reception-btn" class="btn btn-primary" style="width: 100%; height: 50px; background-color: var(--accent); color: #000; margin: 0; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; gap: 8px; border-radius: 12px; border: none; cursor: pointer;">
+        <i class="pi pi-plus-circle" style="font-size: 17px;"></i> Yeni Servis Kabul
       </button>
-      <button id="customer-history-btn" class="btn btn-secondary" style="flex: 1; margin: 0; background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border);">
-        <i class="pi pi-search"></i> Musteri Gecmisi
-      </button>
+      
+      <div id="customer-history-btn" style="background-color: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; cursor: pointer; display: flex; flex-direction: column; gap: 6px; transition: background-color 0.15s ease;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 14px; color: var(--text-primary);">
+          <span><i class="pi pi-search" style="color: var(--accent); margin-right: 6px; font-size: 13px;"></i> Musteri Gecmisi Sorgula</span>
+          <i class="pi pi-chevron-right" style="font-size: 11px; color: var(--text-secondary);"></i>
+        </div>
+        <div style="font-size: 12px; color: var(--text-secondary); line-height: 1.4;">
+          Plaka, musteri adi veya telefon no ile gecmis servis kayitlarini arayin.
+        </div>
+      </div>
     </div>
 
     <!-- Stats Grid -->
     <div class="stats-grid">
-      <div class="stat-card">
-        <div id="stat-open" class="stat-val color-accent">0</div>
-        <div class="stat-label">Acik Is Emri</div>
+      <!-- Acik Is Emri Card -->
+      <div class="stat-card accent-blue">
+        <div class="stat-card-main">
+          <div class="stat-card-info">
+            <span class="stat-label">Acik Is Emri</span>
+            <span id="stat-open" class="stat-val">0</span>
+          </div>
+          <i class="pi pi-wrench stat-icon"></i>
+        </div>
+        <div id="stat-open-sub" class="stat-sub">Tamamlanan: -</div>
       </div>
-      <div class="stat-card">
-        <div id="stat-completed" class="stat-val color-success">0</div>
-        <div class="stat-label">Bugun Biten</div>
+
+      <!-- Kayitli Musteri Card -->
+      <div class="stat-card accent-green">
+        <div class="stat-card-main">
+          <div class="stat-card-info">
+            <span class="stat-label">Kayitli Musteri</span>
+            <span id="stat-customers" class="stat-val">0</span>
+          </div>
+          <i class="pi pi-users stat-icon"></i>
+        </div>
+        <div id="stat-customers-sub" class="stat-sub">Toplam: -</div>
       </div>
-      <div class="stat-card">
-        <div id="stat-critical" class="stat-val color-warning">0</div>
-        <div class="stat-label">Kritik Stok</div>
+
+      <!-- Servisteki Arac Card -->
+      <div class="stat-card accent-amber">
+        <div class="stat-card-main">
+          <div class="stat-card-info">
+            <span class="stat-label">Servisteki Arac</span>
+            <span id="stat-vehicles" class="stat-val">0</span>
+          </div>
+          <i class="pi pi-car stat-icon"></i>
+        </div>
+        <div id="stat-vehicles-sub" class="stat-sub">Tamamlanan: -</div>
+      </div>
+
+      <!-- Aktif Parca Karti Card -->
+      <div class="stat-card accent-purple">
+        <div class="stat-card-main">
+          <div class="stat-card-info">
+            <span class="stat-label">Aktif Parca Karti</span>
+            <span id="stat-parts" class="stat-val">0</span>
+          </div>
+          <i class="pi pi-box stat-icon"></i>
+        </div>
+        <div id="stat-parts-sub" class="stat-sub">Kritik: -  Biten: -</div>
       </div>
     </div>
 
@@ -870,6 +1145,14 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       <div class="detail-row">
         <span class="detail-label">Acilis Tarihi</span>
         <span id="det-date" class="detail-value">-</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Kapatan Usta</span>
+        <span id="det-closed-master" class="detail-value">-</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Kapanis Tarihi</span>
+        <span id="det-closed-date" class="detail-value">-</span>
       </div>
       <div class="detail-row">
         <span class="detail-label">Is Emri Durumu</span>
@@ -1022,15 +1305,17 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       </button>
     </div>
 
-    <!-- Live Search Part -->
-    <div class="search-container">
-      <i class="pi pi-search"></i>
-      <input id="part-search-input" type="text" placeholder="Kod, parca adi veya marka ara...">
-    </div>
+    <!-- Live Search Part Wrapper -->
+    <div style="position: relative; margin-bottom: 16px;">
+      <div class="search-container" style="margin-bottom: 0;">
+        <i class="pi pi-search"></i>
+        <input id="part-search-input" type="text" placeholder="Kod, parca adi veya marka ara..." autocomplete="off">
+      </div>
 
-    <!-- Results list -->
-    <div id="parts-search-results" style="max-height: 180px; overflow-y: auto; margin-bottom: 16px; border-bottom: 1px solid var(--border);">
-      <div style="text-align: center; color: var(--text-secondary); padding: 12px; font-size: 13px;">Arama yapmak icin yazin...</div>
+      <!-- Results list as absolute dropdown -->
+      <div id="parts-search-results" style="display: none; position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; max-height: 200px; overflow-y: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); margin-top: 6px;">
+        <div style="text-align: center; color: var(--text-secondary); padding: 12px; font-size: 13px;">Arama yapmak icin yazin...</div>
+      </div>
     </div>
 
     <!-- Sub form shown when part is selected -->
@@ -1069,7 +1354,7 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
   </div>
 
   <!-- SCREEN: CUSTOMER HISTORY -->
-  <div id="screen-customer-history" class="screen">
+  <div id="screen-customer-history" class="screen" style="display: none;">
     <div class="header" style="border-bottom: none; margin-bottom: 10px;">
       <h2 style="font-size: 18px; font-weight: 700;">Musteri Gecmisi Ara</h2>
       <button id="history-back-btn" class="btn btn-secondary" style="width: auto; height: 32px; padding: 0 12px; font-size: 13px;">
@@ -1077,9 +1362,9 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       </button>
     </div>
 
-    <div class="search-container">
+    <div class="search-container" style="margin-bottom: 16px;">
       <i class="pi pi-search"></i>
-      <input id="history-search-input" type="text" placeholder="Plaka, musteri adi veya telefon...">
+      <input id="history-search-input" type="text" placeholder="Plaka, musteri veya telefon...">
     </div>
 
     <div id="history-loading" style="display: none; text-align: center; padding: 20px; color: var(--text-secondary);">
@@ -1092,7 +1377,7 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
   </div>
 
   <!-- SCREEN: CUSTOMER HISTORY DETAIL -->
-  <div id="screen-history-detail" class="screen">
+  <div id="screen-history-detail" class="screen" style="display: none;">
     <div class="header" style="border-bottom: none; margin-bottom: 10px;">
       <h2 style="font-size: 18px; font-weight: 700;">Gecmis Detayi</h2>
       <button id="history-detail-back-btn" class="btn btn-secondary" style="width: auto; height: 32px; padding: 0 12px; font-size: 13px;">
@@ -1127,7 +1412,7 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
   </div>
 
   <!-- SCREEN: HISTORY WORK ORDER DETAIL (READ ONLY) -->
-  <div id="screen-history-wo-detail" class="screen">
+  <div id="screen-history-wo-detail" class="screen" style="display: none;">
     <div class="header" style="border-bottom: none; margin-bottom: 10px;">
       <h2 style="font-size: 18px; font-weight: 700;">Servis Detayi</h2>
       <button id="history-wo-back-btn" class="btn btn-secondary" style="width: auto; height: 32px; padding: 0 12px; font-size: 13px;">
@@ -1137,8 +1422,12 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
 
     <div class="detail-card">
       <div class="detail-row">
-        <span class="detail-label">Tarih</span>
+        <span class="detail-label">Acilis Tarihi</span>
         <span id="hist-wo-date" class="detail-value">-</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Kapanis Tarihi</span>
+        <span id="hist-wo-closed-date" class="detail-value">-</span>
       </div>
       <div class="detail-row">
         <span class="detail-label">Durum</span>
@@ -1206,7 +1495,16 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     function dateFormat(dateStr) {
       if (!dateStr) return '-';
       try {
-        const d = new Date(dateStr);
+        const cleanStr = String(dateStr).trim();
+        const utcTarih = cleanStr.includes('T')
+          ? cleanStr
+          : cleanStr.replace(' ', 'T') + 'Z';
+        
+        const d = new Date(utcTarih);
+        if (isNaN(d.getTime())) {
+          return dateStr;
+        }
+        
         return d.toLocaleDateString('tr-TR') + ' ' + d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
       } catch (e) {
         return dateStr;
@@ -1399,9 +1697,17 @@ async function loadMasters() {
         const statsRes = await fetch('/api/dashboard');
         const stats = await statsRes.json();
         
-        document.getElementById('stat-open').textContent = stats.openCount || 0;
-        document.getElementById('stat-completed').textContent = stats.completedCount || 0;
-        document.getElementById('stat-critical').textContent = stats.lowStockCount || 0;
+        document.getElementById('stat-open').textContent = stats.acikIsEmri || 0;
+        document.getElementById('stat-open-sub').textContent = 'Tamamlanan: ' + (stats.tamamlananIsEmri || 0);
+
+        document.getElementById('stat-customers').textContent = stats.musteriAktif || 0;
+        document.getElementById('stat-customers-sub').textContent = 'Toplam: ' + (stats.musteriToplam || 0);
+
+        document.getElementById('stat-vehicles').textContent = stats.aracAktif || 0;
+        document.getElementById('stat-vehicles-sub').textContent = 'Tamamlanan: ' + (stats.aracToplam || 0);
+
+        document.getElementById('stat-parts').textContent = stats.toplamStok || 0;
+        document.getElementById('stat-parts-sub').textContent = 'Kritik: ' + (stats.dusukStok || 0) + '  Biten: ' + (stats.bitenStok || 0);
 
         await loadTabOrders();
       } catch (e) {
@@ -1499,6 +1805,8 @@ async function loadMasters() {
         document.getElementById('det-vehicle').textContent = (wo.brand || '') + ' ' + (wo.model || '');
         document.getElementById('det-master').textContent = wo.master_name || '-';
         document.getElementById('det-date').textContent = dateFormat(wo.created_at);
+        document.getElementById('det-closed-master').textContent = wo.closed_master_name || '-';
+        document.getElementById('det-closed-date').textContent = wo.closed_at ? dateFormat(wo.closed_at) : 'Henüz kapanmadı';
         const statusText = wo.status === 'Açık' ? 'Acik' : (wo.status === 'Tamamlandı' ? 'Tamamlandi' : (wo.status || 'Acik'));
         const statusBadge = document.getElementById('det-status');
         statusBadge.textContent = statusText;
@@ -1686,6 +1994,7 @@ itemsList.innerHTML = items.map(item => {
       if (!wo) return;
       
       document.getElementById('hist-wo-date').textContent = dateFormat(wo.created_at);
+      document.getElementById('hist-wo-closed-date').textContent = wo.closed_at ? dateFormat(wo.closed_at) : 'Henüz kapanmadı';
       const statusClass = wo.status === 'Tamamlandı' ? 'badge-status tamamlandi' : 'badge-status acik';
       const statusText = wo.status === 'Tamamlandı' ? 'Tamamlandi' : 'Acik';
       const statusSpan = document.getElementById('hist-wo-status');
@@ -1897,13 +2206,17 @@ itemsList.innerHTML = items.map(item => {
       }
     });
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ ADD PART FLOW Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+    // ─── ADD PART FLOW ───
+    let searchedParts = [];
     document.getElementById('add-part-btn').addEventListener('click', () => {
       document.getElementById('part-search-input').value = '';
-      document.getElementById('parts-search-results').innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 12px; font-size: 13px;">Arama yapmak icin yazin...</div>';
+      const resultsDiv = document.getElementById('parts-search-results');
+      resultsDiv.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 12px; font-size: 13px;">Arama yapmak icin yazin...</div>';
+      resultsDiv.style.display = 'none';
       document.getElementById('selected-part-info').style.display = 'none';
       document.getElementById('part-error').style.display = 'none';
       selectedPart = null;
+      searchedParts = [];
       showScreen('addPart');
     });
 
@@ -1915,6 +2228,14 @@ itemsList.innerHTML = items.map(item => {
     let partsTimeout = null;
     document.getElementById('part-search-input').addEventListener('input', (e) => {
       const val = e.target.value.trim();
+      const resultsDiv = document.getElementById('parts-search-results');
+      
+      if (val.length < 2) {
+        resultsDiv.style.display = 'none';
+        searchedParts = [];
+        return;
+      }
+
       if (partsTimeout) clearTimeout(partsTimeout);
 
       partsTimeout = setTimeout(async () => {
@@ -1925,33 +2246,64 @@ itemsList.innerHTML = items.map(item => {
         } catch (e) {
           console.error(e);
         }
-      }, 300);
+      }, 250);
+    });
+
+    // Close suggestions on outside click
+    document.addEventListener('click', (e) => {
+      const input = document.getElementById('part-search-input');
+      const results = document.getElementById('parts-search-results');
+      if (input && results) {
+        if (!input.contains(e.target) && !results.contains(e.target)) {
+          results.style.display = 'none';
+        }
+      }
     });
 
     function renderPartsSearchList(list) {
       const container = document.getElementById('parts-search-results');
+      searchedParts = list;
+      container.style.display = 'block';
+
       if (list.length === 0) {
         container.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 12px; font-size: 13.5px;">Parca bulunamadi.</div>';
         return;
       }
 
-      container.innerHTML = list.map(part => {
-        const partJson = JSON.stringify(part).replace(/"/g, '&quot;');
-        return '<div class="part-select-card" onclick="selectPartForAdding(' + partJson + ')">' +
-          '<div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 14px;">' +
-            '<span>' + (part.name || 'Isimsiz Parca') + '</span>' +
-            '<span class="color-accent">' + tlFormat(part.sell_price) + '</span>' +
+      container.innerHTML = list.slice(0, 6).map((part, index) => {
+        let stockWarning = '';
+        if (part.stock <= 0) {
+          stockWarning = '<span style="font-size: 9px; font-weight: 700; color: #ef4444; background: rgba(239, 68, 68, 0.1); padding: 2px 5px; border-radius: 4px; margin-left: 6px;">Stokta Yok</span>';
+        } else if (part.critical_stock_enabled !== 0 && part.stock <= (part.critical_stock || 5)) {
+          stockWarning = '<span style="font-size: 9px; font-weight: 700; color: #f59e0b; background: rgba(245, 158, 11, 0.1); padding: 2px 5px; border-radius: 4px; margin-left: 6px;">Kritik Stok</span>';
+        }
+        
+        const brandText = part.brand ? '<span style="font-size: 10px; color: var(--text-muted); margin-left: 4px;">(' + part.brand + ')</span>' : '';
+
+        return '<div class="part-select-card" onclick="selectPartForAddingByIndex(' + index + ')" style="padding: 10px; cursor: pointer; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px;">' +
+          '<div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 13.5px; color: var(--text-primary); text-align: left;">' +
+            '<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;">' + (part.name || 'Isimsiz Parca') + brandText + '</span>' +
+            '<span style="color: var(--accent); font-weight: 700;">' + tlFormat(part.sell_price) + '</span>' +
           '</div>' +
-          '<div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-secondary); margin-top: 4px;">' +
-            '<span>Kod: ' + (part.code || '-') + ' | OEM: ' + (part.oem_code || '-') + '</span>' +
-            '<span>Stok: <strong style="color: ' + (part.stock <= part.critical_stock ? 'var(--warning)' : 'var(--success)') + '">' + part.stock + ' ' + (part.unit || 'Adet') + '</strong></span>' +
+          '<div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-secondary);">' +
+            '<span>Kod: ' + (part.code || '-') + '</span>' +
+            '<div style="display: flex; align-items: center;">' +
+              '<span>Stok: <strong>' + part.stock + ' ' + (part.unit || 'Adet') + '</strong></span>' +
+              stockWarning +
+            '</div>' +
           '</div>' +
         '</div>';
       }).join('');
     }
 
-    window.selectPartForAdding = function(part) {
+    window.selectPartForAddingByIndex = function(idx) {
+      const part = searchedParts[idx];
+      if (!part) return;
       selectedPart = part;
+      
+      document.getElementById('parts-search-results').style.display = 'none';
+      document.getElementById('part-search-input').value = part.code ? part.code + ' - ' + part.name : part.name;
+      
       document.getElementById('selected-part-info').style.display = 'block';
       document.getElementById('part-selected-name').textContent = part.name;
       document.getElementById('part-selected-stock').textContent = part.stock + ' ' + (part.unit || 'Adet');
@@ -2085,27 +2437,58 @@ itemsList.innerHTML = items.map(item => {
         // 4. API: Dashboard statistics count
         if (pathName === '/api/dashboard') {
           try {
-            const openRes = db.prepare("SELECT COUNT(*) AS count FROM work_orders WHERE status = 'Açık'").get() as any
-            
-            const completedRes = db.prepare(`
-              SELECT COUNT(*) AS count 
-              FROM work_orders 
-              WHERE status = 'Tamamlandı' 
-                AND strftime('%Y-%m-%d', closed_at) = date('now', 'localtime')
+            const resMusteri = db.prepare(`
+              SELECT
+                (
+                  SELECT COUNT(*)
+                  FROM customers
+                  WHERE IFNULL(is_active, 1) = 1
+                ) AS toplam,
+                (
+                  SELECT COUNT(DISTINCT customers.id)
+                  FROM work_orders
+                  JOIN vehicles ON work_orders.vehicle_id = vehicles.id
+                  JOIN customers ON vehicles.customer_id = customers.id
+                  WHERE work_orders.status != 'Tamamlandı'
+                    AND IFNULL(vehicles.is_active, 1) = 1
+                    AND IFNULL(customers.is_active, 1) = 1
+                ) AS aktif
             `).get() as any
- 
-            const criticalRes = db.prepare(`
-              SELECT COUNT(*) AS count 
-              FROM parts 
-              WHERE IFNULL(stock, 0) <= IFNULL(critical_stock, 5) 
-                AND IFNULL(is_active, 1) = 1
+
+            const resArac = db.prepare(`
+              SELECT
+                COUNT(DISTINCT CASE WHEN status != 'Tamamlandı' THEN vehicle_id END) AS aktif,
+                COUNT(CASE WHEN status = 'Tamamlandı' THEN 1 END) AS toplam
+              FROM work_orders
             `).get() as any
- 
+
+            const resIsEmri = db.prepare(`
+              SELECT
+                COUNT(CASE WHEN status != 'Tamamlandı' THEN 1 END) AS acik,
+                COUNT(CASE WHEN status = 'Tamamlandı' THEN 1 END) AS tamamlanan
+              FROM work_orders
+            `).get() as any
+
+            const resStok = db.prepare(`
+              SELECT
+                COUNT(*) AS aktif,
+                COALESCE(SUM(CASE WHEN (IFNULL(critical_stock_enabled, 1) = 1 AND IFNULL(stock, 0) <= IFNULL(critical_stock, 5)) OR IFNULL(stock, 0) <= 0 THEN 1 ELSE 0 END), 0) AS dusuk,
+                COALESCE(SUM(CASE WHEN IFNULL(stock, 0) <= 0 THEN 1 ELSE 0 END), 0) AS biten
+              FROM parts
+              WHERE IFNULL(is_active, 1) = 1
+            `).get() as any
+
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
             res.end(JSON.stringify({
-              openCount: openRes?.count || 0,
-              completedCount: completedRes?.count || 0,
-              lowStockCount: criticalRes?.count || 0
+              acikIsEmri: Number(resIsEmri?.acik || 0),
+              tamamlananIsEmri: Number(resIsEmri?.tamamlanan || 0),
+              musteriAktif: Number(resMusteri?.aktif || 0),
+              musteriToplam: Number(resMusteri?.toplam || 0),
+              aracAktif: Number(resArac?.aktif || 0),
+              aracToplam: Number(resArac?.toplam || 0),
+              toplamStok: Number(resStok?.aktif || 0),
+              dusukStok: Number(resStok?.dusuk || 0),
+              bitenStok: Number(resStok?.biten || 0)
             }))
           } catch (err: any) {
             res.writeHead(500, { 'Content-Type': 'application/json' })
@@ -2188,11 +2571,13 @@ itemsList.innerHTML = items.map(item => {
                      v.plate, 
                      v.brand, 
                      v.model,
-                     m.name AS master_name 
+                     opened_master.name AS master_name,
+                     closed_master.name AS closed_master_name
               FROM work_orders wo 
               LEFT JOIN vehicles v ON wo.vehicle_id = v.id 
               LEFT JOIN customers c ON v.customer_id = c.id 
-              LEFT JOIN masters m ON wo.opened_by_master_id = m.id 
+              LEFT JOIN masters opened_master ON wo.opened_by_master_id = opened_master.id 
+              LEFT JOIN masters closed_master ON wo.closed_by_master_id = closed_master.id
               WHERE wo.id = ?
             `).get(id) as any
  
@@ -2203,7 +2588,7 @@ itemsList.innerHTML = items.map(item => {
             }
  
             const items = db.prepare(`
-              SELECT * 
+              SELECT *, quantity AS qty, unit_price AS price
               FROM work_order_items 
               WHERE work_order_id = ?
               ORDER BY id ASC
@@ -2257,11 +2642,11 @@ itemsList.innerHTML = items.map(item => {
                   wo.created_at,
                   wo.closed_at,
                   wo.status,
-                  wo.complaint,
+                  wo.description AS complaint,
                   opened_master.name AS opened_by_master_name,
                   closed_master.name AS closed_by_master_name,
                   (
-                    SELECT SUM(qty * price) 
+                    SELECT SUM(total_price) 
                     FROM work_order_items 
                     WHERE work_order_id = wo.id
                   ) AS total_amount

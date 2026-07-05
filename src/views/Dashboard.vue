@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -54,7 +54,57 @@ const verileriYukle = async () => {
 }
 }
 
+const aramaSonuclariDialogAcik = ref(false)
+const detayDialogAcik = ref(false)
+const seciliArac = ref(null)
+
+const oneriler = ref([])
+const onerilerAcik = ref(false)
+let debounceTimer = null
+
+const benzersizAraclar = computed(() => {
+  const groups = {}
+  secereVerileri.value.forEach(wo => {
+    const key = wo.plate || 'PLAKASIZ'
+    if (!groups[key] || new Date(wo.created_at) > new Date(groups[key].last_visit_date)) {
+      groups[key] = {
+        plate: wo.plate,
+        customer_name: wo.customer_name,
+        customer_phone: wo.customer_phone,
+        brand: wo.brand,
+        model: wo.model,
+        last_visit_date: wo.created_at,
+        last_visit_status: wo.status,
+        last_visit_description: wo.description,
+        workOrders: []
+      }
+    }
+  })
+  
+  secereVerileri.value.forEach(wo => {
+    const key = wo.plate || 'PLAKASIZ'
+    if (groups[key]) {
+      groups[key].workOrders.push(wo)
+    }
+  })
+  
+  Object.keys(groups).forEach(key => {
+    groups[key].workOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  })
+  
+  return Object.values(groups)
+})
+
+const seciliAracWorkOrders = computed(() => {
+  return seciliArac.value ? seciliArac.value.workOrders : []
+})
+
+const detayGoster = (arac) => {
+  seciliArac.value = arac
+}
+
 const gecmisSorgula = async () => {
+  onerilerAcik.value = false
   gecmisArandi.value = true
   gecmisYukleniyor.value = true
 
@@ -63,12 +113,26 @@ const gecmisSorgula = async () => {
 
     if (res?.success) {
       secereVerileri.value = Array.isArray(res.gecmis) ? res.gecmis : []
+      if (secereVerileri.value.length > 0) {
+        aramaSonuclariDialogAcik.value = true
+        // Auto-select the first vehicle to give a rich, instant overview
+        const uAraclar = benzersizAraclar.value
+        if (uAraclar.length > 0) {
+          seciliArac.value = uAraclar[0]
+        } else {
+          seciliArac.value = null
+        }
+      } else {
+        seciliArac.value = null
+      }
     } else {
       secereVerileri.value = []
+      seciliArac.value = null
     }
   } catch (error) {
     console.error('Servis geçmişi arama hatası:', error)
     secereVerileri.value = []
+    seciliArac.value = null
   } finally {
     gecmisYukleniyor.value = false
   }
@@ -78,6 +142,100 @@ const gecmisTemizle = () => {
   gecmisAramaMetni.value = ''
   gecmisArandi.value = false
   secereVerileri.value = []
+  aramaSonuclariDialogAcik.value = false
+  seciliArac.value = null
+  oneriler.value = []
+  onerilerAcik.value = false
+}
+
+const onerileriGoster = () => {
+  if (oneriler.value.length > 0) {
+    onerilerAcik.value = true
+  }
+}
+
+const oneriTuruGetir = (oneri) => {
+  const query = (gecmisAramaMetni.value || '').toLowerCase()
+  if (oneri.plate && oneri.plate.toLowerCase().includes(query)) {
+    return 'Plaka'
+  }
+  if (oneri.customer_phone && oneri.customer_phone.toLowerCase().includes(query)) {
+    return 'Telefon'
+  }
+  return 'Müşteri'
+}
+
+const oneriSec = (oneri) => {
+  gecmisAramaMetni.value = oneri.plate || oneri.customer_name
+  onerilerAcik.value = false
+  oneriler.value = []
+  gecmisSorgula()
+}
+
+const onerileriGetir = () => {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+  }
+
+  const query = (gecmisAramaMetni.value || '').trim()
+  if (query.length < 2) {
+    oneriler.value = []
+    onerilerAcik.value = false
+    return
+  }
+
+  debounceTimer = setTimeout(async () => {
+    try {
+      const res = await window.api.servisGecmisiAra(query)
+      if (res?.success && Array.isArray(res.gecmis)) {
+        const groups = {}
+        res.gecmis.forEach(wo => {
+          const key = wo.plate || 'PLAKASIZ'
+          if (!groups[key] || new Date(wo.created_at) > new Date(groups[key].last_visit_date)) {
+            groups[key] = {
+              plate: wo.plate,
+              customer_name: wo.customer_name,
+              customer_phone: wo.customer_phone,
+              brand: wo.brand,
+              model: wo.model,
+              last_visit_date: wo.created_at,
+              status: wo.status,
+              description: wo.description,
+              workOrders: []
+            }
+          }
+        })
+        
+        res.gecmis.forEach(wo => {
+          const key = wo.plate || 'PLAKASIZ'
+          if (groups[key]) {
+            groups[key].workOrders.push(wo)
+          }
+        })
+        
+        Object.keys(groups).forEach(key => {
+          groups[key].workOrders.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        })
+
+        oneriler.value = Object.values(groups).slice(0, 6)
+        onerilerAcik.value = oneriler.value.length > 0
+      } else {
+        oneriler.value = []
+        onerilerAcik.value = false
+      }
+    } catch (e) {
+      console.error('Öneri getirme hatası:', e)
+      oneriler.value = []
+      onerilerAcik.value = false
+    }
+  }, 250)
+}
+
+const closeSuggestionsOnOutsideClick = (e) => {
+  const container = document.querySelector('.search-module')
+  if (container && !container.contains(e.target)) {
+    onerilerAcik.value = false
+  }
 }
 
 const kalemBasligiGetir = (kalem) => {
@@ -131,6 +289,14 @@ const isEmirlerineGit = () => {
 
 onMounted(() => {
   verileriYukle()
+  window.addEventListener('click', closeSuggestionsOnOutsideClick)
+})
+
+onUnmounted(() => {
+  if (debounceTimer) {
+    clearTimeout(debounceTimer)
+  }
+  window.removeEventListener('click', closeSuggestionsOnOutsideClick)
 })
 </script>
 
@@ -270,7 +436,7 @@ onMounted(() => {
             <i class="pi pi-search"></i>
             <span>Müşteri / Plaka / Telefon Ara</span>
           </div>
-          <div class="search-module-input-row">
+          <div class="search-module-input-row" style="position: relative;">
             <span class="p-input-icon-left" style="flex: 1;">
               <i class="pi pi-search" />
               <InputText
@@ -278,6 +444,8 @@ onMounted(() => {
                 placeholder="Plaka, telefon, müşteri adı veya işlem yazın..."
                 class="search-module-input"
                 @keyup.enter="gecmisSorgula"
+                @input="onerileriGetir"
+                @focus="onerileriGoster"
               />
             </span>
             <Button
@@ -294,6 +462,38 @@ onMounted(() => {
               @click="gecmisTemizle"
               title="Temizle"
             />
+
+            <!-- Öneriler Listesi Dropdown -->
+            <div
+              v-if="onerilerAcik && oneriler.length > 0"
+              class="search-suggestions-dropdown"
+              style="position: absolute; top: 100%; left: 0; right: 0; z-index: 1000; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 8px; margin-top: 6px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); max-height: 280px; overflow-y: auto; display: flex; flex-direction: column;"
+            >
+              <div
+                v-for="oneri in oneriler"
+                :key="oneri.plate + '-' + oneri.customer_name"
+                class="suggestion-row"
+                style="padding: 10px 12px; cursor: pointer; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; transition: background 0.15s;"
+                @click="oneriSec(oneri)"
+              >
+                <div style="display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0;">
+                  <span style="font-size: 13px; font-weight: 600; color: var(--text-title); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left;">
+                    {{ oneri.customer_name }}
+                  </span>
+                  <span style="font-size: 11px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left;">
+                    {{ oneri.customer_phone || '-' }} &bull; <strong style="font-family: monospace; font-size: 11px; color: var(--text-muted);">{{ oneri.plate }}</strong> &bull; {{ oneri.brand || '' }} {{ oneri.model || '' }}
+                  </span>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px; margin-left: 8px;">
+                  <span style="font-size: 10px; font-weight: 700; text-transform: uppercase; color: var(--accent-color, #38bdf8); background: rgba(56, 189, 248, 0.1); padding: 2px 6px; border-radius: 4px;">
+                    {{ oneriTuruGetir(oneri) }}
+                  </span>
+                  <span v-if="oneri.last_visit_date" style="font-size: 10px; color: var(--text-muted);">
+                    {{ tarihFormatla(oneri.last_visit_date).split(' ')[0] }}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Arama Sonucu -->
@@ -301,49 +501,17 @@ onMounted(() => {
             <i class="pi pi-spin pi-spinner"></i> Aranıyor...
           </div>
 
-          <div v-else-if="secereVerileri.length > 0" class="search-results">
-            <div
-              v-for="(kayit, index) in secereVerileri"
-              :key="kayit.id"
-              class="history-card"
-            >
-              <div class="history-card-header">
-                <div class="history-card-id">
-                  <span class="plate-cell">{{ kayit.plate || 'Plakasız' }}</span>
-                  <Tag :value="kayit.status || '-'" :severity="getSeverity(kayit.status)" />
-                </div>
-                <div class="history-card-meta">
-                  <strong>{{ kayit.customer_name || 'Müşteri bilinmiyor' }}</strong>
-                  <span>{{ kayit.brand || '' }} {{ kayit.model || '' }}</span>
-                </div>
-              </div>
-
-              <div class="history-detail-grid">
-                <div><span>Açılış</span><strong>{{ tarihFormatla(kayit.created_at) }}</strong></div>
-                <div><span>Kapanış</span><strong>{{ kayit.closed_at ? tarihFormatla(kayit.closed_at) : '-' }}</strong></div>
-                <div><span>KM</span><strong>{{ kayit.mileage ? Number(kayit.mileage).toLocaleString('tr-TR') : '-' }}</strong></div>
-                <div><span>Usta</span><strong>{{ kayit.opened_by_master_name || '-' }}</strong></div>
-              </div>
-
-              <div v-if="kayit.description" class="history-desc">
-                <span>Şikayet:</span> {{ kayit.description }}
-              </div>
-
-              <div v-if="kayit.kalemler && kayit.kalemler.length > 0" class="history-items-row">
-                <span>Kalemler:</span>
-                <ul>
-                  <li v-for="kalem in kayit.kalemler" :key="kalem.id">
-                    {{ kalemBasligiGetir(kalem) }}
-                    <em v-if="Number(kalem.total_price) > 0">{{ tlFormatla(kalem.total_price) }}</em>
-                  </li>
-                </ul>
-              </div>
-
-              <div class="history-total">
-                <span>{{ index + 1 }}. Servis</span>
-                <strong class="cell-price">{{ tlFormatla(kayit.total_price) }}</strong>
-              </div>
-            </div>
+          <div v-else-if="secereVerileri.length > 0" class="search-success-hint" style="padding: 12px; text-align: center; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 8px;">
+            <i class="pi pi-check-circle" style="color: #10b981; font-size: 24px; margin-bottom: 8px; display: block;"></i>
+            <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px; line-height: 1.4;">
+              {{ benzersizAraclar.length }} araç için arama sonuçları bulundu.
+            </p>
+            <Button
+              label="Sonuçları Göster"
+              icon="pi pi-external-link"
+              class="p-button-sm p-button-secondary w-full"
+              @click="aramaSonuclariDialogAcik = true"
+            />
           </div>
 
           <div v-else-if="gecmisArandi" class="search-empty">
@@ -352,7 +520,7 @@ onMounted(() => {
           </div>
 
           <div v-else class="search-hint">
-            Araç plakası, müşteri adı, telefon veya yapılan işlem ile arama yapın.
+            Plaka, müşteri adı, telefon veya yapılan işlem ile geçmiş servisleri bulun.
           </div>
         </div>
 
@@ -360,13 +528,14 @@ onMounted(() => {
         <div v-if="dusukStokParcalari.length > 0" class="low-stock-box">
           <div class="low-stock-header">
             <i class="pi pi-exclamation-triangle"></i>
-            <h3>Kritik Stok Uyardışı</h3>
+            <h3>Kritik Stok Uyarısı</h3>
           </div>
           <ul>
             <li v-for="parca in dusukStokParcalari" :key="parca.id">
               <strong>{{ parca.code }}</strong>
               <span>{{ parca.name }}</span>
-              <em>{{ parca.stock }}/{{ parca.critical_stock ?? 5 }}</em>
+              <em v-if="parca.critical_stock_enabled !== 0">{{ parca.stock }}/{{ parca.critical_stock ?? 5 }}</em>
+              <em v-else style="color: var(--status-open, #ef4444);">{{ parca.stock }}/Tükendi</em>
             </li>
           </ul>
         </div>
@@ -375,9 +544,138 @@ onMounted(() => {
           <i class="pi pi-check-circle"></i>
           <strong>Kritik stokta parça yok</strong>
         </div>
-
       </div>
     </div>
+
+    <!-- Arama Sonuçları Modalleri -->
+    <Dialog
+      v-model:visible="aramaSonuclariDialogAcik"
+      modal
+      header="Müşteri & Araç Geçmişi Arama Sonuçları"
+      :style="{ width: '85vw', maxWidth: '1200px' }"
+      :breakpoints="{ '1024px': '95vw', '640px': '100vw' }"
+    >
+      <div class="search-results-modal-layout" style="display: flex; gap: 20px; height: 65vh; min-height: 450px;">
+        
+        <!-- Sol Bölüm: Arama Sonuçları Listesi -->
+        <div class="results-sidebar" style="flex: 0 0 35%; display: flex; flex-direction: column; border-right: 1px solid var(--border-color); padding-right: 16px; overflow-y: auto;">
+          <h4 style="margin: 0 0 12px 0; font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">
+            Eşleşen Araçlar ({{ benzersizAraclar.length }})
+          </h4>
+          
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div
+              v-for="arac in benzersizAraclar"
+              :key="arac.plate"
+              class="vehicle-result-row"
+              :class="{ 'active': seciliArac && seciliArac.plate === arac.plate }"
+              style="padding: 12px; border: 1px solid var(--border-color); border-radius: 8px; cursor: pointer; transition: all 0.2s; background: var(--bg-panel);"
+              @click="detayGoster(arac)"
+            >
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span class="plate-cell" style="font-size: 12px; padding: 2px 6px; font-family: monospace; font-weight: 700;">
+                  {{ arac.plate || 'PLAKASIZ' }}
+                </span>
+                <Tag :value="arac.last_visit_status || '-'" :severity="getSeverity(arac.last_visit_status)" />
+              </div>
+              <div style="font-size: 13.5px; font-weight: 700; color: var(--text-title); margin-bottom: 4px;">
+                {{ arac.customer_name || 'Müşteri Bilinmiyor' }}
+              </div>
+              <div style="font-size: 12px; color: var(--text-secondary); display: flex; justify-content: space-between;">
+                <span>{{ arac.brand || '' }} {{ arac.model || '' }}</span>
+                <span>{{ tarihFormatla(arac.last_visit_date).split(' ')[0] }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sağ Bölüm: Seçilen Aracın Servis Geçmişi -->
+        <div class="results-detail-pane" style="flex: 1 1 65%; display: flex; flex-direction: column; overflow-y: auto; padding-left: 4px;">
+          <div v-if="seciliArac" style="display: flex; flex-direction: column; gap: 16px; height: 100%;">
+            
+            <!-- Üst Sabit Özet Kartı -->
+            <div class="customer-info-banner" style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <div><span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 700; margin-right: 6px;">Müşteri:</span> <strong style="font-size: 13.5px; font-weight: 600; color: var(--text-title);">{{ seciliArac.customer_name || 'Bilinmiyor' }}</strong></div>
+                <div><span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 700; margin-right: 6px;">Telefon:</span> <strong style="font-size: 13.5px; font-weight: 600; color: var(--text-title);">{{ seciliArac.customer_phone || '-' }}</strong></div>
+              </div>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div><span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 700; margin-right: 6px;">Plaka:</span> <strong class="plate-cell">{{ seciliArac.plate || 'PLAKASIZ' }}</strong></div>
+                <div><span style="color: var(--text-muted); font-size: 11px; text-transform: uppercase; font-weight: 700; margin-right: 6px;">Araç:</span> <strong style="font-size: 13.5px; font-weight: 600; color: var(--text-title);">{{ seciliArac.brand || '' }} {{ seciliArac.model || '' }}</strong></div>
+              </div>
+            </div>
+
+            <!-- Servis Geçmişi Zaman Çizelgesi -->
+            <h4 style="margin: 0; font-size: 13px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700;">
+              Servis Geçmişi ({{ seciliAracWorkOrders.length }} Ziyaret)
+            </h4>
+            
+            <div class="visits-timeline" style="display: flex; flex-direction: column; gap: 16px; padding-bottom: 20px;">
+              <div
+                v-for="(visit, idx) in seciliAracWorkOrders"
+                :key="visit.id"
+                class="visit-history-card"
+                style="background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 10px;"
+              >
+                <!-- Üst Kısım -->
+                <div class="visit-card-top" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px;">
+                  <div style="display: flex; gap: 10px; align-items: center;">
+                    <span style="font-weight: 700; color: var(--accent-color, #38bdf8); font-size: 13.5px;">{{ idx + 1 }}. Servis Kaydı</span>
+                    <Tag :value="visit.status || '-'" :severity="getSeverity(visit.status)" />
+                  </div>
+                  <strong style="color: var(--accent-color, #38bdf8); font-size: 14.5px;">{{ tlFormatla(visit.total_price) }}</strong>
+                </div>
+
+                <!-- Detay Grid -->
+                <div class="visit-card-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; font-size: 12.5px;">
+                  <div><span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase; font-weight: 700;">Açılış:</span> <strong style="display: block; margin-top: 2px; color: var(--text-title);">{{ tarihFormatla(visit.created_at) }}</strong></div>
+                  <div><span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase; font-weight: 700;">Kapanış:</span> <strong style="display: block; margin-top: 2px; color: var(--text-title);">{{ visit.closed_at ? tarihFormatla(visit.closed_at) : '-' }}</strong></div>
+                  <div><span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase; font-weight: 700;">Açan Usta:</span> <strong style="display: block; margin-top: 2px; color: var(--text-title);">{{ visit.opened_by_master_name || '-' }}</strong></div>
+                  <div><span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase; font-weight: 700;">Kapatan Usta:</span> <strong style="display: block; margin-top: 2px; color: var(--text-title);">{{ visit.closed_by_master_name || '-' }}</strong></div>
+                </div>
+
+                <!-- Şikayet / Açıklama -->
+                <div v-if="visit.description" class="visit-complaint-section" style="font-size: 13px; background: var(--bg-panel); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-color); color: var(--text-secondary); line-height: 1.4;">
+                  <span style="color: var(--text-title); font-weight: 700; margin-right: 4px; font-size: 12px;">Şikayet:</span>
+                  {{ visit.description }}
+                </div>
+
+                <!-- Kalemler -->
+                <div v-if="visit.kalemler && visit.kalemler.length > 0" class="visit-items-section">
+                  <span style="font-weight: 700; color: var(--text-title); font-size: 12px; display: block; margin-bottom: 6px;">Kalemler:</span>
+                  <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <div
+                      v-for="kalem in visit.kalemler"
+                      :key="kalem.id"
+                      style="display: flex; justify-content: space-between; align-items: center; padding: 5px 8px; background: var(--bg-panel); border: 1px solid var(--border-color); border-radius: 6px; font-size: 12px;"
+                    >
+                      <div style="display: flex; flex-direction: column; gap: 1px;">
+                        <span style="font-weight: 600;">
+                          <i :class="kalem.type === 'Parça' || kalem.type === 'Parca' ? 'pi pi-cog' : 'pi pi-user'" style="font-size: 10px; margin-right: 4px;"></i>
+                          {{ kalemBasligiGetir(kalem) }}
+                        </span>
+                        <span style="font-size: 10.5px; color: var(--text-secondary);">
+                          {{ kalem.quantity }} {{ kalem.type === 'Parça' || kalem.type === 'Parca' ? 'Adet' : 'Saat' }} x {{ tlFormatla(kalem.unit_price) }}
+                        </span>
+                      </div>
+                      <strong style="color: var(--text-primary);">{{ tlFormatla(kalem.total_price) }}</strong>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+          <div v-else style="display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100%; color: var(--text-secondary); text-align: center; border: 1px dashed var(--border-color); border-radius: 12px; background: var(--bg-panel); padding: 40px;">
+            <i class="pi pi-history" style="font-size: 40px; color: var(--text-muted); opacity: 0.5; margin-bottom: 12px;"></i>
+            <h3>Servis Geçmişi</h3>
+            <p style="font-size: 13px; margin: 4px 0 0 0;">Lütfen sol taraftaki sonuç listesinden detayını görmek istediğiniz aracı seçin.</p>
+          </div>
+        </div>
+
+      </div>
+    </Dialog>
 
   </div>
 </template>
@@ -489,7 +787,7 @@ onMounted(() => {
 }
 
 .cell-date { font-size: 13px; color: var(--text-secondary); }
-.cell-sub  { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; }
+.cell-sub  { font-size: 12.5px; color: var(--text-secondary, #94a3b8); font-weight: 500; margin-top: 5px; }
 .cell-price { font-weight: 700; color: var(--status-done); }
 
 /* ── Right Panel & Search Module ────────────────── */
@@ -593,14 +891,18 @@ onMounted(() => {
 }
 
 .plate-cell {
-  background: var(--bg-active-box);
-  color: var(--accent-color);
-  border: 1px solid var(--border-color);
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+  border-left: 4px solid #1d4ed8 !important; /* TR Plate Blue */
   border-radius: 4px;
-  padding: 2px 6px;
-  font-family: monospace;
-  font-weight: 700;
-  font-size: 13px;
+  padding: 2px 6px 2px 10px;
+  font-family: 'Outfit', 'Inter', monospace;
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  display: inline-block;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 /* ── Low Stock ────────────────────────────────── */
@@ -883,5 +1185,71 @@ onMounted(() => {
 :global(html[data-theme="light"] .low-stock-box p),
 :global(html[data-theme="light"] .low-stock-box span) {
   color: #7c2d12 !important;
+}
+
+.vehicle-result-row:hover {
+  background: var(--bg-panel-hover, rgba(255, 255, 255, 0.05)) !important;
+  border-color: var(--accent-color, #38bdf8) !important;
+}
+
+.vehicle-result-row.active {
+  background: var(--bg-active-box, rgba(56, 189, 248, 0.15)) !important;
+  border-color: var(--accent-color, #38bdf8) !important;
+}
+
+@media (max-width: 768px) {
+  .search-results-modal-layout {
+    flex-direction: column !important;
+    height: auto !important;
+  }
+  
+  .results-sidebar {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border-color);
+    padding-right: 0 !important;
+    padding-bottom: 16px;
+    flex: none !important;
+    max-height: 200px;
+  }
+  
+  .results-detail-pane {
+    padding-left: 0 !important;
+    flex: none !important;
+  }
+}
+
+:global(html[data-theme="light"] .vehicle-result-row) {
+  background: #f8fafc !important;
+}
+
+:global(html[data-theme="light"] .vehicle-result-row.active) {
+  background: #e2e8f0 !important;
+  border-color: #3b82f6 !important;
+}
+
+:global(html[data-theme="light"] .customer-info-banner) {
+  background: #f8fafc !important;
+}
+
+:global(html[data-theme="light"] .visit-history-card) {
+  background: #f8fafc !important;
+}
+
+:global(html[data-theme="light"] .visit-complaint-section),
+:global(html[data-theme="light"] .visit-items-section > div > div) {
+  background: #ffffff !important;
+}
+
+.suggestion-row:hover {
+  background: var(--bg-panel-hover, rgba(255, 255, 255, 0.05)) !important;
+}
+
+:global(html[data-theme="light"] .search-suggestions-dropdown) {
+  background: #ffffff !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+:global(html[data-theme="light"] .suggestion-row:hover) {
+  background: #f1f5f9 !important;
 }
 </style>

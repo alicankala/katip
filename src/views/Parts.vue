@@ -73,6 +73,7 @@ const form = reactive({
   stock: 0,
   unit: 'Adet',
   critical_stock: 5,
+  critical_stock_enabled: false,
   buy_price: 0,
   sell_price: 0,
   shelf: '',
@@ -89,6 +90,7 @@ const formuTemizle = () => {
     stock: 0,
     unit: 'Adet',
     critical_stock: 5,
+    critical_stock_enabled: false,
     buy_price: 0,
     sell_price: 0,
     shelf: '',
@@ -172,6 +174,7 @@ Object.assign(form, {
   stock: parca.stock || 0,
   unit: parca.unit || 'Adet',
   critical_stock: parca.critical_stock ?? 5,
+  critical_stock_enabled: parca.critical_stock_enabled !== 0,
   buy_price: parca.buy_price || 0,
   sell_price: parca.sell_price || 0,
   shelf: parca.shelf || '',
@@ -257,7 +260,7 @@ const kaydet = async () => {
     return
   }
 
-  if (Number(form.critical_stock) < 0) {
+  if (form.critical_stock_enabled && Number(form.critical_stock) < 0) {
     uyariMesaji('Kritik stok limiti negatif olamaz.')
     return
   }
@@ -395,7 +398,7 @@ onMounted(() => {
         :value="filtrelenmisParcalar"
         responsiveLayout="scroll"
         emptyMessage="Aradığınız kriterlere uygun parça bulunamadı."
-        :rowClass="(row) => Number(row.stock || 0) <= 0 ? 'row-critical' : (Number(row.stock || 0) <= Number(row.critical_stock ?? 5) ? 'row-critical' : '')"
+        :rowClass="(row) => Number(row.stock || 0) <= 0 ? 'row-critical' : (row.critical_stock_enabled !== 0 && Number(row.stock || 0) <= Number(row.critical_stock ?? 5) ? 'row-critical' : '')"
       >
 <Column field="code" header="Parça Kodu">
   <template #body="slotProps">
@@ -420,7 +423,12 @@ onMounted(() => {
         <Column header="Stok">
   <template #body="slotProps">
     <Tag
-      v-if="Number(slotProps.data.stock || 0) <= Number(slotProps.data.critical_stock ?? 5)"
+      v-if="Number(slotProps.data.stock || 0) <= 0"
+      value="Tükendi"
+      severity="danger"
+    />
+    <Tag
+      v-else-if="slotProps.data.critical_stock_enabled !== 0 && Number(slotProps.data.stock || 0) <= Number(slotProps.data.critical_stock ?? 5)"
       :value="`${slotProps.data.stock} ${slotProps.data.unit || 'Adet'} / Kritik`"
       severity="danger"
     />
@@ -432,7 +440,12 @@ onMounted(() => {
 
 <Column header="Kritik Stok">
   <template #body="slotProps">
-    {{ slotProps.data.critical_stock ?? 5 }} {{ slotProps.data.unit || 'adet' }}
+    <span v-if="slotProps.data.critical_stock_enabled !== 0">
+      {{ slotProps.data.critical_stock ?? 5 }} {{ slotProps.data.unit || 'adet' }}
+    </span>
+    <span v-else style="color: var(--text-muted); opacity: 0.65; font-size: 11.5px;">
+      Takip Kapalı
+    </span>
   </template>
 </Column>
 <Column header="Alış">
@@ -539,51 +552,69 @@ onMounted(() => {
     </div>
 
     <div class="form-section-title"><i class="pi pi-chart-bar"></i> Stok &amp; Fiyat Bilgileri</div>
-    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px;">
-      <div class="form-group">
-        <label>Stok</label>
-        <InputText
-          type="number"
-          v-model="form.stock"
-          style="width: 100%"
-        />
+    <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; align-items: start;">
+      
+      <!-- Sol blok: Stok / Birim ve Alış / Satış -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+        <div class="form-group">
+          <label>Stok</label>
+          <InputText
+            type="number"
+            v-model="form.stock"
+            style="width: 100%"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Birim</label>
+          <InputText
+            v-model="form.unit"
+            placeholder="Adet"
+            style="width: 100%"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Alış (₺)</label>
+          <InputText
+            type="number"
+            v-model="form.buy_price"
+            style="width: 100%"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Satış (₺)</label>
+          <InputText
+            type="number"
+            v-model="form.sell_price"
+            style="width: 100%"
+          />
+        </div>
       </div>
 
-      <div class="form-group">
-        <label>Birim</label>
-        <InputText
-          v-model="form.unit"
-          placeholder="Adet"
-          style="width: 100%"
-        />
+      <!-- Sağ blok: Kritik Stok Takibi ve Limit -->
+      <div style="display: flex; flex-direction: column; gap: 12px; background: var(--bg-panel-hover, rgba(255, 255, 255, 0.02)); border: 1px dashed var(--border-color); padding: 12px 14px; border-radius: 8px; min-height: 110px; justify-content: center;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input 
+            id="critical_stock_enabled" 
+            type="checkbox" 
+            v-model="form.critical_stock_enabled" 
+            style="width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent-color, #38bdf8);"
+          />
+          <label for="critical_stock_enabled" style="cursor: pointer; user-select: none; font-weight: 600; margin-bottom: 0;">Kritik Stok Takibi Yap</label>
+        </div>
+
+        <div class="form-group" v-if="form.critical_stock_enabled" style="margin-top: 4px; margin-bottom: 0;">
+          <label style="font-size: 11.5px;">Kritik Stok Limiti</label>
+          <InputText
+            type="number"
+            v-model="form.critical_stock"
+            style="width: 100%"
+          />
+        </div>
       </div>
 
-      <div class="form-group">
-        <label>Kritik Stok</label>
-        <InputText
-          type="number"
-          v-model="form.critical_stock"
-          style="width: 100%"
-        />
-      </div>
-
-      <div class="form-group">
-        <label>Alış (₺)</label>
-        <InputText
-          type="number"
-          v-model="form.buy_price"
-          style="width: 100%"
-        />
-      </div>
-
-      <div class="form-group">
-        <label>Satış (₺)</label>
-        <InputText
-          type="number"
-          v-model="form.sell_price"
-          style="width: 100%"
-        />
-      </div>
     </div>
 
     <div class="form-group">
@@ -624,7 +655,11 @@ onMounted(() => {
           <strong>Parça:</strong> {{ seciliParca.name }} <br>
           <strong>Kod:</strong> {{ seciliParca.code }} <br>
           <strong>Mevcut Stok:</strong> {{ seciliParca.stock }} <br>
-          <strong>Kritik Stok:</strong> {{ seciliParca.critical_stock ?? 5 }}
+          <strong>Kritik Stok:</strong> 
+          <span v-if="seciliParca.critical_stock_enabled !== 0">
+            {{ seciliParca.critical_stock ?? 5 }}
+          </span>
+          <span v-else style="color: var(--text-muted); opacity: 0.65;">Takip Kapalı</span>
         </div>
 
         <DataTable

@@ -408,6 +408,7 @@ kanalEkle('parcalari-filtreli-getir', (_event, filtre: any = {}) => {
 
     if (durum === 'kritik') {
       kosullar.push('IFNULL(stock, 0) > 0')
+      kosullar.push('IFNULL(critical_stock_enabled, 1) = 1')
       kosullar.push('IFNULL(stock, 0) <= IFNULL(critical_stock, 5)')
     }
 
@@ -446,6 +447,7 @@ kanalEkle('parcalari-filtreli-getir', (_event, filtre: any = {}) => {
         COUNT(CASE
           WHEN IFNULL(is_active, 1) = 1
            AND IFNULL(stock, 0) > 0
+           AND IFNULL(critical_stock_enabled, 1) = 1
            AND IFNULL(stock, 0) <= IFNULL(critical_stock, 5)
           THEN 1
         END) AS kritik,
@@ -500,7 +502,10 @@ kanalEkle('dusuk-stok-parcalari-getir', (_event, limit: any = 5) => {
     SELECT *
     FROM parts
     WHERE IFNULL(is_active, 1) = 1
-      AND IFNULL(stock, 0) <= IFNULL(critical_stock, 5)
+      AND (
+        IFNULL(stock, 0) <= 0
+        OR (IFNULL(critical_stock_enabled, 1) = 1 AND IFNULL(stock, 0) <= IFNULL(critical_stock, 5))
+      )
     ORDER BY stock ASC, name ASC
     LIMIT ?
   `).all(sinir)
@@ -525,6 +530,12 @@ kanalEkle('parca-ekle', (_event, parca: any) => {
       parca.critical_stock !== ''
         ? Number(parca.critical_stock)
         : 5
+
+    const criticalStockEnabled =
+      parca.critical_stock_enabled !== undefined &&
+      parca.critical_stock_enabled !== null
+        ? (parca.critical_stock_enabled ? 1 : 0)
+        : 0
 
     const activeMasterId =
       parca.active_master_id !== undefined &&
@@ -573,6 +584,7 @@ kanalEkle('parca-ekle', (_event, parca: any) => {
           sell_price = ?,
           shelf = ?,
           critical_stock = ?,
+          critical_stock_enabled = ?,
           note = ?,
           is_active = 1
         WHERE id = ?
@@ -587,6 +599,7 @@ kanalEkle('parca-ekle', (_event, parca: any) => {
         sellPrice,
         shelf,
         criticalStock,
+        criticalStockEnabled,
         note,
         Number(mevcutParca.id)
       )
@@ -626,10 +639,11 @@ stokHareketiKaydet({
         sell_price,
         shelf,
         critical_stock,
+        critical_stock_enabled,
         note,
         is_active
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `)
 
     const info = stmt.run(
@@ -644,6 +658,7 @@ stokHareketiKaydet({
       sellPrice,
       shelf,
       criticalStock,
+      criticalStockEnabled,
       note,
       1
     )
@@ -694,6 +709,12 @@ kanalEkle('parca-guncelle', (_event, parca: any) => {
       parca.critical_stock !== ''
         ? Number(parca.critical_stock)
         : 5
+
+    const criticalStockEnabled =
+      parca.critical_stock_enabled !== undefined &&
+      parca.critical_stock_enabled !== null
+        ? (parca.critical_stock_enabled ? 1 : 0)
+        : (eskiParca ? eskiParca.critical_stock_enabled : 0)
 
     const activeMasterId =
       parca.active_master_id !== undefined &&
@@ -761,6 +782,7 @@ kanalEkle('parca-guncelle', (_event, parca: any) => {
         sell_price = ?,
         shelf = ?,
         critical_stock = ?,
+        critical_stock_enabled = ?,
         note = ?
       WHERE id = ?
     `).run(
@@ -775,6 +797,7 @@ kanalEkle('parca-guncelle', (_event, parca: any) => {
       sellPrice,
       shelf,
       criticalStock,
+      criticalStockEnabled,
       note,
       partId
     )

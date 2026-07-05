@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS parts (
   sell_price REAL DEFAULT 0,
   shelf TEXT,
   critical_stock INTEGER DEFAULT 5,
+  critical_stock_enabled INTEGER DEFAULT 1,
   note TEXT
 );
 
@@ -361,6 +362,10 @@ migrationCalistir(16, () => {
 
 migrationCalistir(17, () => {
   kolonEkleEksikse('current_accounts', 'direction', "TEXT DEFAULT 'Borç'")
+})
+
+migrationCalistir(18, () => {
+  kolonEkleEksikse('parts', 'critical_stock_enabled', 'INTEGER DEFAULT 1')
 })
 
   console.log('Veritabanı hazır ve tablolar oluşturuldu! Yol:', dbPath)
