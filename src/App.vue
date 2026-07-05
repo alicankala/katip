@@ -41,7 +41,6 @@ const menuItems = ref([
   { label: 'Araçlar', icon: 'pi pi-car', path: '/vehicles', command: () => router.push('/vehicles') },
   { label: 'Parça / Stok', icon: 'pi pi-box', path: '/parts', command: () => router.push('/parts') },
   { label: 'Cari Hesap', icon: 'pi pi-wallet', path: '/current-accounts', command: () => router.push('/current-accounts') },
-  { label: 'Genel Giderler', icon: 'pi pi-receipt', path: '/general-expenses', command: () => router.push('/general-expenses') },
   { label: 'İç Kâr Raporu', icon: 'pi pi-chart-line', path: '/profit-report', command: () => router.push('/profit-report') },
   { label: 'Ayarlar', icon: 'pi pi-cog', path: '/settings', command: () => router.push('/settings') }
 ])
@@ -66,6 +65,9 @@ const ustalariYukle = async () => {
 }
 
 const girisYap = async () => {
+  // Zaten yükleniyorsa ikinci kez çalışmasın (Enter tuşu veya çift tıklama)
+  if (girisYukleniyor.value) return
+
   girisHatasi.value = ''
 
   if (isAdminLogin.value) {
@@ -86,20 +88,21 @@ const girisYap = async () => {
         aktifUsta.value = adminUser
         localStorage.setItem('aktifUsta', JSON.stringify(adminUser))
         pin.value = ''
+        girisYukleniyor.value = false
         router.push('/dashboard')
       } else {
         girisHatasi.value = 'Hatalı Admin PIN.'
+        girisYukleniyor.value = false
       }
     } catch (e) {
       console.error('Admin giriş hatası:', e)
       girisHatasi.value = 'Giriş hatası.'
-    } finally {
       girisYukleniyor.value = false
     }
     return
   }
 
-  // Normal login
+  // Normal usta girişi
   if (!seciliUstaId.value) {
     girisHatasi.value = 'Lütfen usta seçin.'
     return
@@ -114,28 +117,48 @@ const girisYap = async () => {
     return
   }
 
+  if (!window.api || !window.api.ustaGirisYap) {
+    girisHatasi.value = 'Uygulama hazır değil. Lütfen kapatıp yeniden açın.'
+    return
+  }
+
   girisYukleniyor.value = true
 
   try {
-    const res = await window.api.ustaGirisYap({
-      master_id: seciliUstaId.value,
-      pin: pin.value
+    // 8 saniyelik timeout: IPC hiç cevap vermezse loading açık kalmaz
+    const zamanAsimi = new Promise(function(_, reject) {
+      setTimeout(function() { reject(new Error('Sunucu yanıt vermedi. Uygulamayı yeniden başlatın.')) }, 8000)
     })
 
-    if (!res?.success) {
-      girisHatasi.value = res?.error || 'Giriş yapılamadı.'
+    const res = await Promise.race([
+      window.api.ustaGirisYap({
+        master_id: seciliUstaId.value,
+        pin: pin.value
+      }),
+      zamanAsimi
+    ])
+
+    if (!res || !res.success) {
+      girisHatasi.value = (res && res.error) ? res.error : 'Giriş yapılamadı.'
+      girisYukleniyor.value = false
       return
     }
 
-    aktifUsta.value = res.usta
-    localStorage.setItem('aktifUsta', JSON.stringify(res.usta))
+    const usta = res.usta
+    if (!usta || !usta.id) {
+      girisHatasi.value = 'Usta bilgisi alınamadı.'
+      girisYukleniyor.value = false
+      return
+    }
 
+    aktifUsta.value = usta
+    localStorage.setItem('aktifUsta', JSON.stringify(usta))
     pin.value = ''
+    girisYukleniyor.value = false
     router.push('/dashboard')
   } catch (error) {
     console.error('Usta giriş hatası:', error)
-    girisHatasi.value = 'Giriş yapılamadı.'
-  } finally {
+    girisHatasi.value = (error && error.message) ? error.message : 'Giriş yapılamadı. Lütfen tekrar deneyin.'
     girisYukleniyor.value = false
   }
 }
@@ -169,7 +192,7 @@ const showPhoneAccessModal = ref(false)
 const togglePhoneAccessModal = () => {
   showPhoneAccessModal.value = !showPhoneAccessModal.value
 }
-const kopyalaAdres = async (text: string) => {
+const kopyalaAdres = async (text) => {
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
       await navigator.clipboard.writeText(text)

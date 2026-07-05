@@ -359,6 +359,10 @@ migrationCalistir(16, () => {
   `)
 })
 
+migrationCalistir(17, () => {
+  kolonEkleEksikse('current_accounts', 'direction', "TEXT DEFAULT 'Borç'")
+})
+
   console.log('Veritabanı hazır ve tablolar oluşturuldu! Yol:', dbPath)
 }
 

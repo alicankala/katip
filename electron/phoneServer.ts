@@ -788,10 +788,15 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       </div>
     </div>
 
-    <!-- Prominent Service Reception Button -->
-    <button id="new-reception-btn" class="btn btn-primary" style="margin-bottom: 20px; background-color: var(--accent); color: #000;">
-      <i class="pi pi-plus-circle"></i> Yeni Servis Kabul
-    </button>
+    <!-- Prominent Buttons -->
+    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+      <button id="new-reception-btn" class="btn btn-primary" style="flex: 1; background-color: var(--accent); color: #000; margin: 0;">
+        <i class="pi pi-plus-circle"></i> Yeni Servis Kabul
+      </button>
+      <button id="customer-history-btn" class="btn btn-secondary" style="flex: 1; margin: 0; background-color: var(--bg-card); color: var(--text-primary); border: 1px solid var(--border);">
+        <i class="pi pi-search"></i> Musteri Gecmisi
+      </button>
+    </div>
 
     <!-- Stats Grid -->
     <div class="stats-grid">
@@ -1063,11 +1068,117 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     </div>
   </div>
 
+  <!-- SCREEN: CUSTOMER HISTORY -->
+  <div id="screen-customer-history" class="screen">
+    <div class="header" style="border-bottom: none; margin-bottom: 10px;">
+      <h2 style="font-size: 18px; font-weight: 700;">Musteri Gecmisi Ara</h2>
+      <button id="history-back-btn" class="btn btn-secondary" style="width: auto; height: 32px; padding: 0 12px; font-size: 13px;">
+        <i class="pi pi-arrow-left"></i> Geri Don
+      </button>
+    </div>
+
+    <div class="search-container">
+      <i class="pi pi-search"></i>
+      <input id="history-search-input" type="text" placeholder="Plaka, musteri adi veya telefon...">
+    </div>
+
+    <div id="history-loading" style="display: none; text-align: center; padding: 20px; color: var(--text-secondary);">
+      Yukleniyor...
+    </div>
+
+    <div id="history-results" class="list-container">
+      <!-- Search results loaded dynamically -->
+    </div>
+  </div>
+
+  <!-- SCREEN: CUSTOMER HISTORY DETAIL -->
+  <div id="screen-history-detail" class="screen">
+    <div class="header" style="border-bottom: none; margin-bottom: 10px;">
+      <h2 style="font-size: 18px; font-weight: 700;">Gecmis Detayi</h2>
+      <button id="history-detail-back-btn" class="btn btn-secondary" style="width: auto; height: 32px; padding: 0 12px; font-size: 13px;">
+        <i class="pi pi-arrow-left"></i> Geri Don
+      </button>
+    </div>
+
+    <div class="section-title">Musteri &amp; Arac Bilgileri</div>
+    <div class="detail-card">
+      <div class="detail-row">
+        <span class="detail-label">Musteri Adi</span>
+        <span id="hist-customer-name" class="detail-value">-</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Telefon</span>
+        <span id="hist-customer-phone" class="detail-value">-</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Plaka</span>
+        <span class="detail-value"><span id="hist-plate" class="plate-badge">-</span></span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Arac Marka / Model</span>
+        <span id="hist-vehicle" class="detail-value">-</span>
+      </div>
+    </div>
+
+    <div class="section-title">Servis Ziyaretleri</div>
+    <div id="history-work-orders-list" class="list-container">
+      <!-- Visited work orders list -->
+    </div>
+  </div>
+
+  <!-- SCREEN: HISTORY WORK ORDER DETAIL (READ ONLY) -->
+  <div id="screen-history-wo-detail" class="screen">
+    <div class="header" style="border-bottom: none; margin-bottom: 10px;">
+      <h2 style="font-size: 18px; font-weight: 700;">Servis Detayi</h2>
+      <button id="history-wo-back-btn" class="btn btn-secondary" style="width: auto; height: 32px; padding: 0 12px; font-size: 13px;">
+        <i class="pi pi-arrow-left"></i> Geri Don
+      </button>
+    </div>
+
+    <div class="detail-card">
+      <div class="detail-row">
+        <span class="detail-label">Tarih</span>
+        <span id="hist-wo-date" class="detail-value">-</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Durum</span>
+        <span class="detail-value"><span id="hist-wo-status" class="badge-status">-</span></span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Acan Usta</span>
+        <span id="hist-wo-opened-master" class="detail-value">-</span>
+      </div>
+      <div class="detail-row">
+        <span class="detail-label">Kapatan Usta</span>
+        <span id="hist-wo-closed-master" class="detail-value">-</span>
+      </div>
+      <div class="detail-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+        <span class="detail-label">Sikayet / Aciklama</span>
+        <span id="hist-wo-complaint" style="font-weight: 500; font-size: 13.5px; color: var(--text-primary); text-align: left; padding: 4px 0;">-</span>
+      </div>
+    </div>
+
+    <div class="section-title">Yapilan Isler &amp; Kullanilan Parcalar</div>
+    <div id="history-wo-items-container" class="list-container" style="background: var(--bg-card); padding: 12px; border-radius: 10px; border: 1px solid var(--border); margin-bottom: 12px;">
+      <!-- Labor & Parts -->
+    </div>
+
+    <div class="detail-card" style="padding: 12px;">
+      <div class="detail-row" style="border: none;">
+        <span class="detail-label" style="font-size: 15px; font-weight: 700; color: var(--text-primary);">Toplam Tutar</span>
+        <span id="hist-wo-total" class="detail-value" style="font-size: 16px; font-weight: 700; color: var(--accent);">-</span>
+      </div>
+    </div>
+  </div>
+
   <script>
     let activeUser = null;
     let workOrders = [];
     let selectedPart = null;
     let currentTab = 'open';
+    
+    let historyResults = [];
+    let selectedVehicle = null;
 
     const screens = {
       login: document.getElementById('screen-login'),
@@ -1075,7 +1186,10 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       details: document.getElementById('screen-details'),
       reception: document.getElementById('screen-new-reception'),
       addLabor: document.getElementById('screen-add-labor'),
-      addPart: document.getElementById('screen-add-part')
+      addPart: document.getElementById('screen-add-part'),
+      customerHistory: document.getElementById('screen-customer-history'),
+      historyDetail: document.getElementById('screen-history-detail'),
+      historyWoDetail: document.getElementById('screen-history-wo-detail')
     };
 
     function showScreen(screenKey) {
@@ -1438,7 +1552,165 @@ itemsList.innerHTML = items.map(item => {
       }
     });
 
-    // Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬ NEW RECEPTION FLOW Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
+    // ─── CUSTOMER HISTORY FLOW ───
+    document.getElementById('customer-history-btn').addEventListener('click', () => {
+      document.getElementById('history-search-input').value = '';
+      document.getElementById('history-results').innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">Arama yapmak icin plaka, musteri adi veya telefon girin.</div>';
+      showScreen('customerHistory');
+    });
+
+    document.getElementById('history-back-btn').addEventListener('click', () => {
+      showScreen('dashboard');
+    });
+
+    let historySearchTimeout = null;
+    document.getElementById('history-search-input').addEventListener('input', (e) => {
+      const query = e.target.value.trim();
+      if (historySearchTimeout) clearTimeout(historySearchTimeout);
+      
+      if (query.length < 2) {
+        document.getElementById('history-results').innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">Arama yapmak icin en az 2 karakter girin.</div>';
+        return;
+      }
+
+      historySearchTimeout = setTimeout(async () => {
+        document.getElementById('history-loading').style.display = 'block';
+        try {
+          const res = await fetch('/api/customer-history/search?query=' + encodeURIComponent(query));
+          const data = await res.json();
+          document.getElementById('history-loading').style.display = 'none';
+          if (data.success) {
+            historyResults = data.results || [];
+            renderHistoryResults();
+          } else {
+            document.getElementById('history-results').innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-danger);">Arama hatasi: ' + (data.error || 'Bilinmeyen hata') + '</div>';
+          }
+        } catch (err) {
+          document.getElementById('history-loading').style.display = 'none';
+          document.getElementById('history-results').innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-danger);">Sunucu baglanti hatasi.</div>';
+        }
+      }, 300);
+    });
+
+    function renderHistoryResults() {
+      const container = document.getElementById('history-results');
+      if (historyResults.length === 0) {
+        container.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">Sonuc bulunamadi.</div>';
+        return;
+      }
+
+      container.innerHTML = historyResults.map((item, idx) => {
+        const dateStr = item.last_visit_date ? dateFormat(item.last_visit_date) : 'Yok';
+        return '<div class="order-card" onclick="viewHistoryDetail(' + idx + ')" style="cursor: pointer; margin-bottom: 10px;">' +
+          '<div class="order-header">' +
+            '<span class="plate-badge">' + (item.plate || 'PLAKASIZ') + '</span>' +
+            '<span style="font-size: 12px; color: var(--text-secondary);">Son Islem: ' + dateStr + '</span>' +
+          '</div>' +
+          '<div class="order-meta" style="margin-top: 6px;">' +
+            '<div><i class="pi pi-user"></i> <strong>' + (item.customer_name || '') + '</strong></div>' +
+            '<div style="font-size: 12px; margin-top: 3px;"><i class="pi pi-phone"></i> ' + (item.customer_phone || '-') + '</div>' +
+            '<div style="font-size: 12px; margin-top: 3px;"><i class="pi pi-car"></i> ' + (item.brand || '') + ' ' + (item.model || '') + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    window.viewHistoryDetail = function(idx) {
+      const item = historyResults[idx];
+      if (!item) return;
+      selectedVehicle = item;
+      
+      document.getElementById('hist-customer-name').textContent = item.customer_name;
+      document.getElementById('hist-customer-phone').textContent = item.customer_phone || '-';
+      document.getElementById('hist-plate').textContent = item.plate;
+      document.getElementById('hist-vehicle').textContent = (item.brand || '') + ' ' + (item.model || '');
+
+      const woList = document.getElementById('history-work-orders-list');
+      const workOrders = item.workOrders || [];
+      if (workOrders.length === 0) {
+        woList.innerHTML = '<div style="text-align: center; padding: 20px; color: var(--text-secondary);">Bu arac icin gecmis is emri bulunamadi.</div>';
+      } else {
+        woList.innerHTML = workOrders.map((wo, wIdx) => {
+          const statusClass = wo.status === 'Tamamlandı' ? 'badge-status tamamlandi' : 'badge-status acik';
+          const statusText = wo.status === 'Tamamlandı' ? 'Tamamlandi' : 'Acik';
+          return '<div class="order-card" onclick="viewHistoryWorkOrderDetail(' + wIdx + ')" style="cursor: pointer; margin-bottom: 10px;">' +
+            '<div class="order-header">' +
+              '<span class="status-badge ' + statusClass + '">' + statusText + '</span>' +
+              '<span style="font-size: 12.5px; font-weight: 700; color: var(--accent);">' + tlFormat(wo.total_amount) + '</span>' +
+            '</div>' +
+            '<div class="order-meta" style="margin-top: 6px;">' +
+              '<div><strong>Tarih:</strong> ' + dateFormat(wo.created_at) + '</div>' +
+              '<div style="font-size: 12.5px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">' +
+                '<strong>Sikayet:</strong> ' + (wo.complaint || '-') +
+              '</div>' +
+            '</div>' +
+          '</div>';
+        }).join('');
+      }
+      showScreen('historyDetail');
+    };
+
+    document.getElementById('history-detail-back-btn').addEventListener('click', () => {
+      showScreen('customerHistory');
+    });
+
+    window.viewHistoryWorkOrderDetail = async function(wIdx) {
+      if (!selectedVehicle) return;
+      const wo = selectedVehicle.workOrders[wIdx];
+      if (!wo) return;
+      
+      document.getElementById('hist-wo-date').textContent = dateFormat(wo.created_at);
+      const statusClass = wo.status === 'Tamamlandı' ? 'badge-status tamamlandi' : 'badge-status acik';
+      const statusText = wo.status === 'Tamamlandı' ? 'Tamamlandi' : 'Acik';
+      const statusSpan = document.getElementById('hist-wo-status');
+      statusSpan.className = statusClass;
+      statusSpan.textContent = statusText;
+      
+      document.getElementById('hist-wo-opened-master').textContent = wo.opened_by_master_name || '-';
+      document.getElementById('hist-wo-closed-master').textContent = wo.closed_by_master_name || '-';
+      document.getElementById('hist-wo-complaint').textContent = wo.complaint || '-';
+      document.getElementById('hist-wo-total').textContent = tlFormat(wo.total_amount);
+
+      const itemsContainer = document.getElementById('history-wo-items-container');
+      itemsContainer.innerHTML = '<div style="text-align: center; padding: 10px; color: var(--text-secondary);">Yukleniyor...</div>';
+
+      try {
+        const res = await fetch('/api/work-orders/' + wo.work_order_id);
+        const data = await res.json();
+        if (data.success) {
+          const items = data.items || [];
+          if (items.length === 0) {
+            itemsContainer.innerHTML = '<div style="text-align: center; color: var(--text-secondary);">Bu is emrinde kayitli is/parca yok.</div>';
+          } else {
+            itemsContainer.innerHTML = items.map(it => {
+              const isPart = !!it.part_id;
+              const icon = isPart ? 'pi pi-cog' : 'pi pi-user';
+              const label = isPart ? '[PARCA] ' + it.name : '[ISCILIK] ' + it.name;
+              const qtyStr = isPart ? it.qty + ' adet' : '1 adet';
+              return '<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;">' +
+                '<div style="display: flex; flex-direction: column; gap: 2px;">' +
+                  '<span style="font-weight: 600; color: var(--text-primary);"><i class="' + icon + '" style="font-size: 11px;"></i> ' + label + '</span>' +
+                  '<span style="font-size: 11px; color: var(--text-secondary);">' + qtyStr + ' x ' + tlFormat(it.price) + '</span>' +
+                '</div>' +
+                '<span style="font-weight: 700; color: var(--text-primary);">' + tlFormat(it.qty * it.price) + '</span>' +
+              '</div>';
+            }).join('');
+          }
+        } else {
+          itemsContainer.innerHTML = '<div style="text-align: center; color: var(--text-danger);">Yukleme hatasi.</div>';
+        }
+      } catch (e) {
+        itemsContainer.innerHTML = '<div style="text-align: center; color: var(--text-danger);">Baglanti hatasi.</div>';
+      }
+
+      showScreen('historyWoDetail');
+    };
+
+    document.getElementById('history-wo-back-btn').addEventListener('click', () => {
+      showScreen('historyDetail');
+    });
+
+    // ─── NEW RECEPTION FLOW ───
     document.getElementById('new-reception-btn').addEventListener('click', () => {
       document.getElementById('reception-form').reset();
       document.getElementById('rec-found-banner').style.display = 'none';
@@ -1924,6 +2196,71 @@ itemsList.innerHTML = items.map(item => {
           return
         }
  
+        // API: Customer History Search
+        if (pathName === '/api/customer-history/search') {
+          try {
+            const query = (parsedUrl.searchParams.get('query') || '').trim();
+            if (!query) {
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: true, results: [] }))
+              return
+            }
+
+            const searchVal = `%${query}%`
+            const vehicles = db.prepare(`
+              SELECT 
+                v.id AS vehicle_id,
+                v.plate,
+                v.brand,
+                v.model,
+                c.id AS customer_id,
+                c.name AS customer_name,
+                c.phone AS customer_phone,
+                (SELECT MAX(created_at) FROM work_orders WHERE vehicle_id = v.id) AS last_visit_date
+              FROM vehicles v
+              JOIN customers c ON v.customer_id = c.id
+              WHERE v.plate LIKE ? OR c.name LIKE ? OR c.phone LIKE ?
+              ORDER BY last_visit_date DESC
+              LIMIT 50
+            `).all(searchVal, searchVal, searchVal) as any[]
+
+            const results = vehicles.map(vehicle => {
+              const workOrders = db.prepare(`
+                SELECT 
+                  wo.id AS work_order_id,
+                  wo.created_at,
+                  wo.closed_at,
+                  wo.status,
+                  wo.complaint,
+                  opened_master.name AS opened_by_master_name,
+                  closed_master.name AS closed_by_master_name,
+                  (
+                    SELECT SUM(qty * price) 
+                    FROM work_order_items 
+                    WHERE work_order_id = wo.id
+                  ) AS total_amount
+                FROM work_orders wo
+                LEFT JOIN masters opened_master ON wo.opened_by_master_id = opened_master.id
+                LEFT JOIN masters closed_master ON wo.closed_by_master_id = closed_master.id
+                WHERE wo.vehicle_id = ?
+                ORDER BY wo.created_at DESC
+              `).all(vehicle.vehicle_id) as any[]
+
+              return {
+                ...vehicle,
+                workOrders
+              }
+            })
+
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({ success: true, results }))
+          } catch (err: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: false, error: err.message }))
+          }
+          return
+        }
+
         // 7. API: Live search vehicle by plate
         if (pathName === '/api/vehicles/search') {
           try {

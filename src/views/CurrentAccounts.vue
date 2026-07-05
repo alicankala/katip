@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -15,6 +16,8 @@ const seciliCari = ref(null)
 const aramaKelimesi = ref('')
 const seciliCariTipiFiltre = ref(null)
 const sadeceBorcluOlanlar = ref(false)
+const yonFiltresi = ref('Tümü') // Tümü, Alacaklar, Borçlar
+const aktifAnaSekme = ref('genel-ozet')
 
 // İşlem ve Ödeme Geçmişi
 const islemler = ref([])
@@ -79,7 +82,8 @@ const cariForm = reactive({
   name: '',
   type: '',
   phone: '',
-  note: ''
+  note: '',
+  direction: 'Borç'
 })
 
 const islemForm = reactive({
@@ -220,7 +224,22 @@ const filtrelenmisCariler = computed(() => {
 
   // Sadece kalan borcu olanlar
   if (sadeceBorcluOlanlar.value) {
-    list = list.filter(c => c.remaining_debt > 0.01)
+    list = list.filter(c => {
+      const rem = Number(c.remaining_debt || 0)
+      const dir = c.direction || 'Borç'
+      if (dir === 'Borç') {
+        return rem > 0.01
+      } else {
+        return rem < -0.01
+      }
+    })
+  }
+
+  // Yön filtresi
+  if (yonFiltresi.value === 'Alacaklar') {
+    list = list.filter(c => (c.direction || 'Borç') === 'Alacak')
+  } else if (yonFiltresi.value === 'Borçlar') {
+    list = list.filter(c => (c.direction || 'Borç') === 'Borç')
   }
 
   return list
@@ -228,20 +247,60 @@ const filtrelenmisCariler = computed(() => {
 
 // İstatistikler (Filtrelenmiş veya tümü üzerinden)
 const genelOzet = computed(() => {
-  let totalDebt = 0
-  let totalPaid = 0
+  let totalDebt = 0   // Bizim toplam borcumuz (Payable)
+  let totalCredit = 0 // Bizim toplam alacağımız (Receivable)
   
   cariler.value.forEach(c => {
-    totalDebt += (c.total_debt || 0)
-    totalPaid += (c.total_paid || 0)
+    const rem = Number(c.remaining_debt || 0)
+    const dir = c.direction || 'Borç'
+
+    if (dir === 'Borç') {
+      if (rem > 0.01) {
+        totalDebt += rem
+      } else if (rem < -0.01) {
+        totalCredit += Math.abs(rem)
+      }
+    } else { // Alacak
+      if (rem > 0.01) {
+        totalCredit += rem
+      } else if (rem < -0.01) {
+        totalDebt += Math.abs(rem)
+      }
+    }
   })
+
+  const netDurum = totalCredit - totalDebt
 
   return {
     totalDebt,
-    totalPaid,
-    remainingDebt: totalDebt - totalPaid
+    totalCredit,
+    netDurum,
+    durumMetni: netDurum >= 0 ? 'Net Alacaklıyız' : 'Net Borçluyuz'
   }
 })
+
+const bakiyeSinifi = (cari) => {
+  if (!cari) return ''
+  const rem = Number(cari.remaining_debt || 0)
+  const dir = cari.direction || 'Borç'
+  if (dir === 'Borç') {
+    return rem > 0.01 ? 'borclu' : 'borcsuz'
+  } else {
+    return rem > 0.01 ? 'borcsuz' : 'borclu'
+  }
+}
+
+const bakiyeMetni = (cari) => {
+  if (!cari) return ''
+  const rem = Number(cari.remaining_debt || 0)
+  const dir = cari.direction || 'Borç'
+  if (Math.abs(rem) < 0.01) return 'Dengede'
+  if (dir === 'Borç') {
+    return rem > 0.01 ? 'Borcumuz' : 'Alacağımız'
+  } else {
+    return rem > 0.01 ? 'Alacağımız' : 'Borcumuz'
+  }
+}
 
 // Cari Ekle / Düzenle İşlemleri
 const cariDuzenle = (cari) => {
@@ -250,7 +309,8 @@ const cariDuzenle = (cari) => {
     name: cari.name,
     type: cari.type,
     phone: cari.phone,
-    note: cari.note
+    note: cari.note,
+    direction: cari.direction || 'Borç'
   })
   cariDialogAcik.value = true
 }
@@ -276,7 +336,7 @@ const cariKaydet = async () => {
       cariDialogAcik.value = false
       
       // Formu temizle
-      Object.assign(cariForm, { id: null, name: '', type: '', phone: '', note: '' })
+      Object.assign(cariForm, { id: null, name: '', type: '', phone: '', note: '', direction: 'Borç' })
       await carileriYukle()
     } else {
       hataMesaji(res?.error || 'Cari kaydedilemedi.')
@@ -446,10 +506,270 @@ const odemeSil = (odeme) => {
   })
 }
 
+// Gider Değişkenleri ve Form İşlemleri
+const giderler = ref([])
+const giderFormDialog = ref(false)
+const isEditingGider = ref(false)
+const giderAramaMetni = ref('')
+const seciliGiderDurumFiltresi = ref('Tümü')
+const seciliGiderTurFiltresi = ref('Tümü')
+
+const giderTurleri = [
+  'İnternet',
+  'Elektrik',
+  'Doğalgaz',
+  'Su',
+  'Kira',
+  'Vergi',
+  'Sigorta',
+  'Muhasebeci',
+  'Aidat',
+  'Abonelik',
+  'Diğer'
+]
+
+
+const giderForm = ref({
+  id: null,
+  expense_type: '',
+  company_name: '',
+  period: '',
+  expense_date: '',
+  due_date: '',
+  amount: null,
+  status: 'Ödenmedi',
+  payment_date: '',
+  payment_method: '',
+  note: ''
+})
+
+const resetGiderForm = () => {
+  const bugun = new Date().toISOString().slice(0, 10)
+  giderForm.value = {
+    id: null,
+    expense_type: '',
+    company_name: '',
+    period: '',
+    expense_date: bugun,
+    due_date: '',
+    amount: null,
+    status: 'Ödenmedi',
+    payment_date: '',
+    payment_method: '',
+    note: ''
+  }
+}
+
+const giderleriYukle = async () => {
+  try {
+    const res = await window.api.giderleriGetir()
+    if (res?.success) {
+      giderler.value = Array.isArray(res.giderler) ? res.giderler : []
+    }
+  } catch (error) {
+    console.error('Giderleri yükleme hatası:', error)
+  }
+}
+
+const filtrelenmisGiderler = computed(() => {
+  let list = giderler.value
+
+  // Arama metni
+  if (giderAramaMetni.value) {
+    const aranan = giderAramaMetni.value.toLowerCase()
+    list = list.filter(g =>
+      (g.expense_type || '').toLowerCase().includes(aranan) ||
+      (g.company_name || '').toLowerCase().includes(aranan) ||
+      (g.note || '').toLowerCase().includes(aranan)
+    )
+  }
+
+  // Durum filtresi
+  if (seciliGiderDurumFiltresi.value !== 'Tümü') {
+    list = list.filter(g => g.status === seciliGiderDurumFiltresi.value)
+  }
+
+  // Tür filtresi
+  if (seciliGiderTurFiltresi.value !== 'Tümü') {
+    list = list.filter(g => g.expense_type === seciliGiderTurFiltresi.value)
+  }
+
+  return list
+})
+
+const genelGiderOzeti = computed(() => {
+  let odenmis = 0
+  let odenmemis = 0
+  
+  giderler.value.forEach(g => {
+    const amt = Number(g.amount || 0)
+    if (g.status === 'Ödendi') {
+      odenmis += amt
+    } else {
+      odenmemis += amt
+    }
+  })
+
+  return {
+    odenmis,
+    odenmemis,
+    toplam: odenmis + odenmemis
+  }
+})
+
+const tumHareketlerListesi = computed(() => {
+  const list = []
+
+  // Cari işlemler ve ödemeler ekle
+  cariler.value.forEach(c => {
+    const txs = c.transactions || []
+    txs.forEach(tx => {
+      list.push({
+        tarih: tx.date,
+        cari_adi: c.name,
+        hareket_turu: 'İşlem',
+        islem_detayi: tx.transaction_type,
+        aciklama: tx.description || 'Cari İşlem',
+        tutar: Number(tx.amount || 0),
+        yon: c.direction === 'Alacak' ? 'Alacak' : 'Borç'
+      })
+    })
+
+    const pms = c.payments || []
+    pms.forEach(pm => {
+      list.push({
+        tarih: pm.date,
+        cari_adi: c.name,
+        hareket_turu: 'Ödeme/Tahsilat',
+        islem_detayi: pm.payment_method,
+        aciklama: pm.description || (c.direction === 'Alacak' ? 'Tahsilat' : 'Ödeme'),
+        tutar: Number(pm.amount || 0),
+        yon: c.direction === 'Alacak' ? 'Tahsilat' : 'Ödeme'
+      })
+    })
+  })
+
+  // Genel giderler ekle
+  giderler.value.forEach(g => {
+    list.push({
+      tarih: g.expense_date,
+      cari_adi: g.company_name || 'Genel Gider',
+      hareket_turu: 'Gider',
+      islem_detayi: g.expense_type,
+      aciklama: `${g.status === 'Ödendi' ? 'Ödendi' : 'Ödenmedi'} - ${g.note || ''}`,
+      tutar: Number(g.amount || 0),
+      yon: 'Gider'
+    })
+  })
+
+  // Tarihe göre azalan sırala
+  return list.sort((a, b) => new Date(b.tarih) - new Date(a.tarih))
+})
+
+const giderEkleDialogAc = () => {
+  isEditingGider.value = false
+  resetGiderForm()
+  giderFormDialog.value = true
+}
+
+const giderDuzenle = (gider) => {
+  isEditingGider.value = true
+  giderForm.value = { ...gider }
+  giderFormDialog.value = true
+}
+
+const giderKaydet = async () => {
+  if (!giderForm.value.expense_type) {
+    uyariMesaji('Gider türü seçilmelidir.')
+    return
+  }
+  if (!giderForm.value.amount || Number(giderForm.value.amount) <= 0) {
+    uyariMesaji('Tutar sıfırdan büyük olmalıdır.')
+    return
+  }
+
+  try {
+    const payload = {
+      ...giderForm.value,
+      amount: Number(giderForm.value.amount) || 0
+    }
+
+    let res
+    if (isEditingGider.value) {
+      res = await window.api.giderGuncelle(payload)
+    } else {
+      res = await window.api.giderEkle(payload)
+    }
+
+    if (res?.success) {
+      basariMesaji(isEditingGider.value ? 'Gider kaydı güncellendi.' : 'Gider kaydı eklendi.')
+      giderFormDialog.value = false
+      await giderleriYukle()
+    } else {
+      hataMesaji(res?.error || 'Gider kaydedilemedi.')
+    }
+  } catch (error) {
+    hataMesaji('Bir hata oluştu: ' + error.message)
+  }
+}
+
+const giderSil = (gider) => {
+  confirmDialog.require({
+    message: `"${gider.expense_type}" türündeki gider kaydını silmek istediğinize emin misiniz?`,
+    header: 'Kayıt Silme Onayı',
+    icon: 'pi pi-exclamation-triangle',
+    rejectLabel: 'Vazgeç',
+    acceptLabel: 'Sil',
+    rejectClass: 'p-button-secondary p-button-outlined',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        const res = await window.api.giderSil(gider.id)
+        if (res?.success) {
+          basariMesaji('Gider kaydı silindi.')
+          await giderleriYukle()
+        } else {
+          hataMesaji(res?.error || 'Gider silinemedi.')
+        }
+      } catch (error) {
+        hataMesaji('Silme sırasında hata oluştu.')
+      }
+    }
+  })
+}
+
+const hizliOde = async (gider) => {
+  const bugun = new Date().toISOString().slice(0, 10)
+  const guncelGider = {
+    ...gider,
+    status: 'Ödendi',
+    payment_date: bugun,
+    payment_method: 'EFT/Havale'
+  }
+
+  try {
+    const res = await window.api.giderGuncelle(guncelGider)
+    if (res?.success) {
+      basariMesaji('Ödeme kaydedildi (EFT/Havale).')
+      await giderleriYukle()
+} else {
+      hataMesaji(res?.error || 'Ödeme kaydedilemedi.')
+    }
+  } catch (error) {
+    hataMesaji('Ödeme sırasında hata oluştu.')
+  }
+}
+
 // Lifecycle Hooks
 onMounted(async () => {
   await carileriYukle()
   await iliskiliVerileriYukle()
+  await giderleriYukle()
+
+  const route = useRoute()
+  if (route.query.tab === 'giderler') {
+    aktifAnaSekme.value = 'giderler'
+  }
 })
 </script>
 
@@ -459,51 +779,184 @@ onMounted(async () => {
     <div class="page-header">
       <div>
         <h2 class="page-title">Cari Hesap Takibi</h2>
-        <p class="page-subtitle">Tedarikçiler, taşeron ustalar ve dış iş ortaklarının hesap bakiye ve işlem takibi</p>
+        <p class="page-subtitle">Tedarikçiler, müşteriler, taşeron ustalar ve işletme giderlerinin tek ekrandan finans yönetimi</p>
       </div>
       
+      <div style="display: flex; gap: 8px;">
+        <Button 
+          v-if="aktifAnaSekme === 'giderler'"
+          label="Yeni Gider Kaydı Ekle" 
+          icon="pi pi-plus" 
+          severity="warning" 
+          @click="giderEkleDialogAc" 
+        />
+        <Button 
+          v-else
+          label="Yeni Cari Hesap Ekle" 
+          icon="pi pi-plus" 
+          severity="info" 
+          @click="Object.assign(cariForm, { id: null, name: '', type: '', phone: '', note: '', direction: 'Borç' }); cariDialogAcik = true" 
+        />
+      </div>
+    </div>
+
+    <!-- Üst Sekme Menüsü -->
+    <div class="tab-menu" style="display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #334155; padding-bottom: 10px; flex-wrap: wrap;">
       <Button 
-        label="Yeni Cari Hesap Ekle" 
-        icon="pi pi-plus" 
+        label="Genel Özet" 
+        icon="pi pi-th-large" 
+        :text="aktifAnaSekme !== 'genel-ozet'"
         severity="info" 
-        @click="Object.assign(cariForm, { id: null, name: '', type: '', phone: '', note: '' }); cariDialogAcik = true" 
+        @click="aktifAnaSekme = 'genel-ozet'" 
+      />
+      <Button 
+        label="Alacaklar" 
+        icon="pi pi-arrow-down-left" 
+        :text="aktifAnaSekme !== 'alacaklar'"
+        severity="success" 
+        @click="aktifAnaSekme = 'alacaklar'; yonFiltresi = 'Alacaklar'" 
+      />
+      <Button 
+        label="Borçlar" 
+        icon="pi pi-up-right" 
+        :text="aktifAnaSekme !== 'borclar'"
+        severity="danger" 
+        @click="aktifAnaSekme = 'borclar'; yonFiltresi = 'Borçlar'" 
+      />
+      <Button 
+        label="Giderler" 
+        icon="pi pi-receipt" 
+        :text="aktifAnaSekme !== 'giderler'"
+        severity="warning" 
+        @click="aktifAnaSekme = 'giderler'" 
+      />
+      <Button 
+        label="Tüm Hareketler" 
+        icon="pi pi-list" 
+        :text="aktifAnaSekme !== 'tum-hareketler'"
+        severity="secondary" 
+        @click="aktifAnaSekme = 'tum-hareketler'" 
       />
     </div>
 
-    <!-- İstatistik Kartları -->
-    <div class="stat-grid">
-      <div class="stat-box">
-        <div class="stat-info">
-          <h3>{{ tlFormatla(genelOzet.totalDebt) }}</h3>
-          <span>Toplam Cari Borç</span>
+    <!-- 1. SEKME: Genel Özet -->
+    <div v-if="aktifAnaSekme === 'genel-ozet'" class="genel-ozet-section" style="display: flex; flex-direction: column; gap: 20px;">
+      <!-- İstatistik Kartları -->
+      <div class="stats-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+        <div class="stat-box" style="border-left: 4px solid #34d399;">
+          <div class="stat-info">
+            <h3 style="color: #34d399; font-size: 1.8rem; font-weight: 700; margin: 0;">{{ tlFormatla(genelOzet.totalCredit) }}</h3>
+            <span style="color: #94a3b8; font-size: 14px;">Toplam Alacak</span>
+          </div>
+          <div class="stat-icon-wrapper green" style="background: rgba(16, 185, 129, 0.1); color: #34d399; padding: 10px; border-radius: 8px;">
+            <i class="pi pi-arrow-down-left" />
+          </div>
         </div>
-        <div class="stat-icon-wrapper red">
-          <i class="pi pi-arrow-up-right" />
+
+        <div class="stat-box" style="border-left: 4px solid #f87171;">
+          <div class="stat-info">
+            <h3 style="color: #f87171; font-size: 1.8rem; font-weight: 700; margin: 0;">{{ tlFormatla(genelOzet.totalDebt) }}</h3>
+            <span style="color: #94a3b8; font-size: 14px;">Toplam Borç</span>
+          </div>
+          <div class="stat-icon-wrapper red" style="background: rgba(239, 68, 68, 0.1); color: #f87171; padding: 10px; border-radius: 8px;">
+            <i class="pi pi-arrow-up-right" />
+          </div>
+        </div>
+
+        <div class="stat-box remaining-debt-box" :class="{ 'has-debt': genelOzet.netDurum < 0 }" style="border-left: 4px solid #38bdf8;">
+          <div class="stat-info">
+            <h3 style="font-size: 1.8rem; font-weight: 700; margin: 0;" :style="{ color: genelOzet.netDurum >= 0 ? '#34d399' : '#f87171' }">
+              {{ tlFormatla(Math.abs(genelOzet.netDurum)) }}
+            </h3>
+            <span style="color: #94a3b8; font-size: 14px;">Net Cari Durum ({{ genelOzet.durumMetni }})</span>
+          </div>
+          <div class="stat-icon-wrapper" :class="genelOzet.netDurum >= 0 ? 'green' : 'red'" style="padding: 10px; border-radius: 8px;">
+            <i class="pi pi-wallet" />
+          </div>
+        </div>
+
+        <div class="stat-box" style="border-left: 4px solid #fb923c;">
+          <div class="stat-info">
+            <h3 style="color: #fb923c; font-size: 1.8rem; font-weight: 700; margin: 0;">{{ tlFormatla(genelGiderOzeti.toplam) }}</h3>
+            <span style="color: #94a3b8; font-size: 14px;">Toplam Gider</span>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">
+              Ödenmiş: {{ tlFormatla(genelGiderOzeti.odenmis) }} | Ödenmemiş: {{ tlFormatla(genelGiderOzeti.odenmemis) }}
+            </div>
+          </div>
+          <div class="stat-icon-wrapper" style="background: rgba(251, 146, 60, 0.1); color: #fb923c; padding: 10px; border-radius: 8px;">
+            <i class="pi pi-receipt" />
+          </div>
+        </div>
+
+        <div class="stat-box" :style="{ borderLeft: '4px solid ' + (genelOzet.netDurum - genelGiderOzeti.odenmemis >= 0 ? '#34d399' : '#f87171') }">
+          <div class="stat-info">
+            <h3 style="font-size: 1.8rem; font-weight: 700; margin: 0;" :style="{ color: genelOzet.netDurum - genelGiderOzeti.odenmemis >= 0 ? '#34d399' : '#f87171' }">
+              {{ tlFormatla(Math.abs(genelOzet.netDurum - genelGiderOzeti.odenmemis)) }}
+            </h3>
+            <span style="color: #94a3b8; font-size: 14px;">Net İşletme Durumu ({{ genelOzet.netDurum - genelGiderOzeti.odenmemis >= 0 ? 'Net Artıdayız' : 'Net Eksideyiz' }})</span>
+            <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">
+              Net Cari Durum - Ödenmemiş Giderler
+            </div>
+          </div>
+          <div class="stat-icon-wrapper" :class="genelOzet.netDurum - genelGiderOzeti.odenmemis >= 0 ? 'green' : 'red'" style="padding: 10px; border-radius: 8px;">
+            <i class="pi pi-chart-pie" />
+          </div>
         </div>
       </div>
-      <div class="stat-box">
-        <div class="stat-info">
-          <h3 style="color: #10b981;">{{ tlFormatla(genelOzet.totalPaid) }}</h3>
-          <span>Toplam Yapılan Ödeme</span>
+
+      <!-- Hızlı Özet Blokları -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px;">
+        <div class="panel" style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px;">
+          <h4 style="color: #38bdf8; margin: 0 0 12px; border-bottom: 1px solid #334155; padding-bottom: 8px;">En Yüksek Açık Cari Bakiyeler</h4>
+          <div v-if="cariler.filter(c => Math.abs(c.remaining_debt) > 0.01).length === 0" style="color: #94a3b8; text-align: center; padding: 20px 0;">
+            Açık cari bakiye bulunamadı.
+          </div>
+          <div v-else style="display: flex; flex-direction: column; gap: 10px;">
+            <div 
+              v-for="c in cariler.filter(c => Math.abs(c.remaining_debt) > 0.01).sort((a,b) => Math.abs(b.remaining_debt) - Math.abs(a.remaining_debt)).slice(0, 5)" 
+              :key="c.id" 
+              style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #334155;"
+            >
+              <div>
+                <span style="font-weight: 600; color: #fff;">{{ c.name }}</span>
+                <span class="direction-badge" :class="c.direction === 'Alacak' ? 'alacak' : 'borc'" style="margin-left: 8px;">
+                  {{ c.direction || 'Borç' }}
+                </span>
+              </div>
+              <span class="bakiye-deger" :class="bakiyeSinifi(c)" style="font-weight: 700;">
+                {{ tlFormatla(Math.abs(c.remaining_debt)) }}
+              </span>
+            </div>
+          </div>
         </div>
-        <div class="stat-icon-wrapper green">
-          <i class="pi pi-arrow-down-left" />
-        </div>
-      </div>
-      <div class="stat-box remaining-debt-box" :class="{ 'has-debt': genelOzet.remainingDebt > 0.01 }">
-        <div class="stat-info">
-          <h3>{{ tlFormatla(genelOzet.remainingDebt) }}</h3>
-          <span>Kalan Net Borç</span>
-        </div>
-        <div class="stat-icon-wrapper" :class="genelOzet.remainingDebt > 0.01 ? 'red' : 'green'">
-          <i class="pi pi-wallet" />
+
+        <div class="panel" style="background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 16px;">
+          <h4 style="color: #fb923c; margin: 0 0 12px; border-bottom: 1px solid #334155; padding-bottom: 8px;">Ödenmemiş Genel Giderler</h4>
+          <div v-if="giderler.filter(g => g.status !== 'Ödendi').length === 0" style="color: #94a3b8; text-align: center; padding: 20px 0;">
+            Ödenmemiş genel gider bulunamadı.
+          </div>
+          <div v-else style="display: flex; flex-direction: column; gap: 10px;">
+            <div 
+              v-for="g in giderler.filter(g => g.status !== 'Ödendi').sort((a,b) => new Date(a.due_date || a.expense_date) - new Date(b.due_date || b.expense_date)).slice(0, 5)" 
+              :key="g.id" 
+              style="display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #334155;"
+            >
+              <div>
+                <span style="font-weight: 600; color: #fff;">{{ g.expense_type }}</span>
+                <span style="font-size: 12px; color: #94a3b8; margin-left: 8px;">{{ g.company_name || '' }}</span>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-weight: 700; color: #f87171;">{{ tlFormatla(g.amount) }}</div>
+                <div style="font-size: 11px; color: #94a3b8;">Vade: {{ tarihFormatla(g.due_date || g.expense_date) }}</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- İki Sütunlu Ana Bölüm -->
-    <div class="cari-layout">
-      
+    <!-- 2. ve 3. SEKME: Alacaklar / Borçlar -->
+    <div v-if="aktifAnaSekme === 'alacaklar' || aktifAnaSekme === 'borclar'" class="cari-layout">
       <!-- Sol Cari Hesap Listesi Bölümü -->
       <div class="cari-sol-panel panel">
         <div class="filtre-row" style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
@@ -544,8 +997,14 @@ onMounted(async () => {
           <Column field="name" header="Cari Adı / Firma">
             <template #body="slotProps">
               <div class="cari-liste-ad">{{ slotProps.data.name }}</div>
-              <div class="cari-liste-alt">
-                <span class="cari-badge" :class="slotProps.data.type.toLowerCase()">{{ slotProps.data.type }}</span>
+              <div class="cari-liste-alt" style="display: flex; gap: 6px; align-items: center;">
+                <span class="cari-badge" :class="(slotProps.data.type || '').toLowerCase()">{{ slotProps.data.type }}</span>
+                <span class="direction-badge" :class="slotProps.data.direction === 'Alacak' ? 'alacak' : 'borc'">
+                  {{ slotProps.data.direction || 'Borç' }}
+                </span>
+                <span class="status-badge" :class="Math.abs(slotProps.data.remaining_debt) < 0.01 ? 'closed' : 'open'">
+                  {{ Math.abs(slotProps.data.remaining_debt) < 0.01 ? (slotProps.data.direction === 'Alacak' ? 'Tahsil Edildi' : 'Ödendi') : 'Açık' }}
+                </span>
                 <span v-if="slotProps.data.phone" class="cari-liste-tel">
                   <i class="pi pi-phone" /> {{ slotProps.data.phone }}
                 </span>
@@ -553,19 +1012,22 @@ onMounted(async () => {
             </template>
           </Column>
           
-          <Column field="remaining_debt" header="Net Bakiye" style="text-align: right; width: 130px;">
+          <Column field="remaining_debt" header="Net Bakiye" style="text-align: right; width: 140px;">
             <template #body="slotProps">
-              <span class="bakiye-deger" :class="slotProps.data.remaining_debt > 0.01 ? 'borclu' : 'borcsuz'">
-                {{ tlFormatla(slotProps.data.remaining_debt) }}
+              <span class="bakiye-deger" :class="bakiyeSinifi(slotProps.data)">
+                {{ tlFormatla(Math.abs(slotProps.data.remaining_debt)) }}
               </span>
+              <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 2px;">
+                {{ bakiyeMetni(slotProps.data) }}
+              </div>
             </template>
           </Column>
           
           <Column header="Toplam Borç / Ödeme" style="text-align: right; width: 160px; font-size: 0.92rem;">
             <template #body="slotProps">
               <div class="borc-odeme-detay">
-                <span class="borc">B: {{ tlFormatla(slotProps.data.total_debt) }}</span>
-                <span class="odeme">Ö: {{ tlFormatla(slotProps.data.total_paid) }}</span>
+                <span class="borc">{{ slotProps.data.direction === 'Alacak' ? 'A' : 'B' }}: {{ tlFormatla(slotProps.data.total_debt) }}</span>
+                <span class="odeme">{{ slotProps.data.direction === 'Alacak' ? 'T' : 'Ö' }}: {{ tlFormatla(slotProps.data.total_paid) }}</span>
               </div>
             </template>
           </Column>
@@ -588,7 +1050,15 @@ onMounted(async () => {
         <div v-else class="detay-panel">
           <div class="detay-header">
             <div class="detay-header-info">
-              <span class="cari-badge-buyuk" :class="seciliCari.type.toLowerCase()">{{ seciliCari.type }}</span>
+              <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap;">
+                <span class="cari-badge-buyuk" :class="(seciliCari.type || '').toLowerCase()">{{ seciliCari.type }}</span>
+                <span class="direction-badge" :class="seciliCari.direction === 'Alacak' ? 'alacak' : 'borc'">
+                  {{ seciliCari.direction || 'Borç' }}
+                </span>
+                <span class="status-badge" :class="Math.abs(seciliCari.remaining_debt) < 0.01 ? 'closed' : 'open'">
+                  {{ Math.abs(seciliCari.remaining_debt) < 0.01 ? (seciliCari.direction === 'Alacak' ? 'Tahsil Edildi' : 'Ödendi') : 'Açık' }}
+                </span>
+              </div>
               <h3 class="detay-title">{{ seciliCari.name }}</h3>
               <div class="detay-meta">
                 <div class="detay-iletisim" v-if="seciliCari.phone">
@@ -609,17 +1079,17 @@ onMounted(async () => {
           <!-- Seçili Cari Bakiyesi -->
           <div class="bakiye-kart">
             <div class="bakiye-sutun total-debt">
-              <span class="baslik">Toplam Borç</span>
+              <span class="baslik">{{ seciliCari.direction === 'Alacak' ? 'Toplam Alacak' : 'Toplam Borç' }}</span>
               <span class="tutar">{{ tlFormatla(seciliCari.total_debt) }}</span>
             </div>
             <div class="bakiye-sutun total-paid">
-              <span class="baslik">Yapılan Ödeme</span>
+              <span class="baslik">{{ seciliCari.direction === 'Alacak' ? 'Yapılan Tahsilat' : 'Yapılan Ödeme' }}</span>
               <span class="tutar">{{ tlFormatla(seciliCari.total_paid) }}</span>
             </div>
             <div class="bakiye-sutun remaining-debt">
-              <span class="baslik">Kalan Borç</span>
-              <span class="tutar" :class="{ 'has-debt': seciliCari.remaining_debt > 0.01 }">
-                {{ tlFormatla(seciliCari.remaining_debt) }}
+              <span class="baslik">{{ seciliCari.direction === 'Alacak' ? 'Kalan Alacak' : 'Kalan Borç' }}</span>
+              <span class="tutar" :class="{ 'has-debt': bakiyeSinifi(seciliCari) === 'borclu' }">
+                {{ tlFormatla(Math.abs(seciliCari.remaining_debt)) }}
               </span>
             </div>
           </div>
@@ -627,14 +1097,14 @@ onMounted(async () => {
           <!-- Detay Eylem Butonları -->
           <div class="eylem-satiri">
             <Button 
-              label="İşlem Ekle (Borçlandır)" 
+              :label="seciliCari.direction === 'Alacak' ? 'Hizmet / Satış Ekle' : 'İşlem Ekle (Borçlandır)'" 
               icon="pi pi-file-edit" 
               severity="info" 
               class="flex-1"
               @click="islemEkleAc" 
             />
             <Button 
-              label="Ödeme Yap" 
+              :label="seciliCari.direction === 'Alacak' ? 'Tahsilat Ekle (Ödeme Al)' : 'Ödeme Yap'" 
               icon="pi pi-money-bill" 
               severity="success" 
               class="flex-1"
@@ -649,14 +1119,14 @@ onMounted(async () => {
               :class="{ aktif: aktifTab === 'islemler' }" 
               @click="aktifTab = 'islemler'"
             >
-              <i class="pi pi-list" /> İşlem Geçmişi ({{ islemler.length }})
+              İşlem Geçmişi ({{ islemler.length }})
             </button>
             <button 
               class="sekme-btn" 
               :class="{ aktif: aktifTab === 'odemeler' }" 
               @click="aktifTab = 'odemeler'"
             >
-              <i class="pi pi-wallet" /> Ödeme Geçmişi ({{ odemeler.length }})
+              Ödeme &amp; Tahsilat ({{ odemeler.length }})
             </button>
           </div>
 
@@ -747,7 +1217,146 @@ onMounted(async () => {
 
         </div>
       </div>
+    </div>
 
+    <!-- 4. SEKME: Giderler -->
+    <div v-if="aktifAnaSekme === 'giderler'" class="giderler-section panel" style="display: flex; flex-direction: column; gap: 16px; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 class="finance-section-title" style="margin: 0; color: #fb923c; border-left-color: #fb923c;">Genel Gider Takibi</h3>
+        <Button label="Yeni Gider Kaydı Ekle" icon="pi pi-plus" severity="warning" @click="giderEkleDialogAc" />
+      </div>
+
+      <!-- Gider Filtreleri -->
+      <div class="filtre-row" style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <span class="p-input-icon-left" style="flex: 1; min-width: 200px;">
+          <i class="pi pi-search" />
+          <InputText v-model="giderAramaMetni" placeholder="Gider Ara (Kurum, açıklama...)" />
+        </span>
+        
+        <Dropdown 
+          v-model="seciliGiderTurFiltresi" 
+          :options="['Tümü', ...giderTurleri]" 
+          placeholder="Gider Türü Filtrele" 
+          style="width: 180px;"
+        />
+
+        <Dropdown 
+          v-model="seciliGiderDurumFiltresi" 
+          :options="['Tümü', 'Ödendi', 'Ödenmedi']" 
+          placeholder="Durum Filtrele" 
+          style="width: 160px;"
+        />
+      </div>
+
+      <!-- Gider Tablosu -->
+      <DataTable 
+        :value="filtrelenmisGiderler" 
+        responsiveLayout="scroll" 
+        emptyMessage="Gider kaydı bulunamadı."
+        class="p-datatable-sm"
+      >
+        <Column field="expense_type" header="Gider Türü" style="width: 140px;"></Column>
+        <Column field="company_name" header="Kurum/Alacaklı"></Column>
+        <Column field="period" header="Dönem" style="width: 130px;"></Column>
+        <Column header="Tarih" style="width: 110px;">
+          <template #body="slotProps">
+            {{ tarihFormatla(slotProps.data.expense_date) }}
+          </template>
+        </Column>
+        <Column header="Vade Tarihi" style="width: 110px;">
+          <template #body="slotProps">
+            {{ tarihFormatla(slotProps.data.due_date) }}
+          </template>
+        </Column>
+        <Column header="Tutar" style="text-align: right; width: 120px;">
+          <template #body="slotProps">
+            <strong style="color: #fb923c;">{{ tlFormatla(slotProps.data.amount) }}</strong>
+          </template>
+        </Column>
+        <Column header="Durum" style="text-align: center; width: 110px;">
+          <template #body="slotProps">
+            <span 
+              class="status-badge" 
+              :class="slotProps.data.status === 'Ödendi' ? 'closed' : 'open'"
+            >
+              {{ slotProps.data.status }}
+            </span>
+          </template>
+        </Column>
+        <Column field="note" header="Açıklama/Not"></Column>
+        <Column style="width: 140px; text-align: center;">
+          <template #body="slotProps">
+            <div style="display: flex; gap: 4px; justify-content: center;">
+              <Button 
+                v-if="slotProps.data.status !== 'Ödendi'" 
+                icon="pi pi-check" 
+                severity="success" 
+                text 
+                rounded 
+                title="Hızlı Öde" 
+                @click="hizliOde(slotProps.data)" 
+              />
+              <Button 
+                icon="pi pi-pencil" 
+                severity="info" 
+                text 
+                rounded 
+                title="Düzenle" 
+                @click="giderDuzenle(slotProps.data)" 
+              />
+              <Button 
+                icon="pi pi-trash" 
+                severity="danger" 
+                text 
+                rounded 
+                title="Sil" 
+                @click="giderSil(slotProps.data)" 
+              />
+            </div>
+          </template>
+        </Column>
+      </DataTable>
+    </div>
+
+    <!-- 5. SEKME: Tüm Hareketler -->
+    <div v-if="aktifAnaSekme === 'tum-hareketler'" class="tum-hareketler-section panel" style="display: flex; flex-direction: column; gap: 16px; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px;">
+      <h3 class="finance-section-title" style="margin: 0; color: #94a3b8; border-left-color: #94a3b8;">Finansal Hareket Geçmişi</h3>
+      
+      <DataTable 
+        :value="tumHareketlerListesi" 
+        responsiveLayout="scroll" 
+        emptyMessage="Hareket kaydı bulunamadı."
+        paginator 
+        :rows="20"
+        class="p-datatable-sm"
+      >
+        <Column header="Tarih" style="width: 120px;">
+          <template #body="slotProps">
+            {{ tarihFormatla(slotProps.data.tarih) }}
+          </template>
+        </Column>
+        <Column field="cari_adi" header="Cari Hesap / Alacaklı"></Column>
+        <Column field="hareket_turu" header="Kategori" style="width: 130px;"></Column>
+        <Column field="islem_detayi" header="İşlem Detayı" style="width: 150px;"></Column>
+        <Column field="aciklama" header="Açıklama"></Column>
+        <Column header="Tutar" style="text-align: right; width: 140px;">
+          <template #body="slotProps">
+            <strong :style="{ color: slotProps.data.yon === 'Alacak' || slotProps.data.yon === 'Tahsilat' ? '#34d399' : (slotProps.data.yon === 'Gider' ? '#fb923c' : '#f87171') }">
+              {{ tlFormatla(slotProps.data.tutar) }}
+            </strong>
+          </template>
+        </Column>
+        <Column header="Tür" style="text-align: center; width: 110px;">
+          <template #body="slotProps">
+            <span 
+              class="direction-badge" 
+              :class="slotProps.data.yon.toLowerCase() === 'alacak' || slotProps.data.yon.toLowerCase() === 'tahsilat' ? 'alacak' : (slotProps.data.yon.toLowerCase() === 'gider' ? 'egzozcu' : 'borc')"
+            >
+              {{ slotProps.data.yon }}
+            </span>
+          </template>
+        </Column>
+      </DataTable>
     </div>
 
     <!-- DIALOG 1: Cari Ekle / Düzenle -->
@@ -762,6 +1371,21 @@ onMounted(async () => {
           <label>Firma / Kişi Adı <span class="zorunlu-alan">*</span></label>
           <InputText v-model="cariForm.name" placeholder="Örn: Öz Hilal Rektefiye Sanayi veya Ahmet Demir" autofocus />
           <span class="form-helper">Cari firmanın resmi adını ya da kişinin adını ve soyadını yazın.</span>
+        </div>
+
+        <div class="form-group">
+          <label>Cari Yönü (Tip) <span class="zorunlu-alan">*</span></label>
+          <div style="display: flex; gap: 16px; margin-top: 4px; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #334155;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <input type="radio" id="dir-borc" value="Borç" v-model="cariForm.direction" style="width: 16px; height: 16px; accent-color: #ef4444;" />
+              <label for="dir-borc" style="cursor: pointer; margin: 0; font-weight: 500; font-size: 0.9rem; color: #fff;">Borç (Biz borçluyuz - Tedarikçi)</label>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <input type="radio" id="dir-alacak" value="Alacak" v-model="cariForm.direction" style="width: 16px; height: 16px; accent-color: #10b981;" />
+              <label for="dir-alacak" style="cursor: pointer; margin: 0; font-weight: 500; font-size: 0.9rem; color: #fff;">Alacak (Bize borçlu - Müşteri)</label>
+            </div>
+          </div>
+          <span class="form-helper">Bizim borçlandığımız (Borç) veya bize borçlu olan (Alacak) cari tipini belirtin.</span>
         </div>
         
         <div class="form-group">
@@ -795,14 +1419,15 @@ onMounted(async () => {
       </template>
     </Dialog>
 
-    <!-- DIALOG 2: Cari İşlem Ekle (Borç Kaydı) -->
+    <!-- Cari İşlem Ekle (Borç/Alacak Kaydı) -->
     <Dialog 
+      v-if="seciliCari"
       v-model:visible="islemDialogAcik" 
-      header="Cari İşlem Ekle (Borç Kaydı)" 
+      :header="seciliCari.direction === 'Alacak' ? 'Cari İşlem Ekle (Hizmet / Satış Kaydı)' : 'Cari İşlem Ekle (Borç Kaydı)'" 
       :style="{ width: '520px' }" 
       modal
     >
-      <div class="dialog-form" v-if="seciliCari">
+      <div class="dialog-form">
         <div class="form-group">
           <label>Cari Hesap</label>
           <InputText :value="seciliCari.name" readonly style="background-color: #1e293b; color: #94a3b8;" class="form-readonly-input" />
@@ -823,15 +1448,15 @@ onMounted(async () => {
         </div>
 
         <div class="form-group">
-          <label>Tutar (TL) <span class="zorunlu-alan">*</span></label>
+          <label>{{ seciliCari.direction === 'Alacak' ? 'Hizmet / Satış Tutarı (TL)' : 'Tutar (TL)' }} <span class="zorunlu-alan">*</span></label>
           <input type="number" step="0.01" v-model="islemForm.amount" class="tarih-input" placeholder="0.00" />
-          <span class="form-helper">Borç olarak kaydedilecek tutar (KDV dahil).</span>
+          <span class="form-helper">{{ seciliCari.direction === 'Alacak' ? 'Alacak olarak kaydedilecek tutar (KDV dahil).' : 'Borç olarak kaydedilecek tutar (KDV dahil).' }}</span>
         </div>
 
         <div class="form-group">
-          <label>Yapılan İş / Alınan Mal (Açıklama) <span class="zorunlu-alan">*</span></label>
-          <InputText v-model="islemForm.description" placeholder="Örn: Motor rektefiye & kapak taşlama veya 4 Adet Lastik Alımı" />
-          <span class="form-helper">Alınan hizmetin veya parçanın kısa detayı.</span>
+          <label>{{ seciliCari.direction === 'Alacak' ? 'Yapılan İş / Verilen Hizmet (Açıklama) *' : 'Yapılan İş / Alınan Mal (Açıklama) *' }}</label>
+          <InputText v-model="islemForm.description" :placeholder="seciliCari.direction === 'Alacak' ? 'Örn: Motor bakımı veya Servis Hizmeti' : 'Örn: Motor rektefiye & kapak taşlama veya 4 Adet Lastik Alımı'" />
+          <span class="form-helper">Detay açıklaması.</span>
         </div>
 
         <div class="form-group">
@@ -885,14 +1510,15 @@ onMounted(async () => {
       </template>
     </Dialog>
 
-    <!-- DIALOG 3: Ödeme Kaydet -->
+    <!-- DIALOG 3: Ödeme Kaydet / Tahsilat Ekle -->
     <Dialog 
+      v-if="seciliCari"
       v-model:visible="odemeDialogAcik" 
-      header="Ödeme Kaydet" 
+      :header="seciliCari.direction === 'Alacak' ? 'Tahsilat Ekle (Ödeme Girişi)' : 'Ödeme Kaydet'" 
       :style="{ width: '500px' }" 
       modal
     >
-      <div class="dialog-form" v-if="seciliCari">
+      <div class="dialog-form">
         <div class="form-group">
           <label>Cari Hesap</label>
           <InputText :value="seciliCari.name" readonly style="background-color: #1e293b; color: #94a3b8;" class="form-readonly-input" />
@@ -900,22 +1526,22 @@ onMounted(async () => {
 
         <div class="form-row-two">
           <div class="form-group">
-            <label>Ödeme Tarihi <span class="zorunlu-alan">*</span></label>
+            <label>{{ seciliCari.direction === 'Alacak' ? 'Tahsilat Tarihi' : 'Ödeme Tarihi' }} <span class="zorunlu-alan">*</span></label>
             <input type="date" v-model="odemeForm.date" class="tarih-input" />
-            <span class="form-helper">Ödemenin fiili yapıldığı tarih.</span>
+            <span class="form-helper">Ödemenin/Tahsilatın fiili yapıldığı tarih.</span>
           </div>
           
           <div class="form-group">
-            <label>Ödeme Yöntemi <span class="zorunlu-alan">*</span></label>
+            <label>{{ seciliCari.direction === 'Alacak' ? 'Tahsilat Yöntemi' : 'Ödeme Yöntemi' }} <span class="zorunlu-alan">*</span></label>
             <Dropdown v-model="odemeForm.payment_method" :options="odemeYontemleri" style="width: 100%;" />
-            <span class="form-helper">Yapılan ödeme kanalı.</span>
+            <span class="form-helper">{{ seciliCari.direction === 'Alacak' ? 'Tahsilat yöntemi.' : 'Yapılan ödeme kanalı.' }}</span>
           </div>
         </div>
 
         <div class="form-group">
-          <label>Ödeme Tutarı (TL) <span class="zorunlu-alan">*</span></label>
+          <label>{{ seciliCari.direction === 'Alacak' ? 'Tahsil Edilen Tutar (TL)' : 'Ödeme Tutarı (TL)' }} <span class="zorunlu-alan">*</span></label>
           <input type="number" step="0.01" v-model="odemeForm.amount" class="tarih-input" placeholder="0.00" />
-          <span class="form-helper">Yapılan ödemenin tutarı.</span>
+          <span class="form-helper">{{ seciliCari.direction === 'Alacak' ? 'Alınan tahsilat tutarı.' : 'Yapılan ödemenin tutarı.' }}</span>
         </div>
 
         <div class="form-group">
@@ -946,6 +1572,99 @@ onMounted(async () => {
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="odemeDialogAcik = false" />
         <Button label="Kaydet" icon="pi pi-check" severity="success" @click="odemeKaydet" />
+      </template>
+    </Dialog>
+
+    <!-- DIALOG 4: Gider Ekle / Düzenle -->
+    <Dialog 
+      v-model:visible="giderFormDialog" 
+      :header="isEditingGider ? 'Gider Kaydını Düzenle' : 'Yeni Gider Kaydı Ekle'" 
+      :style="{ width: '480px' }" 
+      modal
+    >
+      <div class="dialog-form">
+        <div class="form-row-two" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Gider Türü <span class="zorunlu-alan" style="color: #f87171;">*</span></label>
+            <Dropdown 
+              v-model="giderForm.expense_type" 
+              :options="giderTurleri" 
+              editable 
+              placeholder="Tür seçin veya yazın" 
+              style="width: 100%;"
+            />
+          </div>
+          
+          <div class="form-group">
+            <label>Kurum / Firma</label>
+            <InputText v-model="giderForm.company_name" placeholder="Örn: Enerjisa, Telekom" style="width: 100%;" />
+          </div>
+        </div>
+
+        <div class="form-row-two" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Dönem / Ay</label>
+            <InputText v-model="giderForm.period" placeholder="Örn: Temmuz 2026" style="width: 100%;" />
+          </div>
+          
+          <div class="form-group">
+            <label>Tutar (TL) <span class="zorunlu-alan" style="color: #f87171;">*</span></label>
+            <InputText type="number" step="0.01" v-model="giderForm.amount" placeholder="0.00" style="width: 100%;" />
+          </div>
+        </div>
+
+        <div class="form-row-two" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Gider Tarihi <span class="zorunlu-alan" style="color: #f87171;">*</span></label>
+            <InputText type="date" v-model="giderForm.expense_date" style="width: 100%;" />
+          </div>
+          
+          <div class="form-group">
+            <label>Vade Tarihi</label>
+            <InputText type="date" v-model="giderForm.due_date" style="width: 100%;" />
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label>Durum <span class="zorunlu-alan" style="color: #f87171;">*</span></label>
+          <div style="display: flex; gap: 16px; margin-top: 4px; background: #0f172a; padding: 10px; border-radius: 8px; border: 1px solid #334155;">
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <input type="radio" id="gider-durum-odenmedi" value="Ödenmedi" v-model="giderForm.status" style="width: 16px; height: 16px; accent-color: #ef4444;" />
+              <label for="gider-durum-odenmedi" style="cursor: pointer; margin: 0; font-weight: 500; font-size: 0.9rem; color: #fff;">Ödenmedi (Açık Borç)</label>
+            </div>
+            <div style="display: flex; align-items: center; gap: 6px;">
+              <input type="radio" id="gider-durum-odendi" value="Ödendi" v-model="giderForm.status" style="width: 16px; height: 16px; accent-color: #10b981;" />
+              <label for="gider-durum-odendi" style="cursor: pointer; margin: 0; font-weight: 500; font-size: 0.9rem; color: #fff;">Ödendi (Kapatılmış)</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row-two" v-if="giderForm.status === 'Ödendi'" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+          <div class="form-group">
+            <label>Ödeme Tarihi</label>
+            <InputText type="date" v-model="giderForm.payment_date" style="width: 100%;" />
+          </div>
+          
+          <div class="form-group">
+            <label>Ödeme Yöntemi</label>
+            <Dropdown 
+              v-model="giderForm.payment_method" 
+              :options="odemeYontemleri" 
+              placeholder="Ödeme kanalı seçin" 
+              style="width: 100%;"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Not / Detay</label>
+          <InputText v-model="giderForm.note" placeholder="Ekstra açıklama girin..." style="width: 100%;" />
+        </div>
+      </div>
+      
+      <template #footer>
+        <Button label="İptal" icon="pi pi-times" text @click="giderFormDialog = false" />
+        <Button label="Kaydet" icon="pi pi-check" severity="warning" @click="giderKaydet" />
       </template>
     </Dialog>
 
@@ -1608,5 +2327,70 @@ onMounted(async () => {
 :global(html[data-theme="light"] .cari-tablo .p-datatable-tbody > tr.p-highlight) {
   background: rgba(56, 189, 248, 0.12) !important;
   color: #0369a1 !important;
+}
+
+.direction-badge {
+  font-size: 0.72rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.direction-badge.alacak {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+.direction-badge.borc {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.status-badge {
+  font-size: 0.72rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+.status-badge.open {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+.status-badge.closed {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+:global(html[data-theme="light"] .direction-badge.alacak) {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  color: #15803d !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+:global(html[data-theme="light"] .direction-badge.borc) {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  color: #b91c1c !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+}
+:global(html[data-theme="light"] .status-badge.open) {
+  background-color: rgba(239, 68, 68, 0.1) !important;
+  color: #b91c1c !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+}
+:global(html[data-theme="light"] .status-badge.closed) {
+  background-color: rgba(16, 185, 129, 0.1) !important;
+  color: #15803d !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+}
+
+:global(html[data-theme="light"] input[type="radio"]) {
+  accent-color: #15803d !important;
+}
+
+:global(html[data-theme="light"] .dialog-form label) {
+  color: #111827 !important;
 }
 </style>

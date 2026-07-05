@@ -2228,6 +2228,8 @@ return {
       const phone = String(hesap.phone || '').trim()
       const note = String(hesap.note || '').trim()
 
+      const direction = String(hesap.direction || 'Borç').trim()
+
       if (!name) {
         throw new Error('Cari hesap adı boş bırakılamaz.')
       }
@@ -2236,10 +2238,10 @@ return {
       }
 
       const stmt = db.prepare(`
-        INSERT INTO current_accounts (name, type, phone, note, is_active)
-        VALUES (?, ?, ?, ?, 1)
+        INSERT INTO current_accounts (name, type, phone, note, direction, is_active)
+        VALUES (?, ?, ?, ?, ?, 1)
       `)
-      const info = stmt.run(name, type, phone, note)
+      const info = stmt.run(name, type, phone, note, direction)
       return { success: true, id: info.lastInsertRowid }
     } catch (error) {
       console.error('Cari hesap ekleme hatası:', error)
@@ -2255,6 +2257,7 @@ return {
       const type = String(hesap.type || '').trim()
       const phone = String(hesap.phone || '').trim()
       const note = String(hesap.note || '').trim()
+      const direction = String(hesap.direction || 'Borç').trim()
 
       if (!id) {
         throw new Error('Güncellenecek cari hesap bulunamadı.')
@@ -2268,9 +2271,9 @@ return {
 
       db.prepare(`
         UPDATE current_accounts
-        SET name = ?, type = ?, phone = ?, note = ?
+        SET name = ?, type = ?, phone = ?, note = ?, direction = ?
         WHERE id = ?
-      `).run(name, type, phone, note, id)
+      `).run(name, type, phone, note, direction, id)
       return { success: true }
     } catch (error) {
       console.error('Cari hesap güncelleme hatası:', error)
