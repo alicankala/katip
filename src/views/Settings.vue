@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'
@@ -72,9 +72,16 @@ const temaOptions = [
 ]
 
 const yogunlukOptions = [
+  { label: 'Kompakt Görünüm', value: 'compact' },
   { label: 'Normal Görünüm', value: 'normal' },
-  { label: 'Kompakt Görünüm', value: 'compact' }
+  { label: 'Rahat Görünüm', value: 'comfortable' }
 ]
+
+watch(() => ayarlarForm.list_density, (yeniYogunluk) => {
+  if (yeniYogunluk) {
+    document.documentElement.setAttribute('data-density', yeniYogunluk)
+  }
+})
 
 const filtreOptions = [
   { label: 'Açık İş Emirleri', value: 'Açık' },

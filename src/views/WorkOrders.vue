@@ -108,6 +108,7 @@ const seciliIsEmri = ref(null)
 const islemGecmisiAcik = ref(false)
 const maliyetKarAcik = ref(false)
 const printPreviewOpen = ref(false)
+const showPaymentSummary = ref(true)
 
 const odemeDurumuHesapla = (row) => {
   if (!row) {
@@ -1065,15 +1066,38 @@ const guvenliMetin = (deger) => {
     .replaceAll("'", '&#039;')
 }
 
-const servisFisiYazdir = () => {
-  if (!seciliIsEmri.value) {
-    uyariMesaji('Yazdırılacak iş emri seçilemedi.')
-    return
-  }
+const ayariBooleanYap = (val, varsayilan = true) => {
+  if (val === undefined || val === null) return varsayilan
+  if (typeof val === 'boolean') return val
+  const s = String(val).trim().toLowerCase()
+  if (s === 'false' || s === '0' || s === 'off' || s === 'no') return false
+  if (s === 'true' || s === '1' || s === 'on' || s === 'yes') return true
+  return Boolean(val)
+}
+
+const servisFisiYazdir = async () => {
+  // Load setting before opening preview
+  let show = true
+  try {
+    const sRes = await window.api?.ayarlariGetir?.()
+    if (sRes?.settings && sRes.settings.show_payment_summary_on_receipt !== undefined) {
+      show = ayariBooleanYap(sRes.settings.show_payment_summary_on_receipt, true)
+    }
+  } catch (e) { console.error('Ayar getirilemedi', e) }
+  showPaymentSummary.value = show
   printPreviewOpen.value = true
 }
 
-const servisFisiYazdirGercek = () => {
+const servisFisiYazdirGercek = async () => {
+  // Load setting before generating printable HTML
+  let showPayment = true
+  try {
+    const sRes = await window.api?.ayarlariGetir?.()
+    if (sRes?.settings && sRes.settings.show_payment_summary_on_receipt !== undefined) {
+      showPayment = ayariBooleanYap(sRes.settings.show_payment_summary_on_receipt, true)
+    }
+  } catch (e) { console.error('Ayar getirilemedi', e) }
+
   if (!seciliIsEmri.value) {
     uyariMesaji('Yazdırılacak iş emri seçilemedi.')
     return
@@ -1521,6 +1545,7 @@ const servisFisiYazdirGercek = () => {
                     <span>Genel Toplam</span>
                     <span>${guvenliMetin(tlFormatla(toplamTutar || isEmri.total_price))}</span>
                   </div>
+${showPayment ? `
                   <div class="total-row" style="margin-top: 4px; font-size: 12px; color: #555;">
                     <span>Tahsil Edilen:</span>
                     <span>${guvenliMetin(tlFormatla(odemeOzeti.toplam_tahsilat))}</span>
@@ -1533,6 +1558,7 @@ const servisFisiYazdirGercek = () => {
                     <span>Ödeme Durumu:</span>
                     <span>${guvenliMetin(odemeOzeti.odeme_durumu)}</span>
                   </div>
+` : ''}
                 </div>
               </div>
 
@@ -2205,15 +2231,15 @@ onUnmounted(() => {
                     <span>Genel Toplam</span>
                     <span>{{ tlFormatla(kalemler.reduce((toplam, kalem) => toplam + Number(kalem.total_price || 0), 0) || seciliIsEmri?.total_price) }}</span>
                   </div>
-                  <div class="total-row" style="margin-top: 4px; font-size: 12px; color: #555;">
+                  <div class="total-row" style="margin-top: 4px; font-size: 12px; color: #555;" v-if="showPaymentSummary">
                     <span>Tahsil Edilen:</span>
                     <span>{{ tlFormatla(odemeOzeti.toplam_tahsilat) }}</span>
                   </div>
-                  <div class="total-row" style="font-size: 12px; color: #555;">
+                  <div class="total-row" style="font-size: 12px; color: #555;" v-if="showPaymentSummary">
                     <span>Kalan Borç:</span>
                     <span>{{ tlFormatla(odemeOzeti.kalan_borc) }}</span>
                   </div>
-                  <div class="total-row" style="font-size: 12px; color: #555;">
+                  <div class="total-row" style="font-size: 12px; color: #555;" v-if="showPaymentSummary">
                     <span>Ödeme Durumu:</span>
                     <span>{{ odemeOzeti.odeme_durumu }}</span>
                   </div>
