@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -300,6 +300,11 @@ formuTemizle()
 onMounted(() => {
   aktifUsta.value = JSON.parse(localStorage.getItem('aktifUsta') || 'null')
   listeyiGetir()
+  window.addEventListener('app-data-refreshed', listeyiGetir)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('app-data-refreshed', listeyiGetir)
 })
 </script>
 

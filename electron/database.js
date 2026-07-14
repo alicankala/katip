@@ -6,7 +6,19 @@ const require = createRequire(import.meta.url)
 const Database = require('better-sqlite3')
 
 const dbPath = path.join(app.getPath('userData'), 'otoservis.db')
-const db = new Database(dbPath)
+let activeDb = new Database(dbPath)
+
+export function getDatabase() {
+  return activeDb
+}
+
+const db = new Proxy({}, {
+  get(_target, prop) {
+    const targetDb = getDatabase();
+    const val = targetDb[prop];
+    return typeof val === 'function' ? val.bind(targetDb) : val;
+  }
+});
 
 // Turkish character and case insensitive normalization function
 function normalizeString(str) {
@@ -23,9 +35,13 @@ function normalizeString(str) {
     .replace(/ö/g, 'o');
 }
 
-db.function('normalize_text', (val) => {
-  return normalizeString(val);
-});
+function ozellestirilmisFonksiyonlariTanimla(targetDb) {
+  targetDb.function('normalize_text', (val) => {
+    return normalizeString(val);
+  });
+}
+
+ozellestirilmisFonksiyonlariTanimla(activeDb);
 
 function schemaVersionTablosuHazirla() {
   db.exec(`
@@ -393,7 +409,118 @@ migrationCalistir(19, () => {
   `)
 })
 
+migrationCalistir(20, () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+  `)
+})
+
   console.log('Veritabanı hazır ve tablolar oluşturuldu! Yol:', dbPath)
+}
+
+export const DEFAULT_SETTINGS = {
+  theme: 'dark',
+  list_density: 'normal',
+  work_orders_default_filter: 'Açık',
+  show_critical_stock_warnings: 'true',
+  phone_server_auto_start: 'true',
+  default_payment_method: 'Nakit',
+  ask_payment_on_completion: 'true',
+  warn_unpaid_completion: 'true',
+  show_payment_summary_on_receipt: 'true',
+  automatic_backup_enabled: 'false',
+  backup_on_exit: 'false',
+  backup_retention_count: '20'
+}
+
+export function ayarlariGetirBackend() {
+  const currentDb = getDatabase()
+  try {
+    const rows = currentDb.prepare('SELECT key, value FROM app_settings').all()
+    const settings = { ...DEFAULT_SETTINGS }
+    for (const row of rows) {
+      if (row.key && row.value !== undefined && row.value !== null) {
+        settings[row.key] = String(row.value)
+      }
+    }
+    return { success: true, settings }
+  } catch (err) {
+    console.error('Ayarları getirme hatası:', err)
+    return { success: true, settings: { ...DEFAULT_SETTINGS } }
+  }
+}
+
+export function ayarKaydetBackend(key, value) {
+  const currentDb = getDatabase()
+  try {
+    const stmt = currentDb.prepare(`
+      INSERT INTO app_settings (key, value, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET
+        value = excluded.value,
+        updated_at = CURRENT_TIMESTAMP
+    `)
+    stmt.run(String(key), String(value));
+    return { success: true }
+  } catch (err) {
+    console.error('Ayar kaydetme hatası:', err)
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export function topluAyarlariKaydetBackend(settingsObj) {
+  const currentDb = getDatabase()
+  try {
+    const stmt = currentDb.prepare(`
+      INSERT INTO app_settings (key, value, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(key) DO UPDATE SET
+        value = excluded.value,
+        updated_at = CURRENT_TIMESTAMP
+    `)
+    const transaction = currentDb.transaction((obj) => {
+      for (const [k, v] of Object.entries(obj)) {
+        if (v !== undefined && v !== null) {
+          stmt.run(String(k), String(v))
+        }
+      }
+    })
+    transaction(settingsObj)
+    return { success: true }
+  } catch (err) {
+    console.error('Toplu ayar kaydetme hatası:', err)
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
+export function veritabaniKontrolEtBackend() {
+  const currentDb = getDatabase()
+  try {
+    const row = currentDb.prepare('PRAGMA quick_check;').get()
+    const result = row ? Object.values(row)[0] : ''
+    if (result === 'ok') {
+      return {
+        success: true,
+        message: 'Veritabanı bütünlük kontrolü başarılı. Tüm tablolar ve indeksler sağlıklı.',
+        checkedAt: new Date().toISOString()
+      }
+    } else {
+      return {
+        success: false,
+        message: `Veritabanı bütünlük kontrolü başarısız oldu: ${result}. Admin / Destek bölümünden yedekleri kontrol edin.`
+      }
+    }
+  } catch (err) {
+    console.error('Veritabanı kontrol hatası:', err)
+    return {
+      success: false,
+      message: 'Veritabanı kontrolü sırasında hata oluştu.'
+    }
+  }
 }
 
 export function verifyBackupDatabase(filePath) {
@@ -430,6 +557,66 @@ export function verifyBackupDatabase(filePath) {
         console.error('Geçici yedek veritabanı kapatılırken hata oluştu:', e);
       }
     }
+  }
+}
+
+let isRefreshing = false
+
+export async function uygulamaVerileriniYenileBackend() {
+  if (isRefreshing) {
+    return {
+      success: false,
+      message: 'Yenileme işlemi zaten devam ediyor.'
+    }
+  }
+
+  isRefreshing = true
+
+  try {
+    if (activeDb) {
+      try {
+        activeDb.close()
+      } catch (err) {
+        console.warn('[DB] Eski veritabanı bağlantısı kapatılırken uyarı:', err)
+      }
+    }
+
+    try {
+      activeDb = new Database(dbPath)
+      ozellestirilmisFonksiyonlariTanimla(activeDb)
+    } catch (err) {
+      console.error('[DB] Bağlantı yeniden açılamadı:', err)
+      return {
+        success: false,
+        message: 'Veritabanı bağlantısı yeniden açılamadı. Veritabanı dosyasını kontrol edin.'
+      }
+    }
+
+    initDB()
+
+    const checkRow = activeDb.prepare('PRAGMA quick_check;').get()
+    const checkResult = checkRow ? Object.values(checkRow)[0] : ''
+
+    if (checkResult !== 'ok') {
+      return {
+        success: false,
+        message: 'Veritabanı bütünlük kontrolü başarısız oldu. Veriler değiştirilmedi. Admin / Destek bölümünden yedekleri kontrol edin.'
+      }
+    }
+
+    return {
+      success: true,
+      message: 'Veriler başarıyla yenilendi.',
+      refreshedAt: new Date().toISOString()
+    }
+  } catch (err) {
+    console.error('[DB] Veri yenileme hatası:', err)
+    return {
+      success: false,
+      message: 'Veriler yenilenemedi. Veritabanı bağlantısını kontrol edin.'
+    }
+  } finally {
+    isRefreshing = false
   }
 }
 

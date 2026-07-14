@@ -1,4 +1,13 @@
-import db, { initDB, dbPath, verifyBackupDatabase } from './database.js'
+import db, {
+  initDB,
+  dbPath,
+  verifyBackupDatabase,
+  uygulamaVerileriniYenileBackend,
+  ayarlariGetirBackend,
+  ayarKaydetBackend,
+  topluAyarlariKaydetBackend,
+  veritabaniKontrolEtBackend
+} from './database.js'
 import { app, BrowserWindow, ipcMain, shell, dialog, Menu, type IpcMainInvokeEvent } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -21,30 +30,42 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let win: BrowserWindow | null = null
 
 function createWindow() {
-win = new BrowserWindow({
-  title: 'Kâtip',
-  width: 1440,
-  height: 900,
-  minWidth: 1180,
-  minHeight: 720,
-  center: true,
-  show: false,
-  frame: false,
-  backgroundColor: '#0f172a',
-  icon: path.join(process.env.VITE_PUBLIC, 'icon.ico'),
-  autoHideMenuBar: true,
-  webPreferences: {
-    preload: path.join(__dirname, 'preload.mjs')
-  }
-})
+  win = new BrowserWindow({
+    title: 'Kâtip',
+    width: 1440,
+    height: 900,
+    minWidth: 1024,
+    minHeight: 640,
+    resizable: true,
+    maximizable: true,
+    minimizable: true,
+    center: true,
+    show: false,
+    frame: false,
+    backgroundColor: '#0f172a',
+    icon: path.join(process.env.VITE_PUBLIC, 'icon.ico'),
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.mjs')
+    }
+  })
 
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', new Date().toLocaleString())
   })
+
+  win.on('maximize', () => {
+    win?.webContents.send('window-maximized-state', true)
+  })
+
+  win.on('unmaximize', () => {
+    win?.webContents.send('window-maximized-state', false)
+  })
+
   win.once('ready-to-show', () => {
-  win?.show()
-  win?.maximize()
-})
+    win?.show()
+    win?.maximize()
+  })
 
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
@@ -142,12 +163,16 @@ function ipcKopruleriniKur() {
       win.maximize()
     }
 
-    return { success: true }
+    return { success: true, isMaximized: win.isMaximized() }
   })
 
   kanalEkle('pencere-kapat', () => {
     win?.close()
     return { success: true }
+  })
+
+  kanalEkle('pencere-durum-getir', () => {
+    return { success: true, isMaximized: win?.isMaximized() ?? false }
   })
 
   // Ustaları getir
@@ -3057,7 +3082,188 @@ return {
       return { success: false, error: getErrorMessage(error) }
     }
   })
+
+  // 38. Uygulama Verilerini Yenile
+  kanalEkle('uygulama-verilerini-yenile', async () => {
+    return await uygulamaVerileriniYenileBackend()
+  })
+
+  // 39. Ayarları Getir
+  kanalEkle('ayarlari-getir', () => {
+    return ayarlariGetirBackend()
+  })
+
+  // 40. Ayar Kaydet / Toplu Kaydet
+  kanalEkle('ayarlari-kaydet', (_event, settings: any) => {
+    if (typeof settings === 'object' && settings !== null) {
+      return topluAyarlariKaydetBackend(settings)
+    }
+    return { success: false, error: 'Geçersiz ayar verisi.' }
+  })
+
+  // 41. Destek Sistem Bilgileri Getir
+  kanalEkle('destek-sistem-bilgileri-getir', async () => {
+    return await destekSistemBilgileriGetirBackend()
+  })
+
+  // 42. Veritabanı Kontrol Et
+  kanalEkle('veritabani-kontrol-et', () => {
+    return veritabaniKontrolEtBackend()
+  })
+
+  // 43. Otomatik Yedek Al
+  kanalEkle('otomatik-yedek-al', async () => {
+    return await otomatikYedekAlBackend()
+  })
+
+  // 44. Log Klasörünü Aç
+  kanalEkle('log-klasoru-ac', async () => {
+    try {
+      const logDir = app.getPath('logs') || app.getPath('userData')
+      await fs.mkdir(logDir, { recursive: true })
+      await shell.openPath(logDir)
+      return { success: true }
+    } catch (err) {
+      return { success: false, error: getErrorMessage(err) }
+    }
+  })
 }
+
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+async function otomatikYedekAlBackend(): Promise<{ success: boolean; path?: string; filename?: string; error?: string }> {
+  try {
+    const backupDir = yedekKlasoruYoluGetir()
+    await fs.mkdir(backupDir, { recursive: true })
+
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, '0')
+    const date = String(now.getDate()).padStart(2, '0')
+    const hours = String(now.getHours()).padStart(2, '0')
+    const minutes = String(now.getMinutes()).padStart(2, '0')
+    const seconds = String(now.getSeconds()).padStart(2, '0')
+
+    const timeStamp = `${year}${month}${date}_${hours}${minutes}${seconds}`
+    const backupFileName = `otoservis_auto_backup_${timeStamp}.db`
+    const backupPath = path.join(backupDir, backupFileName)
+
+    await db.backup(backupPath)
+
+    // Retention cleanup
+    const settingsRes = ayarlariGetirBackend()
+    const retentionCount = Number(settingsRes?.settings?.backup_retention_count) || 20
+
+    if (retentionCount > 0) {
+      const files = await fs.readdir(backupDir)
+      const autoBackups: Array<{ name: string; path: string; time: number }> = []
+
+      for (const f of files) {
+        if (f.startsWith('otoservis_auto_backup_') && f.endsWith('.db')) {
+          const fp = path.join(backupDir, f)
+          const stat = await fs.stat(fp)
+          autoBackups.push({ name: f, path: fp, time: stat.mtimeMs })
+        }
+      }
+
+      autoBackups.sort((a, b) => b.time - a.time) // Newest first
+
+      if (autoBackups.length > retentionCount) {
+        const toDelete = autoBackups.slice(retentionCount)
+        for (const item of toDelete) {
+          try {
+            await fs.unlink(item.path)
+            console.log('[AutoBackup] Retention cleanup: deleted', item.name)
+          } catch (e) {
+            console.warn('[AutoBackup] Retention cleanup failed for', item.name, e)
+          }
+        }
+      }
+    }
+
+    return { success: true, path: backupPath, filename: backupFileName }
+  } catch (error) {
+    console.error('[AutoBackup] Hata:', error)
+    return { success: false, error: getErrorMessage(error) }
+  }
+}
+
+async function destekSistemBilgileriGetirBackend(): Promise<any> {
+  try {
+    const backupDir = yedekKlasoruYoluGetir()
+    let dbSize = '0 B'
+    try {
+      const stat = await fs.stat(dbPath)
+      dbSize = formatBytes(stat.size)
+    } catch (e) {}
+
+    let lastBackupDate = 'Yapılmadı'
+    let lastBackupName = 'Yok'
+    let lastBackupSize = '0 B'
+
+    try {
+      await fs.mkdir(backupDir, { recursive: true })
+      const files = await fs.readdir(backupDir)
+      let newest: { name: string; path: string; time: number; size: number } | null = null
+      for (const f of files) {
+        if (f.endsWith('.db')) {
+          const fp = path.join(backupDir, f)
+          const stat = await fs.stat(fp)
+          if (!newest || stat.mtimeMs > newest.time) {
+            newest = { name: f, path: fp, time: stat.mtimeMs, size: stat.size }
+          }
+        }
+      }
+      if (newest) {
+        lastBackupDate = new Date(newest.time).toLocaleString('tr-TR')
+        lastBackupName = newest.name
+        lastBackupSize = formatBytes(newest.size)
+      }
+    } catch (e) {}
+
+    const musteriSayisi = Number((db.prepare('SELECT COUNT(*) AS count FROM customers WHERE IFNULL(is_active, 1) = 1').get() as any)?.count || 0)
+    const aracSayisi = Number((db.prepare('SELECT COUNT(*) AS count FROM vehicles WHERE IFNULL(is_active, 1) = 1').get() as any)?.count || 0)
+    const isEmriSayisi = Number((db.prepare('SELECT COUNT(*) AS count FROM work_orders').get() as any)?.count || 0)
+    const parcaSayisi = Number((db.prepare('SELECT COUNT(*) AS count FROM parts WHERE IFNULL(is_active, 1) = 1').get() as any)?.count || 0)
+
+    return {
+      success: true,
+      bilgiler: {
+        dbPath,
+        backupDir,
+        dbSize,
+        musteriSayisi,
+        aracSayisi,
+        isEmriSayisi,
+        parcaSayisi,
+        lastBackupDate,
+        lastBackupName,
+        lastBackupSize,
+        appVersion: '1.0.0'
+      }
+    }
+  } catch (error) {
+    console.error('Destek sistem bilgileri getirme hatası:', error)
+    return { success: false, error: getErrorMessage(error) }
+  }
+}
+
+app.on('before-quit', async () => {
+  try {
+    const settingsRes = ayarlariGetirBackend()
+    if (settingsRes?.settings?.backup_on_exit === 'true') {
+      await otomatikYedekAlBackend()
+    }
+  } catch (err) {
+    console.error('[BackupOnExit] Hata:', err)
+  }
+})
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -3072,9 +3278,20 @@ app.on('activate', () => {
   }
 })
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   initDB()
   ipcKopruleriniKur()
   Menu.setApplicationMenu(null)
+
+  // Auto backup on startup if enabled
+  try {
+    const settingsRes = ayarlariGetirBackend()
+    if (settingsRes?.settings?.automatic_backup_enabled === 'true') {
+      otomatikYedekAlBackend()
+    }
+  } catch (err) {
+    console.error('[AutoBackupOnStart] Hata:', err)
+  }
+
   createWindow()
 })

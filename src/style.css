@@ -77,3 +77,20 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* ── Compact Density Styles ───────────────────────── */
+html[data-density="compact"] .p-datatable .p-datatable-tbody > tr > td {
+  padding: 6px 10px !important;
+  font-size: 13px !important;
+}
+
+html[data-density="compact"] .p-datatable .p-datatable-thead > tr > th {
+  padding: 8px 10px !important;
+  font-size: 12.5px !important;
+}
+
+html[data-density="compact"] .p-button.p-button-sm,
+html[data-density="compact"] .p-button-sm {
+  padding: 4px 8px !important;
+  font-size: 12.5px !important;
+}

@@ -1,10 +1,18 @@
 import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('api', {
-    // Pencere
+  // Pencere
   pencereKucult: () => ipcRenderer.invoke('pencere-kucult'),
   pencereBuyutKucult: () => ipcRenderer.invoke('pencere-buyut-kucult'),
   pencereKapat: () => ipcRenderer.invoke('pencere-kapat'),
+  pencereDurumGetir: () => ipcRenderer.invoke('pencere-durum-getir'),
+  onPencereDurumDegisti: (callback: (isMaximized: boolean) => void) => {
+    const handler = (_event: any, isMaximized: boolean) => callback(isMaximized)
+    ipcRenderer.on('window-maximized-state', handler)
+    return () => {
+      ipcRenderer.removeListener('window-maximized-state', handler)
+    }
+  },
     // Ustalar / Giriş
   ustalariGetir: () => ipcRenderer.invoke('ustalari-getir'),
   ustaGirisYap: (giris) => ipcRenderer.invoke('usta-giris-yap', giris),
@@ -83,5 +91,14 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   // Telefon Erişimi
   telefonErisimiBaslat: (port) => ipcRenderer.invoke('telefon-erisimi-baslat', port),
   telefonErisimiDurdur: () => ipcRenderer.invoke('telefon-erisimi-durdur'),
-  telefonErisimiDurumGetir: () => ipcRenderer.invoke('telefon-erisimi-durum-getir')
+  telefonErisimiDurumGetir: () => ipcRenderer.invoke('telefon-erisimi-durum-getir'),
+
+  // Veri Yenileme & Ayarlar
+  uygulamaVerileriniYenile: () => ipcRenderer.invoke('uygulama-verilerini-yenile'),
+  ayarlariGetir: () => ipcRenderer.invoke('ayarlari-getir'),
+  ayarlariKaydet: (settings) => ipcRenderer.invoke('ayarlari-kaydet', settings),
+  destekSistemBilgileriGetir: () => ipcRenderer.invoke('destek-sistem-bilgileri-getir'),
+  veritabaniKontrolEt: () => ipcRenderer.invoke('veritabani-kontrol-et'),
+  otomatikYedekAl: () => ipcRenderer.invoke('otomatik-yedek-al'),
+  logKlasoruAc: () => ipcRenderer.invoke('log-klasoru-ac')
 })

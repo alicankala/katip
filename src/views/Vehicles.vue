@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -155,6 +155,11 @@ Object.assign(form, {
 
 onMounted(() => {
   listeleriGetir()
+  window.addEventListener('app-data-refreshed', listeleriGetir)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('app-data-refreshed', listeleriGetir)
 })
 </script>
 

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -662,6 +662,15 @@ const hizliOde = async (gider) => {
   }
 }
 
+const verileriYenileDetayli = async () => {
+  await carileriYukle()
+  await iliskiliVerileriYukle()
+  await giderleriYukle()
+  if (seciliCari.value) {
+    await cariDetaylariniYukle(seciliCari.value)
+  }
+}
+
 onMounted(async () => {
   await carileriYukle()
   await iliskiliVerileriYukle()
@@ -671,6 +680,12 @@ onMounted(async () => {
   if (route.query.tab === 'giderler') {
     aktifAnaSekme.value = 'giderler'
   }
+
+  window.addEventListener('app-data-refreshed', verileriYenileDetayli)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('app-data-refreshed', verileriYenileDetayli)
 })
 </script>
 

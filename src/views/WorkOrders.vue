@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -556,12 +556,22 @@ const tamamlaModalAc = async (isEmri) => {
   const ozetRes = await window.api.isEmriOdemeOzetiGetir(isEmri.id)
   const ozet = ozetRes?.ozet || {}
 
+  let defMethod = 'Nakit'
+  if (window.api?.ayarlariGetir) {
+    try {
+      const setRes = await window.api.ayarlariGetir()
+      if (setRes?.success && setRes.settings?.default_payment_method) {
+        defMethod = setRes.settings.default_payment_method
+      }
+    } catch (e) {}
+  }
+
   tamamlanacakIsEmri.value = isEmri
   tamamlaForm.id = isEmri.id
   tamamlaForm.kalan_borc = Number(ozet.kalan_borc !== undefined ? ozet.kalan_borc : (isEmri.total_price || 0))
   tamamlaForm.payment_option = tamamlaForm.kalan_borc <= 0 ? 'none' : 'full'
   tamamlaForm.amount = tamamlaForm.kalan_borc > 0 ? tamamlaForm.kalan_borc : 0
-  tamamlaForm.payment_method = 'Nakit'
+  tamamlaForm.payment_method = defMethod
   tamamlaForm.payment_date = bugununTarihi()
   tamamlaForm.note = ''
 
@@ -1560,9 +1570,45 @@ const servisFisiYazdirGercek = () => {
 
   yazdirmaPenceresi.document.close()
 }
-onMounted(() => {
+const verileriYenileDetayli = async () => {
+  await listeleriGetir()
+  if (seciliIsEmri.value?.id) {
+    const guncel = isEmirleri.value.find(i => i.id === seciliIsEmri.value.id)
+    if (guncel) {
+      seciliIsEmri.value = guncel
+      await kalemleriGetir(guncel.id)
+      await odemeleriGetir(guncel.id)
+    } else {
+      seciliIsEmri.value = null
+      kalemler.value = []
+      odemeGecmisi.value = []
+    }
+  }
+}
+
+onMounted(async () => {
   aktifUsta.value = JSON.parse(localStorage.getItem('aktifUsta') || 'null')
+
+  if (window.api?.ayarlariGetir) {
+    try {
+      const res = await window.api.ayarlariGetir()
+      if (res?.success && res.settings?.work_orders_default_filter) {
+        const filterVal = res.settings.work_orders_default_filter
+        if (['Açık', 'Beklemede', 'Tümü'].includes(filterVal)) {
+          durumFiltresi.value = filterVal
+        }
+      }
+    } catch (e) {
+      console.warn('İş emirleri filtre ayarı uygulanamadı:', e)
+    }
+  }
+
   listeleriGetir()
+  window.addEventListener('app-data-refreshed', verileriYenileDetayli)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('app-data-refreshed', verileriYenileDetayli)
 })
 </script>
 

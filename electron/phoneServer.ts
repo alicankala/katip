@@ -145,8 +145,8 @@ function stokHareketiKaydet(veri: {
 }
 
 // Transactional helper to insert Customer -> Vehicle -> Work Order
-const createServiceReceptionTransaction = db.transaction((data: any) => {
-  const { plate, name, phone, brand, model, year, mileage, description, master_id } = data
+const createServiceReceptionTransaction = (data: any) => db.transaction((dataInner: any) => {
+  const { plate, name, phone, brand, model, year, mileage, description, master_id } = dataInner
   const cleanPlate = String(plate || '').toUpperCase().replace(/\s+/g, '')
   
   let vehicle = db.prepare("SELECT * FROM vehicles WHERE UPPER(REPLACE(plate, ' ', '')) = ?").get(cleanPlate) as any
@@ -199,11 +199,11 @@ const createServiceReceptionTransaction = db.transaction((data: any) => {
   )
 
   return resWo.lastInsertRowid
-})
+})(data)
 
 // Transactional helper to insert labor into work order
-const addLaborTransaction = db.transaction((data: any) => {
-  const { work_order_id, description, quantity, unit_price } = data
+const addLaborTransaction = (data: any) => db.transaction((dataInner: any) => {
+  const { work_order_id, description, quantity, unit_price } = dataInner
   const qty = Number(quantity)
   const price = Number(unit_price)
   const totalPrice = qty * price
@@ -222,11 +222,11 @@ const addLaborTransaction = db.transaction((data: any) => {
 
   isEmriToplaminiGuncelle(work_order_id)
   return true
-})
+})(data)
 
 // Transactional helper to insert part item and log stock movements
-const addPartTransaction = db.transaction((data: any) => {
-  const { work_order_id, part_id, description, quantity, unit_price, master_id } = data
+const addPartTransaction = (data: any) => db.transaction((dataInner: any) => {
+  const { work_order_id, part_id, description, quantity, unit_price, master_id } = dataInner
   const qty = Number(quantity)
   const sellPrice = Number(unit_price)
   const totalPrice = qty * sellPrice
@@ -270,11 +270,11 @@ const addPartTransaction = db.transaction((data: any) => {
   // 4. Update work order totals
   isEmriToplaminiGuncelle(work_order_id)
   return true
-})
+})(data)
 
 // Transactional helper to delete item and restore stock counts
-const deleteItemTransaction = db.transaction((data: any) => {
-  const { item_id, master_id } = data
+const deleteItemTransaction = (data: any) => db.transaction((dataInner: any) => {
+  const { item_id, master_id } = dataInner
   
   const kalem = db.prepare("SELECT * FROM work_order_items WHERE id = ?").get(Number(item_id)) as any
   if (!kalem) {
@@ -310,7 +310,7 @@ const deleteItemTransaction = db.transaction((data: any) => {
   db.prepare("DELETE FROM work_order_items WHERE id = ?").run(Number(item_id))
   isEmriToplaminiGuncelle(workOrderId)
   return true
-})
+})(data)
 
 
 export function startPhoneServer(requestedPort: number): Promise<{ success: boolean; port?: number; ip?: string; error?: string }> {

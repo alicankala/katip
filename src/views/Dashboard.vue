@@ -50,8 +50,17 @@ const verileriYukle = async () => {
         .slice(0, 5)
     : []
     if (window.api.dusukStokParcalariGetir) {
-  dusukStokParcalari.value = await window.api.dusukStokParcalariGetir(5)
-}
+    let showWarnings = true
+    if (window.api.ayarlariGetir) {
+      try {
+        const sRes = await window.api.ayarlariGetir()
+        if (sRes?.success && sRes.settings?.show_critical_stock_warnings === 'false') {
+          showWarnings = false
+        }
+      } catch (e) {}
+    }
+    dusukStokParcalari.value = showWarnings ? await window.api.dusukStokParcalariGetir(5) : []
+  }
 }
 
 const aramaSonuclariDialogAcik = ref(false)
@@ -290,6 +299,7 @@ const isEmirlerineGit = () => {
 onMounted(() => {
   verileriYukle()
   window.addEventListener('click', closeSuggestionsOnOutsideClick)
+  window.addEventListener('app-data-refreshed', verileriYukle)
 })
 
 onUnmounted(() => {
@@ -297,6 +307,7 @@ onUnmounted(() => {
     clearTimeout(debounceTimer)
   }
   window.removeEventListener('click', closeSuggestionsOnOutsideClick)
+  window.removeEventListener('app-data-refreshed', verileriYukle)
 })
 </script>
 

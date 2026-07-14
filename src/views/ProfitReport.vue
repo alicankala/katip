@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -254,6 +254,11 @@ const karSeverity = (netKar) => {
 
 onMounted(() => {
   raporuGetir()
+  window.addEventListener('app-data-refreshed', raporuGetir)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('app-data-refreshed', raporuGetir)
 })
 </script>
 

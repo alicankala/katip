@@ -24,6 +24,13 @@ declare namespace NodeJS {
 // Renderer tarafında preload.ts ile açılan API
 interface Window {
   api: {
+    // Pencere
+    pencereKucult: () => Promise<any>
+    pencereBuyutKucult: () => Promise<any>
+    pencereKapat: () => Promise<any>
+    pencereDurumGetir: () => Promise<{ success: boolean; isMaximized: boolean }>
+    onPencereDurumDegisti: (callback: (isMaximized: boolean) => void) => () => void
+
     // Müşteriler
     musterileriGetir: () => Promise<any>
     musteriEkle: (musteri: any) => Promise<any>
@@ -81,5 +88,12 @@ veritabaniBilgileriGetir: () => Promise<any>
     cariOdemeleriGetir: (currentAccountId: number) => Promise<any>
     cariOdemeEkle: (odeme: any) => Promise<any>
     cariOdemeSil: (id: number) => Promise<any>
+    uygulamaVerileriniYenile: () => Promise<{ success: boolean; message: string; refreshedAt?: string }>
+    ayarlariGetir: () => Promise<{ success: boolean; settings: Record<string, string> }>
+    ayarlariKaydet: (settings: Record<string, string>) => Promise<{ success: boolean; error?: string }>
+    destekSistemBilgileriGetir: () => Promise<any>
+    veritabaniKontrolEt: () => Promise<{ success: boolean; message: string; checkedAt?: string }>
+    otomatikYedekAl: () => Promise<{ success: boolean; path?: string; filename?: string; error?: string }>
+    logKlasoruAc: () => Promise<{ success: boolean; error?: string }>
   }
 }

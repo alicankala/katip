@@ -7,8 +7,10 @@ import ConfirmDialog from 'primevue/confirmdialog'
 import Dropdown from 'primevue/dropdown'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
+import { useToast } from 'primevue/usetoast'
 
 const router = useRouter()
+const toast = useToast()
 
 const ustalar = ref([])
 const seciliUstaId = ref(null)
@@ -163,16 +165,21 @@ const pinInputDuzenle = (event) => {
   pin.value = String(event.target.value || '').replace(/\D/g, '').slice(0, 4)
 }
 
+const isMaximized = ref(false)
+
 const pencereKucult = async () => {
-  await window.api.pencereKucult()
+  await window.api?.pencereKucult()
 }
 
 const pencereBuyutKucult = async () => {
-  await window.api.pencereBuyutKucult()
+  const res = await window.api?.pencereBuyutKucult()
+  if (res && typeof res.isMaximized === 'boolean') {
+    isMaximized.value = res.isMaximized
+  }
 }
 
 const pencereKapat = async () => {
-  await window.api.pencereKapat()
+  await window.api?.pencereKapat()
 }
 
 const cikisYap = () => {
@@ -254,12 +261,99 @@ const telefonErisimiDurdur = async () => {
   }
 }
 
+const verilerYenileniyor = ref(false)
+
+const verileriYenile = async () => {
+  if (verilerYenileniyor.value) return
+  verilerYenileniyor.value = true
+
+  toast.add({
+    severity: 'info',
+    summary: 'Yenileniyor',
+    detail: 'Veriler yenileniyor...',
+    life: 2000
+  })
+
+  try {
+    const res = await window.api.uygulamaVerileriniYenile()
+    if (res?.success) {
+      toast.add({
+        severity: 'success',
+        summary: 'Başarılı',
+        detail: res.message || 'Veriler başarıyla yenilendi.',
+        life: 3000
+      })
+      window.dispatchEvent(new CustomEvent('app-data-refreshed'))
+    } else {
+      toast.add({
+        severity: 'error',
+        summary: 'Hata',
+        detail: res?.message || 'Veriler yenilenemedi. Veritabanı bağlantısını kontrol edin.',
+        life: 5000
+      })
+    }
+  } catch (err) {
+    console.error('Veri yenileme hatası:', err)
+    toast.add({
+      severity: 'error',
+      summary: 'Hata',
+      detail: 'Veriler yenilenemedi. Veritabanı bağlantısını kontrol edin.',
+      life: 5000
+    })
+  } finally {
+    verilerYenileniyor.value = false
+  }
+}
+
 onMounted(async () => {
   temaUygula()
   localStorage.removeItem('aktifUsta')
   ustalariYukle()
   window.addEventListener('usta-cikis-yapildi', disaridanCikisYap)
+
+  let autoStartPhone = true
+  if (window.api?.ayarlariGetir) {
+    try {
+      const sRes = await window.api.ayarlariGetir()
+      if (sRes?.success && sRes.settings) {
+        const set = sRes.settings
+        const savedTheme = set.theme || localStorage.getItem('uygulamaTema') || 'dark'
+        document.documentElement.setAttribute('data-theme', savedTheme)
+        document.documentElement.style.colorScheme = savedTheme
+        if (savedTheme === 'dark') {
+          document.documentElement.classList.add('p-dark')
+        } else {
+          document.documentElement.classList.remove('p-dark')
+        }
+
+        const density = set.list_density || 'normal'
+        document.documentElement.setAttribute('data-density', density)
+
+        if (set.phone_server_auto_start === 'false') {
+          autoStartPhone = false
+        }
+      }
+    } catch (err) {
+      console.error('Ayarlar uygulanamadı:', err)
+    }
+  }
   
+  if (window.api?.pencereDurumGetir) {
+    try {
+      const pRes = await window.api.pencereDurumGetir()
+      if (pRes?.success) {
+        isMaximized.value = pRes.isMaximized
+      }
+    } catch (e) {}
+  }
+
+  if (window.api?.onPencereDurumDegisti) {
+    const unbind = window.api.onPencereDurumDegisti((maximized) => {
+      isMaximized.value = maximized
+    })
+    onUnmounted(unbind)
+  }
+
   if (window.api?.telefonErisimiDurumGetir) {
     try {
       const res = await window.api.telefonErisimiDurumGetir()
@@ -269,7 +363,7 @@ onMounted(async () => {
         telefonErisimi.value.ip = res.ip
         telefonErisimi.value.ips = res.ips || []
         
-        if (!res.running && window.api?.telefonErisimiBaslat) {
+        if (!res.running && autoStartPhone && window.api?.telefonErisimiBaslat) {
           const startRes = await window.api.telefonErisimiBaslat(Number(telefonErisimi.value.port))
           if (startRes?.success) {
             telefonErisimi.value.running = true
@@ -280,7 +374,7 @@ onMounted(async () => {
         }
       }
     } catch (error) {
-      console.error('Telefon erişimi otomatik başlatılamadı:', error)
+      console.error('Telefon erişimi kontrolü hatası:', error)
     }
   }
 })
@@ -294,7 +388,7 @@ onUnmounted(() => {
   <Toast />
   <ConfirmDialog />
 
-  <div class="custom-titlebar">
+  <div class="custom-titlebar" @dblclick="pencereBuyutKucult">
     <div class="custom-titlebar-left">
       <img
         src="/icon.ico"
@@ -306,7 +400,7 @@ onUnmounted(() => {
       <span class="custom-titlebar-subtitle">Servis Takip Sistemi</span>
     </div>
 
-    <div class="custom-titlebar-actions">
+    <div class="custom-titlebar-actions" @dblclick.stop>
       <button
         type="button"
         class="window-btn phone-btn-titlebar"
@@ -318,26 +412,48 @@ onUnmounted(() => {
 
       <button
         type="button"
-        class="window-btn"
+        class="window-btn refresh-btn-titlebar"
+        :disabled="verilerYenileniyor"
+        @click.stop="verileriYenile"
+        title="Verileri Yenile"
+      >
+        <i :class="['pi', 'pi-refresh', { 'pi-spin': verilerYenileniyor }]"></i>
+      </button>
+
+      <button
+        type="button"
+        class="window-btn window-control-btn"
         @click.stop="pencereKucult"
+        title="Simge Durumuna Küçült"
       >
-        —
+        <svg width="11" height="11" viewBox="0 0 11 11" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <line x1="0" y1="5.5" x2="11" y2="5.5" stroke="currentColor" stroke-width="1.2"/>
+        </svg>
       </button>
 
       <button
         type="button"
-        class="window-btn"
+        class="window-btn window-control-btn"
         @click.stop="pencereBuyutKucult"
+        :title="isMaximized ? 'Aşağı Getir' : 'Ekranı Kapla'"
       >
-        □
+        <svg v-if="!isMaximized" width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0.6" y="0.6" width="8.8" height="8.8" stroke="currentColor" stroke-width="1.2"/>
+        </svg>
+        <svg v-else width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 2.5 0.6 H 9.4 V 7.5 H 7.5 M 0.6 2.5 H 7.5 V 9.4 H 0.6 Z" stroke="currentColor" stroke-width="1.1" fill="none"/>
+        </svg>
       </button>
 
       <button
         type="button"
-        class="window-btn close"
+        class="window-btn window-control-btn btn-close"
         @click.stop="pencereKapat"
+        title="Kapat"
       >
-        ×
+        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M 0.5 0.5 L 9.5 9.5 M 9.5 0.5 L 0.5 9.5" stroke="currentColor" stroke-width="1.2"/>
+        </svg>
       </button>
     </div>
   </div>
@@ -647,7 +763,7 @@ v-for="item in menuItems.slice(6, 8)"
 }
 
 .window-btn {
-  width: 44px;
+  width: 46px;
   height: 52px;
   border: none;
   background: transparent;
@@ -655,15 +771,30 @@ v-for="item in menuItems.slice(6, 8)"
   font-size: 14px;
   cursor: pointer;
   -webkit-app-region: no-drag;
-  transition: background 0.12s, color 0.12s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, color 0.12s ease;
 }
+
 .window-btn:hover {
-  background: var(--bg-card-hover);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--text-title);
 }
-.window-btn.close:hover {
-  background: #dc2626;
-  color: #ffffff;
+
+:global(html[data-theme="light"]) .window-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-title);
+}
+
+.window-btn.btn-close:hover {
+  background: #e81123 !important;
+  color: #ffffff !important;
+}
+
+.window-btn.btn-close:active {
+  background: #f1707a !important;
+  color: #ffffff !important;
 }
 
 /* ── Login Page ──────────────────────────────────── */
@@ -1242,5 +1373,16 @@ v-for="item in menuItems.slice(6, 8)"
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+.refresh-btn-titlebar {
+  font-size: 15px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.refresh-btn-titlebar:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>
