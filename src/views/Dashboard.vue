@@ -632,6 +632,8 @@ onUnmounted(() => {
                   <div><span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase; font-weight: 700;">Kapanış:</span> <strong style="display: block; margin-top: 2px; color: var(--text-title);">{{ visit.closed_at ? tarihFormatla(visit.closed_at) : '-' }}</strong></div>
                   <div><span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase; font-weight: 700;">Açan Usta:</span> <strong style="display: block; margin-top: 2px; color: var(--text-title);">{{ visit.opened_by_master_name || '-' }}</strong></div>
                   <div><span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase; font-weight: 700;">Kapatan Usta:</span> <strong style="display: block; margin-top: 2px; color: var(--text-title);">{{ visit.closed_by_master_name || '-' }}</strong></div>
+                  <div><span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase; font-weight: 700;">Tahsil Edilen:</span> <strong style="display: block; margin-top: 2px; color: #34d399;">{{ tlFormatla(visit.toplam_tahsilat || 0) }}</strong></div>
+                  <div><span style="color: var(--text-muted); font-size: 10px; text-transform: uppercase; font-weight: 700;">Kalan Borç:</span> <strong style="display: block; margin-top: 2px; color: #f87171;">{{ tlFormatla((Number(visit.total_price || 0) - Number(visit.toplam_tahsilat || 0)).toFixed(2)) }}</strong></div>
                 </div>
 
                 <!-- Şikayet / Açıklama -->

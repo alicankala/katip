@@ -52,6 +52,51 @@ const kalemDialogAcik = ref(false)
 const tekrarAcDialogAcik = ref(false)
 const tekrarAcilacakIsEmri = ref(null)
 
+// Ödeme Takibi State
+const odemeDialogAcik = ref(false)
+const tamamlaDialogAcik = ref(false)
+const odemeIptalDialogAcik = ref(false)
+const tamamlanacakIsEmri = ref(null)
+
+const odemeGecmisi = ref([])
+const odemeOzeti = reactive({
+  total_price: 0,
+  toplam_tahsilat: 0,
+  kalan_borc: 0,
+  odeme_durumu: 'Ödenmedi'
+})
+
+const bugununTarihi = () => {
+  const d = new Date()
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const odemeForm = reactive({
+  work_order_id: null,
+  amount: 0,
+  payment_method: 'Nakit',
+  payment_date: bugununTarihi(),
+  note: ''
+})
+
+const tamamlaForm = reactive({
+  id: null,
+  kalan_borc: 0,
+  payment_option: 'full',
+  amount: 0,
+  payment_method: 'Nakit',
+  payment_date: bugununTarihi(),
+  note: ''
+})
+
+const iptalForm = reactive({
+  payment_id: null,
+  cancel_reason: ''
+})
+
 const tekrarAcForm = reactive({
   reason: ''
 })
@@ -63,6 +108,48 @@ const seciliIsEmri = ref(null)
 const islemGecmisiAcik = ref(false)
 const maliyetKarAcik = ref(false)
 const printPreviewOpen = ref(false)
+
+const odemeDurumuHesapla = (row) => {
+  if (!row) {
+    return { status: 'Ödenmedi', text: '● Ödenmedi', color: '#ef4444' }
+  }
+  const total = Number(row.total_price || 0)
+  const paid = Number(row.toplam_tahsilat || 0)
+  const remaining = Number((total - paid).toFixed(2))
+
+  if (paid <= 0.01) {
+    return { status: 'Ödenmedi', text: '● Ödenmedi', color: '#ef4444' }
+  }
+  if (remaining <= 0.01) {
+    return { status: 'Ödendi', text: '● Ödendi', color: '#10b981' }
+  }
+  if (remaining < -0.01) {
+    return { status: 'Fazla Ödeme', text: '● Fazla Ödeme', color: '#a855f7' }
+  }
+
+  return {
+    status: 'Kısmi',
+    text: `● Kısmi · ${tlFormatla(remaining)} kaldı`,
+    color: '#f59e0b'
+  }
+}
+
+const tarihSaatFormatla = (tarihStr) => {
+  if (!tarihStr) return '-'
+  try {
+    const d = new Date(tarihStr)
+    if (isNaN(d.getTime())) return tarihStr
+    return d.toLocaleDateString('tr-TR', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  } catch (e) {
+    return tarihStr
+  }
+}
 
 const durumSecenekleri = ref(['Açık', 'Beklemede', 'Tamamlandı'])
 const kalemTipleri = ref(['Parça', 'İşçilik'])
@@ -330,23 +417,208 @@ const durumDegistir = async (isEmri, yeniDurum) => {
   }
 
   if (yeniDurum === 'Tamamlandı') {
-    confirmDialog.require({
-      message: `Bu iş emrini tamamlandı olarak kapatmak istiyor musunuz? Kapatan usta: ${aktifUsta.value.name}`,
-      header: 'İş Emrini Tamamla',
-      icon: 'pi pi-check-circle',
-      acceptLabel: 'Tamamla',
-      rejectLabel: 'Vazgeç',
-      acceptClass: 'p-button-success',
-      rejectClass: 'p-button-secondary p-button-text',
-      accept: async () => {
-        await durumKaydet(isEmri, 'Tamamlandı', 'İş emri tamamlandı olarak kapatıldı.')
-      }
-    })
-
+    await tamamlaModalAc(isEmri)
     return
   }
 
   await durumKaydet(isEmri, yeniDurum)
+}
+
+const odemeleriGetir = async (workOrderId) => {
+  if (!workOrderId) {
+    odemeGecmisi.value = []
+    return
+  }
+
+  try {
+    const res = await window.api.isEmriOdemeleriGetir(workOrderId)
+    if (res && res.success) {
+      odemeGecmisi.value = res.odemeler || []
+    } else {
+      odemeGecmisi.value = []
+    }
+
+    const ozetRes = await window.api.isEmriOdemeOzetiGetir(workOrderId)
+    if (ozetRes && ozetRes.success) {
+      Object.assign(odemeOzeti, ozetRes.ozet)
+    }
+  } catch (err) {
+    console.error('Ödemeleri getirme hatası:', err)
+  }
+}
+
+const getOdemeSeverity = (durum) => {
+  switch (durum) {
+    case 'Ödendi': return 'success'
+    case 'Kısmi Ödendi': return 'warn'
+    case 'Ödenmedi': return 'danger'
+    case 'Fazla Ödeme': return 'info'
+    default: return 'secondary'
+  }
+}
+
+const odemeAlModalAc = async () => {
+  if (!seciliIsEmri.value?.id) {
+    uyariMesaji('Lütfen önce bir iş emri seçin.')
+    return
+  }
+
+  await odemeleriGetir(seciliIsEmri.value.id)
+
+  odemeForm.work_order_id = seciliIsEmri.value.id
+  odemeForm.amount = odemeOzeti.kalan_borc > 0 ? odemeOzeti.kalan_borc : 0
+  odemeForm.payment_method = 'Nakit'
+  odemeForm.payment_date = bugununTarihi()
+  odemeForm.note = ''
+
+  odemeDialogAcik.value = true
+}
+
+const odemeKaydet = async () => {
+  if (!odemeForm.work_order_id) return
+  if (!odemeForm.amount || Number(odemeForm.amount) <= 0) {
+    uyariMesaji('Geçerli bir ödeme tutarı giriniz.')
+    return
+  }
+  if (!odemeForm.payment_method) {
+    uyariMesaji('Lütfen ödeme yöntemi seçin.')
+    return
+  }
+
+  const aktifMaster = aktifUsta.value || JSON.parse(localStorage.getItem('aktifUsta') || 'null')
+
+  try {
+    const res = await window.api.isEmriOdemeEkle({
+      ...odemeForm,
+      amount: Number(odemeForm.amount),
+      active_master_id: aktifMaster?.id
+    })
+
+    if (res?.success) {
+      basariMesaji('Ödeme başarıyla kaydedildi.')
+      odemeDialogAcik.value = false
+      await odemeleriGetir(seciliIsEmri.value.id)
+      await listeleriGetir()
+      if (seciliIsEmri.value) {
+        const guncel = isEmirleri.value.find(i => i.id === seciliIsEmri.value.id)
+        if (guncel) seciliIsEmri.value = guncel
+      }
+    } else {
+      hataMesaji(res?.error || 'Ödeme kaydedilemedi.')
+    }
+  } catch (err) {
+    hataMesaji(err instanceof Error ? err.message : String(err))
+  }
+}
+
+const odemeIptalModalAc = (odeme) => {
+  if (!odeme?.id) return
+  iptalForm.payment_id = odeme.id
+  iptalForm.cancel_reason = ''
+  odemeIptalDialogAcik.value = true
+}
+
+const odemeIptalKaydet = async () => {
+  if (!iptalForm.payment_id) return
+  if (!iptalForm.cancel_reason || !iptalForm.cancel_reason.trim()) {
+    uyariMesaji('Ödeme iptal sebebi zorunludur.')
+    return
+  }
+
+  const aktifMaster = aktifUsta.value || JSON.parse(localStorage.getItem('aktifUsta') || 'null')
+
+  try {
+    const res = await window.api.isEmriOdemeIptal({
+      payment_id: iptalForm.payment_id,
+      cancel_reason: iptalForm.cancel_reason.trim(),
+      active_master_id: aktifMaster?.id
+    })
+
+    if (res?.success) {
+      basariMesaji('Ödeme kaydı iptal edildi.')
+      odemeIptalDialogAcik.value = false
+      await odemeleriGetir(seciliIsEmri.value.id)
+      await listeleriGetir()
+      if (seciliIsEmri.value) {
+        const guncel = isEmirleri.value.find(i => i.id === seciliIsEmri.value.id)
+        if (guncel) seciliIsEmri.value = guncel
+      }
+    } else {
+      hataMesaji(res?.error || 'Ödeme iptal edilemedi.')
+    }
+  } catch (err) {
+    hataMesaji(err instanceof Error ? err.message : String(err))
+  }
+}
+
+const tamamlaModalAc = async (isEmri) => {
+  if (!isEmri?.id) return
+  const ozetRes = await window.api.isEmriOdemeOzetiGetir(isEmri.id)
+  const ozet = ozetRes?.ozet || {}
+
+  tamamlanacakIsEmri.value = isEmri
+  tamamlaForm.id = isEmri.id
+  tamamlaForm.kalan_borc = Number(ozet.kalan_borc !== undefined ? ozet.kalan_borc : (isEmri.total_price || 0))
+  tamamlaForm.payment_option = tamamlaForm.kalan_borc <= 0 ? 'none' : 'full'
+  tamamlaForm.amount = tamamlaForm.kalan_borc > 0 ? tamamlaForm.kalan_borc : 0
+  tamamlaForm.payment_method = 'Nakit'
+  tamamlaForm.payment_date = bugununTarihi()
+  tamamlaForm.note = ''
+
+  tamamlaDialogAcik.value = true
+}
+
+const tamamlaVeOdemeKaydet = async () => {
+  if (!tamamlaForm.id) return
+
+  const aktifMaster = aktifUsta.value || JSON.parse(localStorage.getItem('aktifUsta') || 'null')
+  if (!aktifMaster?.id) {
+    uyariMesaji('İş emrini tamamlamak için aktif usta girişi yapılmalıdır.')
+    return
+  }
+
+  if (tamamlaForm.kalan_borc <= 0.01) {
+    tamamlaForm.payment_option = 'none'
+    tamamlaForm.amount = 0
+  }
+
+  if (tamamlaForm.payment_option === 'partial') {
+    if (!tamamlaForm.amount || Number(tamamlaForm.amount) <= 0) {
+      uyariMesaji('Geçerli bir ödeme tutarı giriniz.')
+      return
+    }
+    if (Number(tamamlaForm.amount) > tamamlaForm.kalan_borc + 0.01) {
+      uyariMesaji(`Ödeme tutarı kalan borçtan (${tamamlaForm.kalan_borc} TL) büyük olamaz.`)
+      return
+    }
+  }
+
+  try {
+    const res = await window.api.isEmriTamamlaVeOdemeKaydet({
+      id: tamamlaForm.id,
+      active_master_id: aktifMaster.id,
+      payment_option: tamamlaForm.payment_option,
+      amount: Number(tamamlaForm.amount || 0),
+      payment_method: tamamlaForm.payment_method,
+      payment_date: tamamlaForm.payment_date,
+      note: tamamlaForm.note
+    })
+
+    if (res?.success) {
+      basariMesaji('İş emri tamamlandı ve kaydedildi.')
+      tamamlaDialogAcik.value = false
+      await listeleriGetir()
+      if (seciliIsEmri.value?.id === tamamlaForm.id) {
+        const guncel = isEmirleri.value.find(i => i.id === tamamlaForm.id)
+        if (guncel) seciliIsEmri.value = guncel
+        await odemeleriGetir(tamamlaForm.id)
+      }
+    } else {
+      hataMesaji(res?.error || 'İş emri tamamlanamadı.')
+    }
+  } catch (err) {
+    hataMesaji(err instanceof Error ? err.message : String(err))
+  }
 }
 
 const tekrarAc = (isEmri) => {
@@ -480,6 +752,7 @@ maliyetKarAcik.value = false
   })
 
   await kalemleriGetir(isEmri.id)
+  await odemeleriGetir(isEmri.id)
 
   if (typeof isEmriLoglariGetir === 'function') {
     await isEmriLoglariGetir(isEmri.id)
@@ -1238,6 +1511,18 @@ const servisFisiYazdirGercek = () => {
                     <span>Genel Toplam</span>
                     <span>${guvenliMetin(tlFormatla(toplamTutar || isEmri.total_price))}</span>
                   </div>
+                  <div class="total-row" style="margin-top: 4px; font-size: 12px; color: #555;">
+                    <span>Tahsil Edilen:</span>
+                    <span>${guvenliMetin(tlFormatla(odemeOzeti.toplam_tahsilat))}</span>
+                  </div>
+                  <div class="total-row" style="font-size: 12px; color: #555;">
+                    <span>Kalan Borç:</span>
+                    <span>${guvenliMetin(tlFormatla(odemeOzeti.kalan_borc))}</span>
+                  </div>
+                  <div class="total-row" style="font-size: 12px; color: #555;">
+                    <span>Ödeme Durumu:</span>
+                    <span>${guvenliMetin(odemeOzeti.odeme_durumu)}</span>
+                  </div>
                 </div>
               </div>
 
@@ -1282,162 +1567,183 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h2>İş Emirleri (Tamir Fişleri)</h2>
+  <div style="display: flex; flex-direction: column; gap: 16px;">
+    <!-- Üst Başlık -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+      <div>
+        <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--text-title, #fff);">İş Emirleri</h2>
+        <p style="margin: 4px 0 0; color: var(--text-muted, #94a3b8); font-size: 0.88rem;">
+          Açık, bekleyen ve tamamlanan iş emirlerini yönetin.
+        </p>
+      </div>
 
-      <div style="display: flex; gap: 15px; align-items: center;">
-        <span class="p-input-icon-left" style="width: 300px;">
-          <i class="pi pi-search" />
-          <InputText
-            v-model="aramaKelimesi"
-            placeholder="Plaka, Müşteri veya İşlem Ara..."
-          />
-        </span>
+      <Button
+        label="Yeni İş Emri Aç"
+        icon="pi pi-plus"
+        severity="info"
+        size="small"
+        @click="yeniIsEmriAc"
+      />
+    </div>
+
+    <!-- Toolbar & Filtre Çubuğu -->
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: var(--bg-panel, #1e293b); border: 1px solid var(--border-color, #334155); padding: 12px 16px; border-radius: 12px;">
+      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+        <Button
+          :label="`Açık (${durumSayisi('Açık')})`"
+          icon="pi pi-wrench"
+          size="small"
+          :outlined="durumFiltresi !== 'Açık'"
+          severity="danger"
+          @click="durumFiltresi = 'Açık'"
+        />
 
         <Button
-          label="Yeni İş Emri Aç"
-          icon="pi pi-file-edit"
-          severity="info"
-          @click="yeniIsEmriAc"
+          :label="`Beklemede (${durumSayisi('Beklemede')})`"
+          icon="pi pi-clock"
+          size="small"
+          :outlined="durumFiltresi !== 'Beklemede'"
+          severity="warn"
+          @click="durumFiltresi = 'Beklemede'"
+        />
+
+        <Button
+          :label="`Tamamlananlar (${durumSayisi('Tamamlandı')})`"
+          icon="pi pi-check"
+          size="small"
+          :outlined="durumFiltresi !== 'Tamamlandı'"
+          severity="success"
+          @click="durumFiltresi = 'Tamamlandı'"
+        />
+
+        <Button
+          :label="`Hepsi (${durumSayisi('Tümü')})`"
+          icon="pi pi-list"
+          size="small"
+          :outlined="durumFiltresi !== 'Tümü'"
+          severity="secondary"
+          @click="durumFiltresi = 'Tümü'"
         />
       </div>
+
+      <span class="p-input-icon-left" style="min-width: 280px;">
+        <i class="pi pi-search" />
+        <InputText
+          v-model="aramaKelimesi"
+          placeholder="Plaka, müşteri, usta veya açıklama ara..."
+          style="width: 100%; font-size: 0.88rem;"
+        />
+      </span>
     </div>
 
-    <div class="table-panel">
-  <div class="work-order-tabs">
-    <Button
-      :label="`Açık (${durumSayisi('Açık')})`"
-      icon="pi pi-wrench"
-      :outlined="durumFiltresi !== 'Açık'"
-      severity="danger"
-      @click="durumFiltresi = 'Açık'"
-    />
+    <!-- Kompakt Hibrit Liste / Tablo Paneli (72px Yükseklik) -->
+    <div class="work-orders-table-panel">
+      <!-- Başlık Satırı -->
+      <div class="table-header-row">
+        <div>Plaka ve Usta</div>
+        <div>Açıklama ve Tarih</div>
+        <div>Tutar ve Ödeme Durumu</div>
+        <div>İş Emri Durumu</div>
+        <div style="text-align: right;">İşlemler</div>
+      </div>
 
-    <Button
-      :label="`Beklemede (${durumSayisi('Beklemede')})`"
-      icon="pi pi-clock"
-      :outlined="durumFiltresi !== 'Beklemede'"
-      severity="warn"
-      @click="durumFiltresi = 'Beklemede'"
-    />
+      <!-- Satırlar Listesi -->
+      <div class="table-body-rows">
+        <div
+          v-for="isEmri in filtrelenmisIsEmirleri"
+          :key="isEmri.id"
+          class="work-order-table-row"
+          :class="{ 'is-selected': seciliIsEmri?.id === isEmri.id }"
+          @click="kalemleriAc(isEmri)"
+        >
+          <!-- Kolon 1: Plaka ve Usta -->
+          <div class="col-plate-master">
+            <span class="plate-text">{{ isEmri.plate || 'PLAKASIZ' }}</span>
+            <span class="master-customer-text">
+              {{ isEmri.opened_by_master_name || 'Usta' }}
+              <template v-if="isEmri.customer_name"> · {{ isEmri.customer_name }}</template>
+            </span>
+          </div>
 
-    <Button
-      :label="`Tamamlananlar (${durumSayisi('Tamamlandı')})`"
-      icon="pi pi-check"
-      :outlined="durumFiltresi !== 'Tamamlandı'"
-      severity="success"
-      @click="durumFiltresi = 'Tamamlandı'"
-    />
+          <!-- Kolon 2: Açıklama ve Tarih -->
+          <div class="col-desc-date">
+            <span class="desc-text" :title="isEmri.description">
+              {{ isEmri.description || 'Şikayet / Açıklama Girilmedi' }}
+            </span>
+            <span class="date-text" :title="`Açılış: ${tarihSaatFormatla(isEmri.created_at)}${isEmri.closed_at ? ' | Kapanış: ' + tarihSaatFormatla(isEmri.closed_at) : ''}`">
+              {{ tarihSaatFormatla(isEmri.created_at) }}
+              <template v-if="isEmri.closed_at"> · Kapanış: {{ tarihSaatFormatla(isEmri.closed_at) }}</template>
+            </span>
+          </div>
 
-    <Button
-      :label="`Hepsi (${durumSayisi('Tümü')})`"
-      icon="pi pi-list"
-      :outlined="durumFiltresi !== 'Tümü'"
-      severity="secondary"
-      @click="durumFiltresi = 'Tümü'"
-    />
-  </div>
+          <!-- Kolon 3: Tutar ve Ödeme Durumu -->
+          <div 
+            class="col-finance"
+            :title="`Toplam: ${tlFormatla(isEmri.total_price)} | Tahsil Edilen: ${tlFormatla(isEmri.toplam_tahsilat || 0)} | Kalan: ${tlFormatla((Number(isEmri.total_price || 0) - Number(isEmri.toplam_tahsilat || 0)).toFixed(2))}`"
+          >
+            <span class="price-text">{{ tlFormatla(isEmri.total_price) }}</span>
+            <span class="payment-badge-text" :style="{ color: odemeDurumuHesapla(isEmri).color }">
+              {{ odemeDurumuHesapla(isEmri).text }}
+            </span>
+          </div>
 
-<DataTable
-  :value="filtrelenmisIsEmirleri"
-  responsiveLayout="scroll"
-  tableStyle="width: 100%;"
-  emptyMessage="Kayıtlı iş emri bulunamadı."
-  rowHover
-  @row-click="kalemleriAc($event.data)"
->
-<Column field="plate" header="Araç Plakası" style="font-weight: bold;"></Column>
-<Column field="customer_name" header="Müşteri"></Column>
+          <!-- Kolon 4: İş Emri Durumu -->
+          <div class="col-status" @click.stop>
+            <Dropdown
+              :modelValue="isEmri.status"
+              :options="durumSecenekleri"
+              class="durum-dropdown-compact"
+              :disabled="isEmri.status === 'Tamamlandı'"
+              @change="durumDegistir(isEmri, $event.value)"
+            >
+              <template #value="valueSlot">
+                <Tag :value="valueSlot.value" :severity="getSeverity(valueSlot.value)" style="font-size: 0.75rem; padding: 2px 8px;" />
+              </template>
+              <template #option="optionSlot">
+                <Tag :value="optionSlot.option" :severity="getSeverity(optionSlot.option)" style="font-size: 0.75rem;" />
+              </template>
+            </Dropdown>
+          </div>
 
-<Column header="Açılış">
-  <template #body="slotProps">
-    {{ tarihFormatla(slotProps.data.created_at) }}
-  </template>
-</Column>
+          <!-- Kolon 5: İşlemler -->
+          <div class="col-actions" @click.stop>
+            <Button
+              v-if="isEmri.status === 'Tamamlandı'"
+              icon="pi pi-undo"
+              size="small"
+              severity="warning"
+              text
+              rounded
+              title="Tekrar Aç"
+              @click.stop="tekrarAc(isEmri)"
+            />
+            <Button
+              icon="pi pi-pencil"
+              size="small"
+              severity="info"
+              text
+              rounded
+              :disabled="isEmri.status === 'Tamamlandı'"
+              title="Düzenle"
+              @click.stop="duzenle(isEmri)"
+            />
+            <Button
+              icon="pi pi-trash"
+              size="small"
+              severity="danger"
+              text
+              rounded
+              :disabled="isEmri.status === 'Tamamlandı'"
+              title="Sil"
+              @click.stop="sil(isEmri)"
+            />
+          </div>
+        </div>
 
-<Column header="Kapanış">
-  <template #body="slotProps">
-    {{ tarihFormatla(slotProps.data.closed_at) }}
-  </template>
-</Column>
-
-<Column header="Açıklama" style="width: 220px;">
-  <template #body="slotProps">
-    <div class="work-order-description">
-      {{ slotProps.data.description || '-' }}
-    </div>
-  </template>
-</Column>
-
-        <Column header="Toplam">
-          <template #body="slotProps">
-            <strong>{{ tlFormatla(slotProps.data.total_price) }}</strong>
-          </template>
-        </Column>
-
-<Column header="Durum">
-  <template #body="slotProps">
-<Dropdown
-  :modelValue="slotProps.data.status"
-  :options="durumSecenekleri"
-  class="durum-dropdown"
-  :disabled="slotProps.data.status === 'Tamamlandı'"
-  @click.stop
-  @change="durumDegistir(slotProps.data, $event.value)"
->
-      <template #value="valueSlot">
-        <Tag
-          :value="valueSlot.value"
-          :severity="getSeverity(valueSlot.value)"
-        />
-      </template>
-
-      <template #option="optionSlot">
-        <Tag
-          :value="optionSlot.option"
-          :severity="getSeverity(optionSlot.option)"
-        />
-      </template>
-    </Dropdown>
-  </template>
-</Column>
-
-        <Column header="İşlem" :exportable="false" style="width: 150px;">
-          <template #body="slotProps">
-
-<Button
-  v-if="slotProps.data.status === 'Tamamlandı'"
-  label="Tekrar Aç"
-  icon="pi pi-undo"
-  size="small"
-  severity="warning"
-  outlined
-  @click.stop="tekrarAc(slotProps.data)"
-  style="margin-right: 8px;"
-/>
-
-<Button
-  icon="pi pi-pencil"
-  outlined
-  rounded
-  severity="info"
-  :disabled="slotProps.data.status === 'Tamamlandı'"
-  @click.stop="duzenle(slotProps.data)"
-  style="margin-right: 8px;"
-/>
-
-<Button
-  icon="pi pi-trash"
-  outlined
-  rounded
-  severity="danger"
-  :disabled="slotProps.data.status === 'Tamamlandı'"
-  @click.stop="sil(slotProps.data)"
-/>
-          </template>
-        </Column>
-      </DataTable>
+        <div v-if="filtrelenmisIsEmirleri.length === 0" class="empty-state-row">
+          Kayıtlı iş emri bulunamadı.
+        </div>
+      </div>
     </div>
 
     <div
@@ -1549,6 +1855,184 @@ onMounted(() => {
           severity="warning"
           @click="tekrarAcKaydet"
         />
+      </template>
+    </Dialog>
+
+    <!-- Ödeme Al Dialog -->
+    <Dialog
+      v-model:visible="odemeDialogAcik"
+      header="İş Emri Ödemesi Al"
+      :style="{ width: '460px' }"
+      modal
+    >
+      <div style="display: flex; flex-direction: column; gap: 14px; padding-top: 8px;">
+        <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color, #334155);">
+          <div><strong>Plaka:</strong> {{ seciliIsEmri?.plate }}</div>
+          <div><strong>İş Emri Toplamı:</strong> {{ tlFormatla(odemeOzeti.total_price) }}</div>
+          <div><strong>Mevcut Kalan Borç:</strong> <span style="color: #f87171; font-weight: bold;">{{ tlFormatla(odemeOzeti.kalan_borc) }}</span></div>
+        </div>
+
+        <div class="form-group">
+          <label>Alınan Ödeme Tutarı (TL) <span class="zorunlu-alan">*</span></label>
+          <InputText
+            type="number"
+            step="0.01"
+            v-model="odemeForm.amount"
+            style="width: 100%"
+            autofocus
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Ödeme Yöntemi <span class="zorunlu-alan">*</span></label>
+          <Dropdown
+            v-model="odemeForm.payment_method"
+            :options="['Nakit', 'Kart', 'Havale / EFT', 'Diğer']"
+            style="width: 100%"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Ödeme Tarihi <span class="zorunlu-alan">*</span></label>
+          <InputText
+            type="date"
+            v-model="odemeForm.payment_date"
+            style="width: 100%"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Açıklama / Not</label>
+          <InputText
+            v-model="odemeForm.note"
+            placeholder="Örn: Kapora, Kısmi Ödeme veya Kredi Kartı Fiş No..."
+            style="width: 100%"
+          />
+        </div>
+
+        <div style="font-size: 0.85rem; color: var(--text-muted, #94a3b8); padding-top: 4px;">
+          Tahsilatı Alan Usta: <strong>{{ aktifUsta?.name || 'Giriş Yapılmamış' }}</strong>
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="İptal" icon="pi pi-times" text @click="odemeDialogAcik = false" />
+        <Button label="Ödemeyi Kaydet" icon="pi pi-check" severity="success" @click="odemeKaydet" />
+      </template>
+    </Dialog>
+
+    <!-- İş Emrini Tamamla ve Kapat Dialog -->
+    <Dialog
+      v-model:visible="tamamlaDialogAcik"
+      header="İş Emrini Tamamla ve Kapat"
+      :style="{ width: '520px' }"
+      modal
+    >
+      <div style="display: flex; flex-direction: column; gap: 16px; padding-top: 8px;">
+        <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color, #334155);">
+          <div><strong>Araç:</strong> {{ tamamlanacakIsEmri?.plate }} - {{ tamamlanacakIsEmri?.customer_name }}</div>
+          <div><strong>İş Emri Toplamı:</strong> {{ tlFormatla(tamamlanacakIsEmri?.total_price) }}</div>
+          <div><strong>Kalan Borç:</strong> <strong :style="{ color: tamamlaForm.kalan_borc <= 0.01 ? '#34d399' : '#f87171' }">{{ tlFormatla(tamamlaForm.kalan_borc) }}</strong></div>
+        </div>
+
+        <!-- Ödeme Zaten Tamamen Alınmışsa -->
+        <div v-if="tamamlaForm.kalan_borc <= 0.01" style="background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); color: #34d399; padding: 12px; border-radius: 8px; font-weight: 500; display: flex; align-items: center; gap: 10px;">
+          <i class="pi pi-check-circle" style="font-size: 1.3rem;"></i>
+          <span>Bu iş emrinin ödemesi daha önce tamamen alınmış.</span>
+        </div>
+
+        <!-- Kalan Borç Varsa Ödeme Seçenekleri -->
+        <template v-else>
+          <div class="form-group">
+            <label>Kapanış Ödeme Seçeneği <span class="zorunlu-alan">*</span></label>
+            <div style="display: flex; flex-direction: column; gap: 10px; background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="radio" value="full" v-model="tamamlaForm.payment_option" style="accent-color: #10b981;" />
+                <span style="color: #fff;"><strong>Tamamı ödendi</strong> ({{ tlFormatla(tamamlaForm.kalan_borc) }} tahsil edildi)</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="radio" value="partial" v-model="tamamlaForm.payment_option" style="accent-color: #f59e0b;" />
+                <span style="color: #fff;"><strong>Kısmi ödeme alındı</strong> (Bir kısmı tahsil edildi)</span>
+              </label>
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="radio" value="none" v-model="tamamlaForm.payment_option" style="accent-color: #ef4444;" />
+                <span style="color: #fff;"><strong>Ödeme alınmadı / Veresiye</strong> (Açık borç olarak kalsın)</span>
+              </label>
+            </div>
+          </div>
+
+          <div v-if="tamamlaForm.payment_option === 'partial'" class="form-group">
+            <label>Alınan Ödeme Tutarı (TL) <span class="zorunlu-alan">*</span></label>
+            <InputText
+              type="number"
+              step="0.01"
+              v-model="tamamlaForm.amount"
+              style="width: 100%"
+            />
+          </div>
+
+          <div v-if="tamamlaForm.payment_option !== 'none'" class="form-group">
+            <label>Ödeme Yöntemi <span class="zorunlu-alan">*</span></label>
+            <Dropdown
+              v-model="tamamlaForm.payment_method"
+              :options="['Nakit', 'Kart', 'Havale / EFT', 'Diğer']"
+              style="width: 100%"
+            />
+          </div>
+
+          <div v-if="tamamlaForm.payment_option !== 'none'" class="form-group">
+            <label>Ödeme Tarihi</label>
+            <InputText
+              type="date"
+              v-model="tamamlaForm.payment_date"
+              style="width: 100%"
+            />
+          </div>
+
+          <div v-if="tamamlaForm.payment_option !== 'none'" class="form-group">
+            <label>Açıklama / Not</label>
+            <InputText
+              v-model="tamamlaForm.note"
+              placeholder="Kapanış ödemesi açıklaması..."
+              style="width: 100%"
+            />
+          </div>
+        </template>
+      </div>
+
+      <template #footer>
+        <Button label="Vazgeç" icon="pi pi-times" text @click="tamamlaDialogAcik = false" />
+        <Button label="İş Emrini Tamamla" icon="pi pi-check" severity="success" @click="tamamlaVeOdemeKaydet" />
+      </template>
+    </Dialog>
+
+    <!-- Ödeme İptal Dialog -->
+    <Dialog
+      v-model:visible="odemeIptalDialogAcik"
+      header="Ödeme Kaydını İptal Et"
+      :style="{ width: '460px' }"
+      modal
+    >
+      <div style="display: flex; flex-direction: column; gap: 14px; padding-top: 8px;">
+        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); padding: 12px; border-radius: 8px; color: #f87171;">
+          <strong>Dikkat:</strong> Ödeme kaydı fiziksel olarak silinmeyecek, yetkili iptal kaydı olarak işaretlenecek ve toplam tahsilattan düşecektir.
+        </div>
+
+        <div class="form-group">
+          <label>İptal Sebebi <span class="zorunlu-alan">*</span></label>
+          <Textarea
+            v-model="iptalForm.cancel_reason"
+            rows="3"
+            placeholder="Örn: Hatalı tutar girildi, nakit ödeme iade edildi..."
+            style="width: 100%"
+            autofocus
+          />
+        </div>
+      </div>
+
+      <template #footer>
+        <Button label="Vazgeç" icon="pi pi-times" text @click="odemeIptalDialogAcik = false" />
+        <Button label="Ödemeyi İptal Et" icon="pi pi-ban" severity="danger" @click="odemeIptalKaydet" />
       </template>
     </Dialog>
 
@@ -1674,6 +2158,18 @@ onMounted(() => {
                   <div class="total-row">
                     <span>Genel Toplam</span>
                     <span>{{ tlFormatla(kalemler.reduce((toplam, kalem) => toplam + Number(kalem.total_price || 0), 0) || seciliIsEmri?.total_price) }}</span>
+                  </div>
+                  <div class="total-row" style="margin-top: 4px; font-size: 12px; color: #555;">
+                    <span>Tahsil Edilen:</span>
+                    <span>{{ tlFormatla(odemeOzeti.toplam_tahsilat) }}</span>
+                  </div>
+                  <div class="total-row" style="font-size: 12px; color: #555;">
+                    <span>Kalan Borç:</span>
+                    <span>{{ tlFormatla(odemeOzeti.kalan_borc) }}</span>
+                  </div>
+                  <div class="total-row" style="font-size: 12px; color: #555;">
+                    <span>Ödeme Durumu:</span>
+                    <span>{{ odemeOzeti.odeme_durumu }}</span>
                   </div>
                 </div>
               </div>
@@ -2001,7 +2497,128 @@ onMounted(() => {
           </DataTable>
         </div>
 
-                <div class="extra-info-panel">
+        <!-- Ödeme Durumu ve Tahsilat Paneli -->
+        <div style="background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 18px; border-radius: 10px; margin-top: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+            <div>
+              <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-title);">Ödeme Durumu</h3>
+              <p style="margin: 4px 0 0; font-size: 0.85rem; color: var(--text-muted);">Bu iş emrine ait ödeme özeti ve tahsilat geçmişi.</p>
+            </div>
+            <Button
+              label="Ödeme Al"
+              icon="pi pi-credit-card"
+              severity="success"
+              @click="odemeAlModalAc"
+            />
+          </div>
+
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px;">
+            <div style="background: rgba(15, 23, 42, 0.4); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+              <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase; font-weight: 600;">İş Emri Toplamı</span>
+              <strong style="font-size: 1.1rem; color: var(--text-primary); display: block; margin-top: 4px;">{{ tlFormatla(odemeOzeti.total_price) }}</strong>
+            </div>
+
+            <div style="background: rgba(16, 185, 129, 0.1); padding: 12px; border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.2);">
+              <span style="font-size: 0.8rem; color: #34d399; display: block; text-transform: uppercase; font-weight: 600;">Toplam Tahsil Edilen</span>
+              <strong style="font-size: 1.1rem; color: #34d399; display: block; margin-top: 4px;">{{ tlFormatla(odemeOzeti.toplam_tahsilat) }}</strong>
+            </div>
+
+            <div style="background: rgba(239, 68, 68, 0.1); padding: 12px; border-radius: 8px; border: 1px solid rgba(239, 68, 68, 0.2);">
+              <span style="font-size: 0.8rem; color: #f87171; display: block; text-transform: uppercase; font-weight: 600;">Kalan Borç</span>
+              <strong style="font-size: 1.1rem; color: #f87171; display: block; margin-top: 4px;">{{ tlFormatla(odemeOzeti.kalan_borc) }}</strong>
+            </div>
+
+            <div style="background: rgba(15, 23, 42, 0.4); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; flex-direction: column; justify-content: center;">
+              <span style="font-size: 0.8rem; color: var(--text-muted); display: block; text-transform: uppercase; font-weight: 600; margin-bottom: 4px;">Ödeme Durumu</span>
+              <Tag
+                :value="odemeOzeti.odeme_durumu"
+                :severity="getOdemeSeverity(odemeOzeti.odeme_durumu)"
+                style="align-self: start; font-weight: bold;"
+              />
+            </div>
+          </div>
+
+          <!-- Ödeme Geçmişi Tablosu -->
+          <DataTable
+            :value="odemeGecmisi"
+            responsiveLayout="scroll"
+            emptyMessage="Henüz tahsilat kaydı bulunmuyor."
+            class="p-datatable-sm"
+          >
+            <Column header="Tarih">
+              <template #body="slotProps">
+                <span :style="{ textDecoration: slotProps.data.is_cancelled ? 'line-through' : 'none', color: slotProps.data.is_cancelled ? '#94a3b8' : 'inherit' }">
+                  {{ tarihFormatla(slotProps.data.payment_date) }}
+                </span>
+              </template>
+            </Column>
+
+            <Column header="Tutar">
+              <template #body="slotProps">
+                <strong :style="{ textDecoration: slotProps.data.is_cancelled ? 'line-through' : 'none', color: slotProps.data.is_cancelled ? '#94a3b8' : '#34d399' }">
+                  {{ tlFormatla(slotProps.data.amount) }}
+                </strong>
+              </template>
+            </Column>
+
+            <Column field="payment_method" header="Ödeme Yöntemi">
+              <template #body="slotProps">
+                <span :style="{ textDecoration: slotProps.data.is_cancelled ? 'line-through' : 'none', color: slotProps.data.is_cancelled ? '#94a3b8' : 'inherit' }">
+                  {{ slotProps.data.payment_method }}
+                </span>
+              </template>
+            </Column>
+
+            <Column header="Alan Usta">
+              <template #body="slotProps">
+                <span :style="{ textDecoration: slotProps.data.is_cancelled ? 'line-through' : 'none', color: slotProps.data.is_cancelled ? '#94a3b8' : 'inherit' }">
+                  {{ slotProps.data.received_by_master_name || '-' }}
+                </span>
+              </template>
+            </Column>
+
+            <Column header="Açıklama">
+              <template #body="slotProps">
+                <span :style="{ textDecoration: slotProps.data.is_cancelled ? 'line-through' : 'none', color: slotProps.data.is_cancelled ? '#94a3b8' : 'inherit' }">
+                  {{ slotProps.data.note || '-' }}
+                </span>
+              </template>
+            </Column>
+
+            <Column header="Durum">
+              <template #body="slotProps">
+                <Tag
+                  v-if="slotProps.data.is_cancelled"
+                  value="İptal"
+                  severity="danger"
+                  style="font-size: 0.75rem;"
+                />
+                <Tag
+                  v-else
+                  value="Aktif"
+                  severity="success"
+                  style="font-size: 0.75rem;"
+                />
+              </template>
+            </Column>
+
+            <Column header="İşlem" style="width: 90px; text-align: center;">
+              <template #body="slotProps">
+                <Button
+                  v-if="!slotProps.data.is_cancelled"
+                  icon="pi pi-ban"
+                  outlined
+                  rounded
+                  severity="danger"
+                  title="Ödemeyi İptal Et"
+                  @click="odemeIptalModalAc(slotProps.data)"
+                />
+              </template>
+            </Column>
+          </DataTable>
+        </div>
+
+        <div class="extra-info-panel">
           <div>
             <h3>Ek Bilgiler</h3>
             <p>İşlem geçmişi ve iç maliyet/kâr hesabı gerektiğinde açılır.</p>
@@ -2546,5 +3163,160 @@ onMounted(() => {
 
 :global(html[data-theme="light"] .extra-info-panel p) {
   color: #374151 !important;
+}
+
+/* Kompakt Hibrit Liste / Tablo Stilleri (72px Yükseklik) */
+.work-orders-table-panel {
+  background: var(--bg-panel, #1e293b);
+  border: 1px solid var(--border-color, #334155);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.table-header-row {
+  display: grid;
+  grid-template-columns: 20% 38% 18% 12% 12%;
+  align-items: center;
+  padding: 10px 16px;
+  background: rgba(15, 23, 42, 0.6);
+  border-bottom: 1px solid var(--border-color, #334155);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted, #94a3b8);
+}
+
+.table-body-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.work-order-table-row {
+  display: grid;
+  grid-template-columns: 20% 38% 18% 12% 12%;
+  align-items: center;
+  height: 72px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border-color, #334155);
+  background: var(--bg-panel, #1e293b);
+  cursor: pointer;
+  transition: background 0.15s ease-in-out;
+  user-select: none;
+}
+
+.work-order-table-row:last-child {
+  border-bottom: none;
+}
+
+.work-order-table-row:hover {
+  background: rgba(56, 189, 248, 0.05);
+}
+
+.work-order-table-row.is-selected {
+  background: rgba(56, 189, 248, 0.09);
+  box-shadow: inset 3px 0 0 #38bdf8;
+}
+
+.col-plate-master {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding-right: 12px;
+  min-width: 0;
+}
+
+.plate-text {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: var(--text-title, #fff);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.master-customer-text {
+  font-size: 0.78rem;
+  color: var(--text-muted, #94a3b8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.col-desc-date {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding-right: 16px;
+  min-width: 0;
+}
+
+.desc-text {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--text-title, #f1f5f9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.date-text {
+  font-size: 0.76rem;
+  color: var(--text-muted, #94a3b8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.col-finance {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding-right: 12px;
+  min-width: 0;
+}
+
+.price-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-title, #fff);
+}
+
+.payment-badge-text {
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.col-status {
+  display: flex;
+  align-items: center;
+}
+
+.durum-dropdown-compact {
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.durum-dropdown-compact :deep(.p-dropdown-label) {
+  padding: 0;
+}
+
+.col-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.empty-state-row {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-muted, #94a3b8);
+  font-size: 0.9rem;
 }
 </style>

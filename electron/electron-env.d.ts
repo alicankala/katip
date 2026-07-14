@@ -52,6 +52,12 @@ interface Window {
     isEmriKalemleriGetir: (workOrderId: number) => Promise<any>
     isEmriKalemEkle: (kalem: any) => Promise<any>
     isEmriKalemSil: (itemId: number) => Promise<any>
+    isEmriOdemeleriGetir: (workOrderId: number) => Promise<any>
+    isEmriOdemeEkle: (odeme: any) => Promise<any>
+    isEmriOdemeIptal: (veri: any) => Promise<any>
+    isEmriOdemeOzetiGetir: (workOrderId: number) => Promise<any>
+    musteriIsEmriAlacaklariGetir: (customerId?: number) => Promise<any>
+    isEmriTamamlaVeOdemeKaydet: (veri: any) => Promise<any>
 
     // Ana Panel / Geçmiş
     istatistikleriGetir: () => Promise<any>
@@ -65,6 +71,7 @@ veritabaniBilgileriGetir: () => Promise<any>
 
     // Cari Hesaplar
     cariHesapleriGetir: () => Promise<any>
+    cariHesaplariGetir: () => Promise<any>
     cariHesapEkle: (hesap: any) => Promise<any>
     cariHesapGuncelle: (hesap: any) => Promise<any>
     cariHesapSil: (id: number) => Promise<any>

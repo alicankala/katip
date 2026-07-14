@@ -58,17 +58,32 @@ function kanalEkle(kanal: string, fonksiyon: (event: IpcMainInvokeEvent, ...args
   ipcMain.handle(kanal, fonksiyon)
 }
 function isEmriToplaminiGuncelle(workOrderId: number | string): void {
+  const woId = Number(workOrderId)
   const toplam = db.prepare(`
     SELECT COALESCE(SUM(total_price), 0) AS toplam
     FROM work_order_items
     WHERE work_order_id = ?
-  `).get(Number(workOrderId))
+  `).get(woId) as any
+
+  const yeniToplam = Number(toplam?.toplam || 0)
+
+  const tahsilat = db.prepare(`
+    SELECT COALESCE(SUM(amount), 0) AS toplam
+    FROM work_order_payments
+    WHERE work_order_id = ? AND IFNULL(is_cancelled, 0) = 0
+  `).get(woId) as any
+
+  const toplamTahsilat = Number(tahsilat?.toplam || 0)
+
+  if (yeniToplam < toplamTahsilat - 0.01) {
+    throw new Error('İş emri toplamı alınmış ödemelerin altına düşürülemez.')
+  }
 
   db.prepare(`
     UPDATE work_orders
     SET total_price = ?
     WHERE id = ?
-  `).run(Number(toplam?.toplam || 0), Number(workOrderId))
+  `).run(yeniToplam, woId)
 }
 
 function getErrorMessage(err: unknown): string {
@@ -1022,7 +1037,12 @@ kanalEkle('is-emirleri-getir', () => {
       customers.name AS customer_name,
       customers.phone AS customer_phone,
       opened_master.name AS opened_by_master_name,
-      closed_master.name AS closed_by_master_name
+      closed_master.name AS closed_by_master_name,
+      COALESCE((
+        SELECT SUM(amount)
+        FROM work_order_payments
+        WHERE work_order_id = work_orders.id AND IFNULL(is_cancelled, 0) = 0
+      ), 0) AS toplam_tahsilat
     FROM work_orders
     JOIN vehicles ON work_orders.vehicle_id = vehicles.id
     JOIN customers ON vehicles.customer_id = customers.id
@@ -1118,6 +1138,16 @@ kanalEkle('is-emri-sil', (_event, id: any) => {
 
     if (!isEmri) {
       throw new Error('Silinecek iş emri bulunamadı.')
+    }
+
+    const aktifOdeme = db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM work_order_payments
+      WHERE work_order_id = ? AND IFNULL(is_cancelled, 0) = 0
+    `).get(workOrderId) as any
+
+    if (aktifOdeme && Number(aktifOdeme.count) > 0) {
+      throw new Error('Bu iş emrinde tahsilat kaydı bulunduğu için silinemez. Önce tahsilat kayıtlarını kontrol edin.')
     }
 
     const kalemler = db.prepare(`
@@ -1340,6 +1370,363 @@ kanalEkle('is-emri-tekrar-ac', (_event, veri: any) => {
     return transaction()
   } catch (error) {
     console.error('İş emri tekrar açma hatası:', error)
+    return { success: false, error: getErrorMessage(error) }
+  }
+})
+
+// İş emri ödemelerini getir
+kanalEkle('is-emri-odemeleri-getir', (_event, workOrderId?: any) => {
+  try {
+    let query = `
+      SELECT 
+        work_order_payments.*,
+        m1.name AS received_by_master_name,
+        m2.name AS cancelled_by_master_name,
+        vehicles.plate,
+        customers.name AS customer_name
+      FROM work_order_payments
+      JOIN work_orders ON work_order_payments.work_order_id = work_orders.id
+      JOIN vehicles ON work_orders.vehicle_id = vehicles.id
+      JOIN customers ON vehicles.customer_id = customers.id
+      LEFT JOIN masters m1 ON work_order_payments.received_by = m1.id
+      LEFT JOIN masters m2 ON work_order_payments.cancelled_by = m2.id
+    `
+    const params: any[] = []
+
+    if (workOrderId) {
+      query += ` WHERE work_order_payments.work_order_id = ? `
+      params.push(Number(workOrderId))
+    }
+
+    query += ` ORDER BY work_order_payments.id DESC `
+
+    const odemeler = db.prepare(query).all(...params)
+
+    return { success: true, odemeler }
+  } catch (error) {
+    console.error('İş emri ödemeleri getirme hatası:', error)
+    return { success: false, error: getErrorMessage(error) }
+  }
+})
+
+// İş emri ödemesi ekle
+kanalEkle('is-emri-odeme-ekle', (_event, odeme: any) => {
+  const transaction = db.transaction(() => {
+    const workOrderId = Number(odeme.work_order_id)
+    const amount = Number(odeme.amount) || 0
+    const paymentMethod = String(odeme.payment_method || 'Nakit').trim()
+    const paymentDate = String(odeme.payment_date || new Date().toISOString().slice(0, 10)).trim()
+    const note = String(odeme.note || '').trim()
+    const activeMasterId = odeme.active_master_id !== undefined && odeme.active_master_id !== null && odeme.active_master_id !== '' && odeme.active_master_id !== 'admin'
+      ? Number(odeme.active_master_id)
+      : null
+
+    if (!workOrderId) {
+      throw new Error('İş emri seçilmelidir.')
+    }
+
+    const isEmri = db.prepare(`
+      SELECT * FROM work_orders WHERE id = ?
+    `).get(workOrderId) as any
+
+    if (!isEmri) {
+      throw new Error('İş emri bulunamadı.')
+    }
+
+    if (amount <= 0) {
+      throw new Error('Ödeme tutarı 0\'dan büyük olmalıdır.')
+    }
+
+    if (!paymentMethod) {
+      throw new Error('Ödeme yöntemi seçilmelidir.')
+    }
+
+    // Toplam tahsilatı ve kalan borcu hesapla
+    const tahsilat = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) AS toplam
+      FROM work_order_payments
+      WHERE work_order_id = ? AND IFNULL(is_cancelled, 0) = 0
+    `).get(workOrderId) as any
+
+    const toplamTahsilat = Number(tahsilat?.toplam || 0)
+    const kalanBorc = Number((isEmri.total_price - toplamTahsilat).toFixed(2))
+
+    if (amount > kalanBorc + 0.01) {
+      throw new Error(`Ödeme tutarı kalan borçtan (${kalanBorc.toLocaleString('tr-TR')} TL) büyük olamaz.`)
+    }
+
+    db.prepare(`
+      INSERT INTO work_order_payments (
+        work_order_id,
+        amount,
+        payment_method,
+        payment_date,
+        received_by,
+        note
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).run(workOrderId, amount, paymentMethod, paymentDate, activeMasterId, note)
+
+    return { success: true }
+  })
+
+  try {
+    return transaction()
+  } catch (error) {
+    console.error('İş emri ödeme ekleme hatası:', error)
+    return { success: false, error: getErrorMessage(error) }
+  }
+})
+
+// İş emri ödemesi iptal et
+kanalEkle('is-emri-odeme-iptal', (_event, veri: any) => {
+  const transaction = db.transaction(() => {
+    const paymentId = Number(veri.payment_id)
+    const cancelReason = String(veri.cancel_reason || '').trim()
+    const activeMasterId = veri.active_master_id !== undefined && veri.active_master_id !== null && veri.active_master_id !== '' && veri.active_master_id !== 'admin'
+      ? Number(veri.active_master_id)
+      : null
+
+    if (!paymentId) {
+      throw new Error('İptal edilecek ödeme kaydı bulunamadı.')
+    }
+
+    if (!cancelReason) {
+      throw new Error('İptal sebebi girilmesi zorunludur.')
+    }
+
+    const odeme = db.prepare(`
+      SELECT * FROM work_order_payments WHERE id = ?
+    `).get(paymentId) as any
+
+    if (!odeme) {
+      throw new Error('Ödeme kaydı bulunamadı.')
+    }
+
+    if (odeme.is_cancelled === 1) {
+      throw new Error('Bu ödeme kaydı zaten iptal edilmiş.')
+    }
+
+    const cancelledAt = new Date().toISOString()
+
+    db.prepare(`
+      UPDATE work_order_payments
+      SET 
+        is_cancelled = 1,
+        cancelled_at = ?,
+        cancelled_by = ?,
+        cancel_reason = ?
+      WHERE id = ?
+    `).run(cancelledAt, activeMasterId, cancelReason, paymentId)
+
+    return { success: true }
+  })
+
+  try {
+    return transaction()
+  } catch (error) {
+    console.error('İş emri ödeme iptal hatası:', error)
+    return { success: false, error: getErrorMessage(error) }
+  }
+})
+
+// İş emri ödeme özetini getir
+kanalEkle('is-emri-odeme-ozeti-getir', (_event, workOrderId: any) => {
+  try {
+    const woId = Number(workOrderId)
+    const isEmri = db.prepare(`
+      SELECT id, total_price FROM work_orders WHERE id = ?
+    `).get(woId) as any
+
+    if (!isEmri) {
+      throw new Error('İş emri bulunamadı.')
+    }
+
+    const tahsilat = db.prepare(`
+      SELECT COALESCE(SUM(amount), 0) AS toplam
+      FROM work_order_payments
+      WHERE work_order_id = ? AND IFNULL(is_cancelled, 0) = 0
+    `).get(woId) as any
+
+    const totalPrice = Number(isEmri.total_price || 0)
+    const toplamTahsilat = Number(tahsilat?.toplam || 0)
+    const kalanBorc = Number((totalPrice - toplamTahsilat).toFixed(2))
+
+    let odemeDurumu = 'Ödenmedi'
+    if (toplamTahsilat <= 0) {
+      odemeDurumu = 'Ödenmedi'
+    } else if (kalanBorc > 0.01) {
+      odemeDurumu = 'Kısmi Ödendi'
+    } else if (Math.abs(kalanBorc) <= 0.01) {
+      odemeDurumu = 'Ödendi'
+    } else {
+      odemeDurumu = 'Fazla Ödeme'
+    }
+
+    return {
+      success: true,
+      ozet: {
+        work_order_id: woId,
+        total_price: totalPrice,
+        toplam_tahsilat: toplamTahsilat,
+        kalan_borc: kalanBorc,
+        odeme_durumu: odemeDurumu
+      }
+    }
+  } catch (error) {
+    console.error('İş emri ödeme özeti hatası:', error)
+    return { success: false, error: getErrorMessage(error) }
+  }
+})
+
+// Müşteri iş emri alacaklarını getir (Cari Hesap için)
+kanalEkle('musteri-is-emri-alacaklari-getir', (_event, customerId?: any) => {
+  try {
+    let query = `
+      SELECT
+        work_orders.id AS work_order_id,
+        work_orders.vehicle_id,
+        work_orders.total_price,
+        work_orders.status AS work_order_status,
+        work_orders.created_at,
+        work_orders.closed_at,
+        vehicles.plate,
+        vehicles.brand,
+        vehicles.model,
+        customers.id AS customer_id,
+        customers.name AS customer_name,
+        customers.phone AS customer_phone,
+        COALESCE((
+          SELECT SUM(amount)
+          FROM work_order_payments
+          WHERE work_order_id = work_orders.id AND IFNULL(is_cancelled, 0) = 0
+        ), 0) AS toplam_tahsilat
+      FROM work_orders
+      JOIN vehicles ON work_orders.vehicle_id = vehicles.id
+      JOIN customers ON vehicles.customer_id = customers.id
+    `
+    const params: any[] = []
+
+    if (customerId) {
+      query += ` WHERE customers.id = ? `
+      params.push(Number(customerId))
+    }
+
+    query += ` ORDER BY work_orders.id DESC`
+
+    const list = db.prepare(query).all(...params) as any[]
+
+    const alacaklar = list.map(item => {
+      const totalPrice = Number(item.total_price || 0)
+      const toplamTahsilat = Number(item.toplam_tahsilat || 0)
+      const kalanBorc = Number((totalPrice - toplamTahsilat).toFixed(2))
+
+      let odemeDurumu = 'Ödenmedi'
+      if (toplamTahsilat <= 0) {
+        odemeDurumu = 'Ödenmedi'
+      } else if (kalanBorc > 0.01) {
+        odemeDurumu = 'Kısmi Ödendi'
+      } else if (Math.abs(kalanBorc) <= 0.01) {
+        odemeDurumu = 'Ödendi'
+      } else {
+        odemeDurumu = 'Fazla Ödeme'
+      }
+
+      return {
+        ...item,
+        total_price: totalPrice,
+        toplam_tahsilat: toplamTahsilat,
+        kalan_borc: kalanBorc,
+        odeme_durumu: odemeDurumu
+      }
+    })
+
+    return { success: true, alacaklar }
+  } catch (error) {
+    console.error('Müşteri iş emri alacakları hatası:', error)
+    return { success: false, error: getErrorMessage(error) }
+  }
+})
+
+// İş emri tamamla ve ödeme kaydet (Tek transaction)
+kanalEkle('is-emri-tamamla-ve-odeme-kaydet', (_event, veri: any) => {
+  const transaction = db.transaction(() => {
+    const workOrderId = Number(veri.id)
+    const activeMasterId = veri.active_master_id !== undefined && veri.active_master_id !== null && veri.active_master_id !== '' && veri.active_master_id !== 'admin'
+      ? Number(veri.active_master_id)
+      : null
+    const paymentOption = String(veri.payment_option || 'none') // 'full' | 'partial' | 'none'
+    const amount = Number(veri.amount) || 0
+    const paymentMethod = String(veri.payment_method || 'Nakit').trim()
+    const paymentDate = String(veri.payment_date || new Date().toISOString().slice(0, 10)).trim()
+    const note = String(veri.note || '').trim()
+
+    if (!workOrderId) {
+      throw new Error('İş emri seçilmelidir.')
+    }
+
+    const wo = db.prepare('SELECT * FROM work_orders WHERE id = ?').get(workOrderId) as any
+    if (!wo) {
+      throw new Error('İş emri bulunamadı.')
+    }
+
+    // Update status to Tamamlandı
+    db.prepare(`
+      UPDATE work_orders
+      SET 
+        status = 'Tamamlandı',
+        closed_at = COALESCE(closed_at, CURRENT_TIMESTAMP),
+        closed_by_master_id = COALESCE(closed_by_master_id, ?)
+      WHERE id = ?
+    `).run(activeMasterId, workOrderId)
+
+    if (paymentOption === 'full' || paymentOption === 'partial') {
+      const tahsilat = db.prepare(`
+        SELECT COALESCE(SUM(amount), 0) AS toplam
+        FROM work_order_payments
+        WHERE work_order_id = ? AND IFNULL(is_cancelled, 0) = 0
+      `).get(workOrderId) as any
+
+      const toplamTahsilat = Number(tahsilat?.toplam || 0)
+      const kalanBorc = Number((wo.total_price - toplamTahsilat).toFixed(2))
+
+      // Kalan borç 0 veya tolerans dahilinde 0 ise ödeme ekleme yapma!
+      if (kalanBorc > 0.01) {
+        let odenecekTutar = paymentOption === 'full' ? kalanBorc : amount
+        odenecekTutar = Number(odenecekTutar.toFixed(2))
+
+        if (odenecekTutar > 0) {
+          if (odenecekTutar > kalanBorc + 0.01) {
+            throw new Error(`Ödeme tutarı kalan borçtan (${kalanBorc.toLocaleString('tr-TR')} TL) büyük olamaz.`)
+          }
+
+          db.prepare(`
+            INSERT INTO work_order_payments (
+              work_order_id,
+              amount,
+              payment_method,
+              payment_date,
+              received_by,
+              note
+            ) VALUES (?, ?, ?, ?, ?, ?)
+          `).run(
+            workOrderId,
+            odenecekTutar,
+            paymentMethod,
+            paymentDate,
+            activeMasterId,
+            note || (paymentOption === 'full' ? 'İş emri kapatılırken alınan tam ödeme' : 'İş emri kapatılırken alınan kısmi ödeme')
+          )
+        }
+      }
+    }
+
+    return { success: true }
+  })
+
+  try {
+    return transaction()
+  } catch (error) {
+    console.error('İş emri tamamlama ve ödeme kaydetme hatası:', error)
     return { success: false, error: getErrorMessage(error) }
   }
 })
@@ -1947,7 +2334,12 @@ SELECT
   vehicles.model,
   vehicles.chassis,
   opened_master.name AS opened_by_master_name,
-  closed_master.name AS closed_by_master_name
+  closed_master.name AS closed_by_master_name,
+  COALESCE((
+    SELECT SUM(amount)
+    FROM work_order_payments
+    WHERE work_order_id = work_orders.id AND IFNULL(is_cancelled, 0) = 0
+  ), 0) AS toplam_tahsilat
 FROM work_orders
 JOIN vehicles ON work_orders.vehicle_id = vehicles.id
 LEFT JOIN masters opened_master ON work_orders.opened_by_master_id = opened_master.id
@@ -1999,7 +2391,12 @@ kanalEkle('servis-gecmisi-ara', (_event, aramaMetni: any) => {
         customers.name AS customer_name,
         customers.phone AS customer_phone,
         opened_master.name AS opened_by_master_name,
-        closed_master.name AS closed_by_master_name
+        closed_master.name AS closed_by_master_name,
+        COALESCE((
+          SELECT SUM(amount)
+          FROM work_order_payments
+          WHERE work_order_id = work_orders.id AND IFNULL(is_cancelled, 0) = 0
+        ), 0) AS toplam_tahsilat
       FROM work_orders
       JOIN vehicles ON work_orders.vehicle_id = vehicles.id
       JOIN customers ON vehicles.customer_id = customers.id

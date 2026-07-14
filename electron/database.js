@@ -368,6 +368,31 @@ migrationCalistir(18, () => {
   kolonEkleEksikse('parts', 'critical_stock_enabled', 'INTEGER DEFAULT 1')
 })
 
+migrationCalistir(19, () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS work_order_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      work_order_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      payment_method TEXT NOT NULL DEFAULT 'Nakit',
+      payment_date TEXT NOT NULL,
+      received_by INTEGER,
+      note TEXT,
+      is_cancelled INTEGER NOT NULL DEFAULT 0,
+      cancelled_at TEXT,
+      cancelled_by INTEGER,
+      cancel_reason TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_work_order_payments_work_order
+    ON work_order_payments(work_order_id);
+
+    CREATE INDEX IF NOT EXISTS idx_work_order_payments_date
+    ON work_order_payments(payment_date);
+  `)
+})
+
   console.log('Veritabanı hazır ve tablolar oluşturuldu! Yol:', dbPath)
 }
 

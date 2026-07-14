@@ -41,6 +41,12 @@ isEmriKalemGuncelle: (kalem) => ipcRenderer.invoke('is-emri-kalem-guncelle', kal
 isEmriKalemSil: (itemId) => ipcRenderer.invoke('is-emri-kalem-sil', itemId),
 isEmriLoglariGetir: (workOrderId) => ipcRenderer.invoke('is-emri-loglari-getir', workOrderId),
 isEmriTekrarAc: (veri) => ipcRenderer.invoke('is-emri-tekrar-ac', veri),
+isEmriOdemeleriGetir: (workOrderId) => ipcRenderer.invoke('is-emri-odemeleri-getir', workOrderId),
+isEmriOdemeEkle: (odeme) => ipcRenderer.invoke('is-emri-odeme-ekle', odeme),
+isEmriOdemeIptal: (veri) => ipcRenderer.invoke('is-emri-odeme-iptal', veri),
+isEmriOdemeOzetiGetir: (workOrderId) => ipcRenderer.invoke('is-emri-odeme-ozeti-getir', workOrderId),
+musteriIsEmriAlacaklariGetir: (customerId) => ipcRenderer.invoke('musteri-is-emri-alacaklari-getir', customerId),
+isEmriTamamlaVeOdemeKaydet: (veri) => ipcRenderer.invoke('is-emri-tamamla-ve-odeme-kaydet', veri),
 
 // İstatistikler / Geçmiş (Ana Panel)
 istatistikleriGetir: () => ipcRenderer.invoke('istatistikleri-getir'),
@@ -57,6 +63,7 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
 
   // Cari Hesaplar
   cariHesapleriGetir: () => ipcRenderer.invoke('cari-hesaplari-getir'),
+  cariHesaplariGetir: () => ipcRenderer.invoke('cari-hesaplari-getir'),
   cariHesapEkle: (hesap) => ipcRenderer.invoke('cari-hesap-ekle', hesap),
   cariHesapGuncelle: (hesap) => ipcRenderer.invoke('cari-hesap-guncelle', hesap),
   cariHesapSil: (id) => ipcRenderer.invoke('cari-hesap-sil', id),
