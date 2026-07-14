@@ -461,7 +461,7 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="setting-row">
+        <div class="setting-row" :class="{ 'border-none': !isAdmin }">
           <div class="setting-info">
             <div class="setting-name">Tema</div>
             <div class="setting-desc">Arayüz renk teması tercihi</div>
@@ -477,67 +477,69 @@ onMounted(async () => {
           </div>
         </div>
 
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-name">Liste Yoğunluğu</div>
-            <div class="setting-desc">Listelerde satır yüksekliği ve boşluk seviyesi</div>
+        <template v-if="isAdmin">
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name">Liste Yoğunluğu</div>
+              <div class="setting-desc">Listelerde satır yüksekliği ve boşluk seviyesi</div>
+            </div>
+            <div class="setting-control">
+              <Dropdown
+                v-model="ayarlarForm.list_density"
+                :options="yogunlukOptions"
+                optionLabel="label"
+                optionValue="value"
+                class="compact-dropdown"
+              />
+            </div>
           </div>
-          <div class="setting-control">
-            <Dropdown
-              v-model="ayarlarForm.list_density"
-              :options="yogunlukOptions"
-              optionLabel="label"
-              optionValue="value"
-              class="compact-dropdown"
-            />
-          </div>
-        </div>
 
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-name">İş Emirleri Açılış Filtresi</div>
-            <div class="setting-desc">İş Emirleri ekranı açıldığında varsayılan süzgeç</div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name">İş Emirleri Açılış Filtresi</div>
+              <div class="setting-desc">İş Emirleri ekranı açıldığında varsayılan süzgeç</div>
+            </div>
+            <div class="setting-control">
+              <Dropdown
+                v-model="ayarlarForm.work_orders_default_filter"
+                :options="filtreOptions"
+                optionLabel="label"
+                optionValue="value"
+                class="compact-dropdown"
+              />
+            </div>
           </div>
-          <div class="setting-control">
-            <Dropdown
-              v-model="ayarlarForm.work_orders_default_filter"
-              :options="filtreOptions"
-              optionLabel="label"
-              optionValue="value"
-              class="compact-dropdown"
-            />
-          </div>
-        </div>
 
-        <div class="setting-row">
-          <div class="setting-info">
-            <div class="setting-name">Kritik Stok Uyarıları</div>
-            <div class="setting-desc">Stok seviyesi kritik parçalar için uyarılama ve gösterimler</div>
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name">Kritik Stok Uyarıları</div>
+              <div class="setting-desc">Stok seviyesi kritik parçalar için uyarılama ve gösterimler</div>
+            </div>
+            <div class="setting-control">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="ayarlarForm.show_critical_stock_warnings" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
-          <div class="setting-control">
-            <label class="toggle-switch">
-              <input type="checkbox" v-model="ayarlarForm.show_critical_stock_warnings" />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-        </div>
 
-        <div class="setting-row border-none">
-          <div class="setting-info">
-            <div class="setting-name">Telefon Erişimini Otomatik Başlat</div>
-            <div class="setting-desc">Uygulama açılışında mobil bağlantı sunucusunu otomatik başlat</div>
+          <div class="setting-row border-none">
+            <div class="setting-info">
+              <div class="setting-name">Telefon Erişimini Otomatik Başlat</div>
+              <div class="setting-desc">Uygulama açılışında mobil bağlantı sunucusunu otomatik başlat</div>
+            </div>
+            <div class="setting-control">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="ayarlarForm.phone_server_auto_start" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
-          <div class="setting-control">
-            <label class="toggle-switch">
-              <input type="checkbox" v-model="ayarlarForm.phone_server_auto_start" />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-        </div>
+        </template>
       </div>
 
       <!-- 3. İŞ EMRİ VE ÖDEME -->
-      <div class="settings-card panel">
+      <div class="settings-card panel" v-if="isAdmin">
         <div class="card-header">
           <div class="card-header-title">
             <i class="pi pi-wallet card-icon icon-blue"></i>
