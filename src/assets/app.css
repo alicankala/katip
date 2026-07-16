@@ -43,29 +43,29 @@
 }
 
 html[data-theme="light"] {
-  --bg-primary: #f0f4f8;
-  --bg-sidebar: #ffffff;
+  --bg-primary: #e6ecf2;
+  --bg-sidebar: #f2f5f8;
   --bg-panel: #ffffff;
   --bg-card: #ffffff;
-  --bg-card-hover: #f1f5f9;
+  --bg-card-hover: #eaf0f6;
   --bg-input: #ffffff;
-  --bg-active-box: #f8fafc;
-  --border-color: #c8d5e3;
-  --border-color-soft: #dde6ef;
-  --text-primary: #0f172a;
-  --text-secondary: #445569;
-  --text-muted: #7a94a8;
+  --bg-active-box: #edf2f7;
+  --border-color: #cbd5e1;
+  --border-color-soft: #e2e8f0;
+  --text-primary: #1e293b;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
   --text-title: #0f172a;
   --accent-color: #2563eb;
   --accent-color-hover: #1d4ed8;
-  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.07);
-  --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
-  --shadow-lg: 0 10px 20px -3px rgba(0, 0, 0, 0.1), 0 4px 8px -2px rgba(0, 0, 0, 0.05);
-  --shadow-xl: 0 20px 30px -5px rgba(0, 0, 0, 0.12), 0 10px 12px -5px rgba(0, 0, 0, 0.06);
-  --status-open-bg: rgba(239, 68, 68, 0.08);
-  --status-pending-bg: rgba(245, 158, 11, 0.08);
-  --status-done-bg: rgba(16, 185, 129, 0.08);
-  --status-critical-bg: rgba(239, 68, 68, 0.06);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 20px -3px rgba(0, 0, 0, 0.08), 0 4px 8px -2px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 20px 30px -5px rgba(0, 0, 0, 0.1), 0 10px 12px -5px rgba(0, 0, 0, 0.05);
+  --status-open-bg: rgba(239, 68, 68, 0.1);
+  --status-pending-bg: rgba(245, 158, 11, 0.1);
+  --status-done-bg: rgba(16, 185, 129, 0.1);
+  --status-critical-bg: rgba(239, 68, 68, 0.08);
 }
 
 * {
@@ -640,3 +640,68 @@ html[data-density] .app-content .work-orders-table-panel .work-order-table-row {
   height: var(--work-order-row-height);
   padding-inline: 16px;
 }
+
+/* ── Light Theme Global Overrides for Hybrid Lists & Work Orders ─────── */
+html[data-theme="light"] .work-orders-table-panel {
+  background: var(--bg-panel) !important;
+  border-color: var(--border-color) !important;
+}
+
+html[data-theme="light"] .table-header-row {
+  background: #e2e8f0 !important;
+  color: var(--text-secondary) !important;
+  border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme="light"] .work-order-table-row {
+  background: var(--bg-card) !important;
+  border-bottom-color: var(--border-color) !important;
+}
+
+html[data-theme="light"] .work-order-table-row:hover {
+  background: #eaf0f6 !important;
+}
+
+html[data-theme="light"] .work-order-table-row.is-selected {
+  background: #dbeafe !important;
+  box-shadow: inset 3px 0 0 var(--accent-color) !important;
+}
+
+html[data-theme="light"] .plate-text,
+html[data-theme="light"] .desc-text,
+html[data-theme="light"] .price-text {
+  color: var(--text-title) !important;
+}
+
+html[data-theme="light"] .master-customer-text,
+html[data-theme="light"] .date-text {
+  color: var(--text-secondary) !important;
+}
+
+html[data-theme="light"] .extra-info-panel,
+html[data-theme="light"] .internal-profit-panel,
+html[data-theme="light"] .work-order-log-panel {
+  background: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+}
+
+html[data-theme="light"] .profit-card,
+html[data-theme="light"] .work-order-log-item,
+html[data-theme="light"] .inline-kalem-panel,
+html[data-theme="light"] .inline-empty-panel {
+  background: var(--bg-active-box) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Hardcoded dark inline background overrides in light theme */
+html[data-theme="light"] div[style*="background: rgba(15, 23, 42"],
+html[data-theme="light"] div[style*="background: #0f172a"] {
+  background: var(--bg-active-box) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+html[data-theme="light"] div[style*="background: #0f172a"] span[style*="color: #fff"] {
+  color: var(--text-primary) !important;
+}
+
