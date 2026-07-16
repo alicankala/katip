@@ -811,7 +811,7 @@ onUnmounted(() => {
       modal
     >
       <div class="dialog-form" style="display: flex; flex-direction: column; gap: 14px;">
-        <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color, #334155);">
+        <div style="background: var(--bg-active-box); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
           <div><strong>Müşteri:</strong> {{ musteriOdemeForm.customer_name }}</div>
           <div><strong>Plaka:</strong> {{ musteriOdemeForm.plate }}</div>
           <div><strong>Kalan Borç:</strong> <span style="color: #f87171; font-weight: bold;">{{ tlFormatla(musteriOdemeForm.kalan_borc) }}</span></div>
@@ -877,14 +877,14 @@ onUnmounted(() => {
 
         <div class="form-group">
           <label>Cari Yönü (Tip) <span class="zorunlu-alan">*</span></label>
-          <div style="display: flex; gap: 16px; margin-top: 4px; background: rgba(15, 23, 42, 0.5); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color, #334155);">
+          <div style="display: flex; gap: 16px; margin-top: 4px; background: var(--bg-active-box); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
             <div style="display: flex; align-items: center; gap: 6px;">
               <input type="radio" id="dir-borc" value="Borç" v-model="cariForm.direction" style="width: 16px; height: 16px; accent-color: #ef4444;" />
-              <label for="dir-borc" style="cursor: pointer; margin: 0; font-size: 0.88rem; color: #fff;">Borç (Tedarikçi)</label>
+              <label for="dir-borc" style="cursor: pointer; margin: 0; font-size: 0.88rem; color: var(--text-title);">Borç (Tedarikçi)</label>
             </div>
             <div style="display: flex; align-items: center; gap: 6px;">
               <input type="radio" id="dir-alacak" value="Alacak" v-model="cariForm.direction" style="width: 16px; height: 16px; accent-color: #10b981;" />
-              <label for="dir-alacak" style="cursor: pointer; margin: 0; font-size: 0.88rem; color: #fff;">Alacak (Müşteri)</label>
+              <label for="dir-alacak" style="cursor: pointer; margin: 0; font-size: 0.88rem; color: var(--text-title);">Alacak (Müşteri)</label>
             </div>
           </div>
         </div>
@@ -925,7 +925,7 @@ onUnmounted(() => {
       modal
     >
       <div class="dialog-form" style="display: flex; flex-direction: column; gap: 14px;">
-        <div style="background: rgba(15, 23, 42, 0.6); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color, #334155);">
+        <div style="background: var(--bg-active-box); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
           <strong>Cari:</strong> {{ seciliCari?.name }} ({{ seciliCari?.type }})
         </div>
 
@@ -964,7 +964,7 @@ onUnmounted(() => {
       modal
     >
       <div class="dialog-form" style="display: flex; flex-direction: column; gap: 14px;">
-        <div style="background: rgba(15, 23, 42, 0.6); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color, #334155);">
+        <div style="background: var(--bg-active-box); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
           <div><strong>Cari:</strong> {{ seciliCari?.name }}</div>
           <div><strong>Kalan Borcumuz:</strong> <span style="color: #f87171; font-weight: bold;">{{ tlFormatla(seciliCari?.remaining_debt) }}</span></div>
         </div>
@@ -1054,10 +1054,10 @@ onUnmounted(() => {
       modal
     >
       <div v-if="seciliCari" style="display: flex; flex-direction: column; gap: 16px;">
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: rgba(15, 23, 42, 0.5); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color, #334155);">
-          <div><span style="color: var(--text-muted, #94a3b8); font-size: 12px;">Toplam Borçlandırma:</span> <strong style="display: block; color: var(--text-title, #fff);">{{ tlFormatla(seciliCari.total_debt) }}</strong></div>
-          <div><span style="color: var(--text-muted, #94a3b8); font-size: 12px;">Yapılan Ödeme:</span> <strong style="display: block; color: #34d399;">{{ tlFormatla(seciliCari.total_paid) }}</strong></div>
-          <div><span style="color: var(--text-muted, #94a3b8); font-size: 12px;">Kalan Borcumuz:</span> <strong style="display: block; color: #f87171;">{{ tlFormatla(seciliCari.remaining_debt) }}</strong></div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: var(--bg-active-box); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+          <div><span style="color: var(--text-muted); font-size: 12px;">Toplam Borçlandırma:</span> <strong style="display: block; color: var(--text-title);">{{ tlFormatla(seciliCari.total_debt) }}</strong></div>
+          <div><span style="color: var(--text-muted); font-size: 12px;">Yapılan Ödeme:</span> <strong style="display: block; color: #34d399;">{{ tlFormatla(seciliCari.total_paid) }}</strong></div>
+          <div><span style="color: var(--text-muted); font-size: 12px;">Kalan Borcumuz:</span> <strong style="display: block; color: #f87171;">{{ tlFormatla(seciliCari.remaining_debt) }}</strong></div>
         </div>
 
         <h4 style="margin: 0; font-size: 14px; color: var(--text-title, #fff);">İşlem ve Ödeme Geçmişi</h4>

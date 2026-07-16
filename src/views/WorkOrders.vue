@@ -552,6 +552,97 @@ const odemeIptalKaydet = async () => {
   }
 }
 
+// ── İş Emri Detay Sekme Durumu ──────────────────────────────────
+const detaySekmesi = ref('kalemler') // 'kalemler' | 'fotograflar' | 'odemeler' | 'gecmis'
+
+// ── Araç Fotoğrafları (Kabul / Hasar Tespiti) Yönetimi ─────────
+const fotograflar = ref([])
+const fotografKategorisiFiltre = ref('tumu')
+const fotograflarYukleniyor = ref(false)
+const seciliFotografModal = ref(null)
+
+const fotograflariYukle = async (workOrderId) => {
+  if (!workOrderId || !window.api?.isEmriFotograflariGetir) {
+    fotograflar.value = []
+    return
+  }
+  fotograflarYukleniyor.value = true
+  try {
+    const res = await window.api.isEmriFotograflariGetir(workOrderId)
+    if (res?.success) {
+      fotograflar.value = res.fotograflar || []
+    } else {
+      fotograflar.value = []
+    }
+  } catch (err) {
+    console.error('Fotoğraflar yüklenemedi:', err)
+    fotograflar.value = []
+  } finally {
+    fotograflarYukleniyor.value = false
+  }
+}
+
+const fotografYukleModalAc = async () => {
+  if (!seciliIsEmri.value?.id || !window.api?.isEmriFotografYukleDialog) return
+  try {
+    const res = await window.api.isEmriFotografYukleDialog({
+      work_order_id: seciliIsEmri.value.id,
+      category: fotografKategorisiFiltre.value === 'tumu' ? 'Araç Kabul' : fotografKategorisiFiltre.value
+    })
+    if (res?.success) {
+      basariMesaji(`${res.count || 1} adet fotoğraf yüklendi.`)
+      fotograflariYukle(seciliIsEmri.value.id)
+    } else if (res?.error) {
+      hataMesaji(res.error)
+    }
+  } catch (err) {
+    hataMesaji('Fotoğraf eklenirken hata oluştu.')
+  }
+}
+
+const fotografSil = async (photoId) => {
+  if (!photoId || !window.api?.isEmriFotografSil) return
+  if (!confirm('Bu fotoğrafı silmek istediğinize emin misiniz?')) return
+  try {
+    const res = await window.api.isEmriFotografSil(photoId)
+    if (res?.success) {
+      basariMesaji('Fotoğraf silindi.')
+      if (seciliFotografModal.value?.id === photoId) {
+        seciliFotografModal.value = null
+      }
+      fotograflariYukle(seciliIsEmri.value.id)
+    } else {
+      hataMesaji(res?.error || 'Fotoğraf silinemedi.')
+    }
+  } catch (err) {
+    hataMesaji('Fotoğraf silinirken hata oluştu.')
+  }
+}
+
+const fotografGuncelle = async () => {
+  if (!seciliFotografModal.value?.id || !window.api?.isEmriFotografGuncelle) return
+  try {
+    const res = await window.api.isEmriFotografGuncelle({
+      id: seciliFotografModal.value.id,
+      category: seciliFotografModal.value.category,
+      note: seciliFotografModal.value.note
+    })
+    if (res?.success) {
+      basariMesaji('Fotoğraf notu ve kategorisi güncellendi.')
+      fotograflariYukle(seciliIsEmri.value.id)
+    } else {
+      hataMesaji(res?.error || 'Güncellenemedi.')
+    }
+  } catch (err) {
+    hataMesaji('Güncellenirken hata oluştu.')
+  }
+}
+
+const filtrelenmisFotograflar = computed(() => {
+  if (fotografKategorisiFiltre.value === 'tumu') return fotograflar.value
+  return fotograflar.value.filter(f => f.category === fotografKategorisiFiltre.value)
+})
+
 const tamamlaModalAc = async (isEmri) => {
   if (!isEmri?.id) return
   const ozetRes = await window.api.isEmriOdemeOzetiGetir(isEmri.id)
@@ -750,6 +841,7 @@ if (seciliIsEmri.value?.id === isEmri.id) {
     return
   }
 
+  detaySekmesi.value = 'kalemler'
   seciliIsEmri.value = isEmri
   islemGecmisiAcik.value = false
 maliyetKarAcik.value = false
@@ -764,6 +856,7 @@ maliyetKarAcik.value = false
 
   await kalemleriGetir(isEmri.id)
   await odemeleriGetir(isEmri.id)
+  await fotograflariYukle(isEmri.id)
 
   if (typeof isEmriLoglariGetir === 'function') {
     await isEmriLoglariGetir(isEmri.id)
@@ -1659,7 +1752,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Toolbar & Filtre Çubuğu -->
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: var(--bg-panel, #1e293b); border: 1px solid var(--border-color, #334155); padding: 12px 16px; border-radius: 12px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); padding: 12px 16px; border-radius: 12px;">
       <div style="display: flex; gap: 6px; flex-wrap: wrap;">
         <Button
           :label="`Açık (${durumSayisi('Açık')})`"
@@ -1894,7 +1987,7 @@ onUnmounted(() => {
     >
       <div style="display: flex; flex-direction: column; gap: 14px; padding-top: 8px;">
         <div
-          style="background: #1f2937; border: 1px solid #374151; padding: 12px; border-radius: 8px; color: #cbd5e1;"
+          style="background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; color: var(--text-primary);"
         >
           <strong>Uyarı:</strong>
           Bu işlem tamamlanmış iş emrini tekrar açık duruma alır.
@@ -1938,7 +2031,7 @@ onUnmounted(() => {
       modal
     >
       <div style="display: flex; flex-direction: column; gap: 14px; padding-top: 8px;">
-        <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color, #334155);">
+        <div style="background: var(--bg-active-box); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
           <div><strong>Plaka:</strong> {{ seciliIsEmri?.plate }}</div>
           <div><strong>İş Emri Toplamı:</strong> {{ tlFormatla(odemeOzeti.total_price) }}</div>
           <div><strong>Mevcut Kalan Borç:</strong> <span style="color: #f87171; font-weight: bold;">{{ tlFormatla(odemeOzeti.kalan_borc) }}</span></div>
@@ -2001,7 +2094,7 @@ onUnmounted(() => {
       modal
     >
       <div style="display: flex; flex-direction: column; gap: 16px; padding-top: 8px;">
-        <div style="background: rgba(15, 23, 42, 0.6); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color, #334155);">
+        <div style="background: var(--bg-active-box); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
           <div><strong>Araç:</strong> {{ tamamlanacakIsEmri?.plate }} - {{ tamamlanacakIsEmri?.customer_name }}</div>
           <div><strong>İş Emri Toplamı:</strong> {{ tlFormatla(tamamlanacakIsEmri?.total_price) }}</div>
           <div><strong>Kalan Borç:</strong> <strong :style="{ color: tamamlaForm.kalan_borc <= 0.01 ? '#34d399' : '#f87171' }">{{ tlFormatla(tamamlaForm.kalan_borc) }}</strong></div>
@@ -2017,18 +2110,18 @@ onUnmounted(() => {
         <template v-else>
           <div class="form-group">
             <label>Kapanış Ödeme Seçeneği <span class="zorunlu-alan">*</span></label>
-            <div style="display: flex; flex-direction: column; gap: 10px; background: #0f172a; padding: 12px; border-radius: 8px; border: 1px solid #334155;">
+            <div style="display: flex; flex-direction: column; gap: 10px; background: var(--bg-active-box); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="radio" value="full" v-model="tamamlaForm.payment_option" style="accent-color: #10b981;" />
-                <span style="color: #fff;"><strong>Tamamı ödendi</strong> ({{ tlFormatla(tamamlaForm.kalan_borc) }} tahsil edildi)</span>
+                <span style="color: var(--text-title);"><strong>Tamamı ödendi</strong> ({{ tlFormatla(tamamlaForm.kalan_borc) }} tahsil edildi)</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="radio" value="partial" v-model="tamamlaForm.payment_option" style="accent-color: #f59e0b;" />
-                <span style="color: #fff;"><strong>Kısmi ödeme alındı</strong> (Bir kısmı tahsil edildi)</span>
+                <span style="color: var(--text-title);"><strong>Kısmi ödeme alındı</strong> (Bir kısmı tahsil edildi)</span>
               </label>
               <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                 <input type="radio" value="none" v-model="tamamlaForm.payment_option" style="accent-color: #ef4444;" />
-                <span style="color: #fff;"><strong>Ödeme alınmadı / Veresiye</strong> (Açık borç olarak kalsın)</span>
+                <span style="color: var(--text-title);"><strong>Ödeme alınmadı / Veresiye</strong> (Açık borç olarak kalsın)</span>
               </label>
             </div>
           </div>
@@ -2428,11 +2521,48 @@ onUnmounted(() => {
           </div>
         </div>
 
+        <!-- İş Emri Detay Sekme Menüsü -->
+        <div class="work-order-tabs" style="margin-top: 14px; margin-bottom: 14px; display: flex; gap: 8px; flex-wrap: wrap;">
+          <Button
+            :label="`İş Emri Kalemleri (${kalemler.length})`"
+            icon="pi pi-wrench"
+            size="small"
+            :severity="detaySekmesi === 'kalemler' ? 'primary' : 'secondary'"
+            :outlined="detaySekmesi !== 'kalemler'"
+            @click="detaySekmesi = 'kalemler'"
+          />
+          <Button
+            :label="`Araç Fotoğrafları (${fotograflar.length})`"
+            icon="pi pi-camera"
+            size="small"
+            :severity="detaySekmesi === 'fotograflar' ? 'primary' : 'secondary'"
+            :outlined="detaySekmesi !== 'fotograflar'"
+            @click="detaySekmesi = 'fotograflar'"
+          />
+          <Button
+            :label="`Ödemeler & Tahsilat (${odemeOzeti.odeme_durumu || 'Ödenmedi'})`"
+            icon="pi pi-credit-card"
+            size="small"
+            :severity="detaySekmesi === 'odemeler' ? 'primary' : 'secondary'"
+            :outlined="detaySekmesi !== 'odemeler'"
+            @click="detaySekmesi = 'odemeler'"
+          />
+          <Button
+            label="İşlem Geçmişi & Maliyet"
+            icon="pi pi-history"
+            size="small"
+            :severity="detaySekmesi === 'gecmis' ? 'primary' : 'secondary'"
+            :outlined="detaySekmesi !== 'gecmis'"
+            @click="detaySekmesi = 'gecmis'"
+          />
+        </div>
 
-        <div
-          v-if="!seciliIsEmriTamamlandi"
-          style="background: #1f2937; border: 1px solid #374151; padding: 15px; border-radius: 8px;"
-        >
+        <!-- SEKME 1: İş Emri Kalemleri (Parça & İşçilik) -->
+        <div v-if="detaySekmesi === 'kalemler'" style="display: flex; flex-direction: column; gap: 14px;">
+          <div
+            v-if="!seciliIsEmriTamamlandi"
+            style="background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px;"
+          >
           <h3 style="margin-top: 0;">Yeni Kalem Ekle</h3>
 
           <div style="display: grid; grid-template-columns: 130px 1fr 110px 130px 120px; gap: 10px; align-items: end;">
@@ -2506,12 +2636,12 @@ onUnmounted(() => {
 
         <div
           v-else
-          style="background: #1f2937; border: 1px solid #374151; padding: 15px; border-radius: 8px; color: #cbd5e1;"
+          style="background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px; color: var(--text-secondary);"
         >
           Bu iş emri tamamlandığı için kilitlidir. Parça, işçilik, açıklama veya tutar değiştirilemez. Gerekirse Tekrar Aç butonunu kullanın.
         </div>
 
-        <div style="background: #1e1e1e; padding: 15px; border-radius: 8px;">
+        <div style="background: var(--bg-panel); border: 1px solid var(--border-color); padding: 15px; border-radius: 8px;">
 <DataTable
   :value="kalemler"
   responsiveLayout="scroll"
@@ -2568,9 +2698,11 @@ onUnmounted(() => {
 </Column>
           </DataTable>
         </div>
+        </div>
 
-        <!-- Ödeme Durumu ve Tahsilat Paneli -->
-        <div style="background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 18px; border-radius: 10px; margin-top: 10px;">
+        <!-- SEKME 2: Ödemeler & Tahsilat -->
+        <div v-if="detaySekmesi === 'odemeler'">
+          <div style="background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 18px; border-radius: 10px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
             <div>
               <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-title);">Ödeme Durumu</h3>
@@ -2689,8 +2821,113 @@ onUnmounted(() => {
             </Column>
           </DataTable>
         </div>
+        </div>
 
-        <div class="extra-info-panel">
+        <!-- SEKME 3: Araç Fotoğrafları -->
+        <div v-if="detaySekmesi === 'fotograflar'">
+          <div style="background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 18px; border-radius: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+            <div>
+              <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-title); display: flex; align-items: center; gap: 8px;">
+                <i class="pi pi-camera" style="color: var(--accent-color);"></i>
+                Araç Fotoğrafları (Kabul / Hasar Tespiti)
+                <Tag :value="String(fotograflar.length)" severity="info" rounded style="font-size: 0.75rem;" />
+              </h3>
+              <p style="margin: 4px 0 0; font-size: 0.85rem; color: var(--text-muted);">
+                Araç kabulünde çekilen fotoğraflar, çizik/hasar görselleri ve sökülen parça fotoğrafları.
+              </p>
+            </div>
+            <Button
+              label="Fotoğraf Ekle"
+              icon="pi pi-plus"
+              severity="primary"
+              size="small"
+              @click="fotografYukleModalAc"
+            />
+          </div>
+
+          <!-- Kategori Filtreleri -->
+          <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px;">
+            <Button
+              v-for="cat in ['tumu', 'Araç Kabul', 'Hasar / Çizik', 'Sökülen Parça', 'Tamir Sonrası']"
+              :key="cat"
+              :label="cat === 'tumu' ? `Tümü (${fotograflar.length})` : cat"
+              size="small"
+              :severity="fotografKategorisiFiltre === cat ? 'info' : 'secondary'"
+              :text="fotografKategorisiFiltre !== cat"
+              @click="fotografKategorisiFiltre = cat"
+            />
+          </div>
+
+          <!-- Fotoğraflar Grid Görünümü -->
+          <div v-if="filtrelenmisFotograflar.length > 0" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;">
+            <div
+              v-for="photo in filtrelenmisFotograflar"
+              :key="photo.id"
+              style="position: relative; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color); background: var(--bg-card); cursor: pointer; transition: transform 0.15s ease;"
+              @click="seciliFotografModal = { ...photo }"
+            >
+              <img
+                :src="photo.url"
+                :alt="photo.file_name"
+                style="width: 100%; height: 130px; object-fit: cover; display: block;"
+              />
+              <div style="padding: 6px 8px; font-size: 0.78rem; display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.6); color: #fff; position: absolute; bottom: 0; left: 0; right: 0;">
+                <span style="font-weight: 600; font-size: 0.72rem; background: var(--accent-color); padding: 2px 6px; border-radius: 4px;">{{ photo.category }}</span>
+                <i class="pi pi-eye" style="font-size: 0.8rem;"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Boş Durum -->
+          <div v-else style="text-align: center; padding: 24px; color: var(--text-muted); font-size: 0.9rem; border: 1px dashed var(--border-color); border-radius: 8px;">
+            <i class="pi pi-image" style="font-size: 2rem; margin-bottom: 8px; opacity: 0.5; display: block;"></i>
+            <span>Henüz bu iş emrine ait fotoğraf yüklenmedi. "Fotoğraf Ekle" butonunu kullanarak görsel ekleyebilirsiniz.</span>
+          </div>
+        </div>
+
+        <!-- Fotoğraf Önizleme & Detay Dialog -->
+        <Dialog
+          v-model:visible="seciliFotografModal"
+          header="Fotoğraf Detayı & Önizleme"
+          :style="{ width: '680px' }"
+          modal
+        >
+          <div v-if="seciliFotografModal" style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="background: #000; border-radius: 8px; overflow: hidden; text-align: center; max-height: 420px; display: flex; align-items: center; justify-content: center;">
+              <img :src="seciliFotografModal.url" style="max-width: 100%; max-height: 420px; object-fit: contain;" />
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="form-group">
+                <label>Kategori</label>
+                <Dropdown
+                  v-model="seciliFotografModal.category"
+                  :options="['Araç Kabul', 'Hasar / Çizik', 'Sökülen Parça', 'Tamir Sonrası']"
+                  style="width: 100%;"
+                />
+              </div>
+
+              <div class="form-group">
+                <label>Not / Açıklama</label>
+                <InputText
+                  v-model="seciliFotografModal.note"
+                  placeholder="Örn: Sol kapıda 10 cm çizik var"
+                  style="width: 100%;"
+                />
+              </div>
+            </div>
+          </div>
+
+          <template #footer>
+            <Button label="Sil" icon="pi pi-trash" severity="danger" text @click="fotografSil(seciliFotografModal?.id)" />
+            <Button label="Kaydet" icon="pi pi-check" severity="success" @click="fotografGuncelle" />
+          </template>
+        </Dialog>
+        </div>
+
+        <!-- SEKME 4: İşlem Geçmişi & Maliyet / Kâr Hesabı -->
+        <div v-if="detaySekmesi === 'gecmis'" style="display: flex; flex-direction: column; gap: 14px;">
           <div>
             <h3>Ek Bilgiler</h3>
             <p>İşlem geçmişi ve iç maliyet/kâr hesabı gerektiğinde açılır.</p>
@@ -2969,8 +3206,8 @@ onUnmounted(() => {
   line-height: 1.3;
 }
 .extra-info-panel {
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 14px 15px;
   display: flex;
@@ -2981,12 +3218,12 @@ onUnmounted(() => {
 
 .extra-info-panel h3 {
   margin: 0;
-  color: #ffffff;
+  color: var(--text-title);
 }
 
 .extra-info-panel p {
   margin: 5px 0 0;
-  color: #94a3b8;
+  color: var(--text-secondary);
   font-size: 14px;
 }
 

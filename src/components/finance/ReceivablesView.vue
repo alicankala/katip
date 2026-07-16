@@ -118,7 +118,7 @@ const getStatusClass = (durum) => {
   <div class="receivables-view panel" style="display: flex; flex-direction: column; gap: 16px; background: var(--bg-panel, #1e293b); border: 1px solid var(--border-color, #334155); border-radius: 12px; padding: 20px;">
     <!-- Üst Kontrol & Filtre Barları -->
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
-      <div style="display: flex; gap: 6px; background: rgba(15, 23, 42, 0.4); padding: 4px; border-radius: 8px; border: 1px solid var(--border-color, #334155);">
+      <div style="display: flex; gap: 6px; background: var(--bg-active-box); padding: 4px; border-radius: 8px; border: 1px solid var(--border-color);">
         <Button 
           label="Tümü" 
           size="small" 

@@ -28,6 +28,7 @@ const sonAcikIsEmirleri = ref([])
 const dusukStokParcalari = ref([])
 
 const secereVerileri = ref([])
+const dashSeciliFotograf = ref(null)
 const gecmisAramaMetni = ref('')
 const gecmisArandi = ref(false)
 const gecmisYukleniyor = ref(false)
@@ -676,6 +677,27 @@ onUnmounted(() => {
                   </div>
                 </div>
 
+                <!-- Eklenen Araç Fotoğrafları Galeri -->
+                <div v-if="visit.fotograflar && visit.fotograflar.length > 0" class="visit-photos-section" style="margin-top: 6px;">
+                  <span style="font-weight: 700; color: var(--text-title); font-size: 12px; display: flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                    <i class="pi pi-camera" style="color: var(--accent-color, #38bdf8);"></i>
+                    Fotoğraflar ({{ visit.fotograflar.length }})
+                  </span>
+                  <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;">
+                    <div
+                      v-for="foto in visit.fotograflar"
+                      :key="foto.id"
+                      style="position: relative; flex: 0 0 110px; height: 80px; border-radius: 6px; overflow: hidden; border: 1px solid var(--border-color); cursor: pointer;"
+                      @click="dashSeciliFotograf = foto"
+                    >
+                      <img :src="foto.url" :alt="foto.file_name" style="width: 100%; height: 100%; object-fit: cover;" />
+                      <span style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.65); color: #fff; font-size: 9px; font-weight: 600; padding: 2px 4px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                        {{ foto.category }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
               </div>
             </div>
 
@@ -687,6 +709,24 @@ onUnmounted(() => {
           </div>
         </div>
 
+      </div>
+    </Dialog>
+
+    <!-- Dashboard Fotoğraf Önizleme Lightbox -->
+    <Dialog
+      v-model:visible="dashSeciliFotograf"
+      modal
+      header="Araç Fotoğrafı Önizleme"
+      :style="{ width: '650px' }"
+    >
+      <div v-if="dashSeciliFotograf" style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="background: #000; border-radius: 8px; overflow: hidden; text-align: center; max-height: 420px; display: flex; align-items: center; justify-content: center;">
+          <img :src="dashSeciliFotograf.url" style="max-width: 100%; max-height: 420px; object-fit: contain;" />
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 0 4px;">
+          <Tag :value="dashSeciliFotograf.category || 'Fotoğraf'" severity="info" />
+          <span style="color: var(--text-secondary);">{{ dashSeciliFotograf.note || 'Not girilmemiş' }}</span>
+        </div>
       </div>
     </Dialog>
 

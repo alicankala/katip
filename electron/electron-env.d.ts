@@ -95,5 +95,9 @@ veritabaniBilgileriGetir: () => Promise<any>
     veritabaniKontrolEt: () => Promise<{ success: boolean; message: string; checkedAt?: string }>
     otomatikYedekAl: () => Promise<{ success: boolean; path?: string; filename?: string; error?: string }>
     logKlasoruAc: () => Promise<{ success: boolean; error?: string }>
+    isEmriFotograflariGetir: (workOrderId: number) => Promise<{ success: boolean; fotograflar?: any[]; error?: string }>
+    isEmriFotografYukleDialog: (veri: { work_order_id: number; category?: string; note?: string }) => Promise<{ success: boolean; count?: number; canceled?: boolean; error?: string }>
+    isEmriFotografSil: (photoId: number) => Promise<{ success: boolean; error?: string }>
+    isEmriFotografGuncelle: (veri: { id: number; category?: string; note?: string }) => Promise<{ success: boolean; error?: string }>
   }
 }

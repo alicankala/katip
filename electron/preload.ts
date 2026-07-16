@@ -100,5 +100,11 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   destekSistemBilgileriGetir: () => ipcRenderer.invoke('destek-sistem-bilgileri-getir'),
   veritabaniKontrolEt: () => ipcRenderer.invoke('veritabani-kontrol-et'),
   otomatikYedekAl: () => ipcRenderer.invoke('otomatik-yedek-al'),
-  logKlasoruAc: () => ipcRenderer.invoke('log-klasoru-ac')
+  logKlasoruAc: () => ipcRenderer.invoke('log-klasoru-ac'),
+
+  // Araç Fotoğrafları
+  isEmriFotograflariGetir: (workOrderId) => ipcRenderer.invoke('is-emri-fotograflari-getir', workOrderId),
+  isEmriFotografYukleDialog: (veri) => ipcRenderer.invoke('is-emri-fotograf-yukle-dialog', veri),
+  isEmriFotografSil: (photoId) => ipcRenderer.invoke('is-emri-fotograf-sil', photoId),
+  isEmriFotografGuncelle: (veri) => ipcRenderer.invoke('is-emri-fotograf-guncelle', veri)
 })

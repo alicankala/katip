@@ -8,11 +8,12 @@ import db, {
   topluAyarlariKaydetBackend,
   veritabaniKontrolEtBackend
 } from './database.js'
+import { hashPin, verifyPin } from './security'
 import { app, BrowserWindow, ipcMain, shell, dialog, Menu, type IpcMainInvokeEvent } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
-import { promises as fs } from 'node:fs'
-import { startPhoneServer, stopPhoneServer, isServerRunning, getCurrentPort, getLocalIPAddress, getLocalIPAddresses } from './phoneServer.js'
+import fsSync, { promises as fs } from 'node:fs'
+import { startPhoneServer, stopPhoneServer, isServerRunning, getCurrentPort, getLocalIPAddress, getLocalIPAddresses, runPhoneServerMigrations } from './phoneServer.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -207,16 +208,21 @@ function ipcKopruleriniKur() {
       }
 
       const usta = db.prepare(`
-        SELECT id, name, is_active
+        SELECT id, name, pin, is_active
         FROM masters
         WHERE id = ?
-          AND pin = ?
           AND IFNULL(is_active, 1) = 1
         LIMIT 1
-      `).get(masterId, pin) as any
+      `).get(masterId) as any
 
-      if (!usta) {
+      if (!usta || !verifyPin(pin, usta.pin)) {
         throw new Error('Usta veya PIN hatalı.')
+      }
+
+      if (usta.pin === pin) {
+        try {
+          db.prepare("UPDATE masters SET pin = ? WHERE id = ?").run(hashPin(pin), usta.id)
+        } catch (e) {}
       }
 
       return {
@@ -252,15 +258,14 @@ function ipcKopruleriniKur() {
       }
 
       const usta = db.prepare(`
-        SELECT id
+        SELECT id, pin
         FROM masters
         WHERE id = ?
-          AND pin = ?
           AND IFNULL(is_active, 1) = 1
         LIMIT 1
-      `).get(masterId, eskiPin) as any
+      `).get(masterId) as any
 
-      if (!usta) {
+      if (!usta || !verifyPin(eskiPin, usta.pin)) {
         throw new Error('Eski PIN hatalı.')
       }
 
@@ -268,7 +273,7 @@ function ipcKopruleriniKur() {
         UPDATE masters
         SET pin = ?
         WHERE id = ?
-      `).run(yeniPin, masterId)
+      `).run(hashPin(yeniPin), masterId)
 
       return { success: true }
     } catch (error) {
@@ -1183,25 +1188,31 @@ kanalEkle('is-emri-sil', (_event, id: any) => {
 
     for (const kalem of kalemler) {
       if (kalem.type === 'Parça' && kalem.part_id) {
-        db.prepare(`
-          UPDATE parts
-          SET stock = stock + ?
-          WHERE id = ?
-        `).run(
-          Number(kalem.quantity) || 0,
-          Number(kalem.part_id)
-        )
+        const partId = Number(kalem.part_id)
+        const miktar = Number(kalem.quantity) || 0
+
+        const parca = db.prepare(`
+          SELECT stock FROM parts WHERE id = ?
+        `).get(partId) as any
+
+        const eskiStok = Number(parca?.stock) || 0
+        const yeniStok = eskiStok + miktar
 
         db.prepare(`
-          INSERT INTO stock_movements (part_id, work_order_id, type, quantity, note)
-          VALUES (?, ?, ?, ?, ?)
-        `).run(
-          Number(kalem.part_id),
+          UPDATE parts
+          SET stock = ?
+          WHERE id = ?
+        `).run(yeniStok, partId)
+
+        stokHareketiKaydet({
+          partId,
           workOrderId,
-          'Giriş',
-          Number(kalem.quantity) || 0,
-          'İş emri silindiği için stok geri eklendi'
-        )
+          type: 'Giriş',
+          quantity: miktar,
+          oldStock: eskiStok,
+          newStock: yeniStok,
+          note: 'İş emri silindiği için stok geri eklendi'
+        })
       }
     }
 db.prepare(`
@@ -2468,10 +2479,39 @@ kanalEkle('servis-gecmisi-ara', (_event, aramaMetni: any) => {
       ORDER BY work_order_items.id ASC
     `)
 
+    const fotograflariGetir = db.prepare(`
+      SELECT id, file_name, file_path, category, note, created_at
+      FROM work_order_photos
+      WHERE work_order_id = ?
+      ORDER BY id DESC
+    `)
+
     const gecmis = kayitlar.map((kayit) => {
+      const photos = fotograflariGetir.all(Number(kayit.id)) as any[]
+      const fotograflar = photos.map((p) => {
+        let url = ''
+        try {
+          const fileData = fsSync.readFileSync(p.file_path)
+          const ext = path.extname(p.file_path).toLowerCase().replace('.', '') || 'jpeg'
+          const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+          url = `data:${mimeType};base64,${fileData.toString('base64')}`
+        } catch (e) {
+          console.warn('[Photos] Search foto okunamadı:', p.file_path, e)
+        }
+        return {
+          id: p.id,
+          file_name: p.file_name,
+          category: p.category || 'Araç Kabul',
+          note: p.note || '',
+          created_at: p.created_at,
+          url
+        }
+      })
+
       return {
         ...kayit,
-        kalemler: kalemleriGetir.all(Number(kayit.id))
+        kalemler: kalemleriGetir.all(Number(kayit.id)),
+        fotograflar
       }
     })
 
@@ -3127,6 +3167,140 @@ return {
       return { success: false, error: getErrorMessage(err) }
     }
   })
+
+  // 45. İş Emri Fotoğraflarını Getir
+  kanalEkle('is-emri-fotograflari-getir', async (_event, workOrderId: number) => {
+    try {
+      const woId = Number(workOrderId)
+      if (!woId) return { success: false, error: 'İş emri ID geçersiz.' }
+
+      const rows = db.prepare(`
+        SELECT * FROM work_order_photos
+        WHERE work_order_id = ?
+        ORDER BY id DESC
+      `).all(woId) as any[]
+
+      const fotograflar: any[] = []
+      for (const row of rows) {
+        let url = ''
+        try {
+          const fileData = await fs.readFile(row.file_path)
+          const ext = path.extname(row.file_path).toLowerCase().replace('.', '') || 'jpeg'
+          const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+          url = `data:${mimeType};base64,${fileData.toString('base64')}`
+        } catch (e) {
+          console.warn('[Photos] Dosya okunamadı:', row.file_path, e)
+        }
+
+        fotograflar.push({
+          id: row.id,
+          work_order_id: row.work_order_id,
+          file_name: row.file_name,
+          category: row.category || 'Araç Kabul',
+          note: row.note || '',
+          created_at: row.created_at,
+          url
+        })
+      }
+
+      return { success: true, fotograflar }
+    } catch (error) {
+      console.error('Fotoğrafları getirme hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 46. İş Emrine Fotoğraf Yükle (Dialog İle)
+  kanalEkle('is-emri-fotograf-yukle-dialog', async (_event, veri: { work_order_id: number; category?: string; note?: string }) => {
+    try {
+      const woId = Number(veri?.work_order_id)
+      if (!woId) return { success: false, error: 'İş emri seçilmedi.' }
+
+      const result = await dialog.showOpenDialog({
+        title: 'Fotoğraf Seçin (Araç Kabul / Hasar Tespiti)',
+        properties: ['openFile', 'multiSelections'],
+        filters: [{ name: 'Resim Dosyaları', extensions: ['jpg', 'jpeg', 'png', 'webp', 'bmp'] }]
+      })
+
+      if (result.canceled || !result.filePaths || result.filePaths.length === 0) {
+        return { success: false, canceled: true }
+      }
+
+      const photoDir = path.join(app.getPath('userData'), 'fotograflar')
+      await fs.mkdir(photoDir, { recursive: true })
+
+      const category = String(veri?.category || 'Araç Kabul').trim()
+      const note = String(veri?.note || '').trim()
+
+      let addedCount = 0
+      for (let i = 0; i < result.filePaths.length; i++) {
+        const srcPath = result.filePaths[i]
+        const ext = path.extname(srcPath)
+        const baseName = path.basename(srcPath, ext).replace(/[^a-zA-Z0-9_-]/g, '_')
+        const targetFileName = `wo_${woId}_${Date.now()}_${i}_${baseName}${ext}`
+        const targetPath = path.join(photoDir, targetFileName)
+
+        await fs.copyFile(srcPath, targetPath)
+
+        db.prepare(`
+          INSERT INTO work_order_photos (work_order_id, file_name, file_path, category, note)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(woId, targetFileName, targetPath, category, note)
+
+        addedCount++
+      }
+
+      return { success: true, count: addedCount }
+    } catch (error) {
+      console.error('Fotoğraf yükleme hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 47. İş Emri Fotoğrafı Sil
+  kanalEkle('is-emri-fotograf-sil', async (_event, photoId: number) => {
+    try {
+      const id = Number(photoId)
+      if (!id) return { success: false, error: 'Fotoğraf ID geçersiz.' }
+
+      const photo = db.prepare('SELECT * FROM work_order_photos WHERE id = ?').get(id) as any
+      if (photo && photo.file_path) {
+        try {
+          await fs.unlink(photo.file_path)
+        } catch (e) {
+          console.warn('[Photos] Fiziksel dosya silinemedi veya zaten yok:', photo.file_path)
+        }
+      }
+
+      db.prepare('DELETE FROM work_order_photos WHERE id = ?').run(id)
+      return { success: true }
+    } catch (error) {
+      console.error('Fotoğraf silme hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 48. Fotoğraf Notu / Kategorisi Güncelle
+  kanalEkle('is-emri-fotograf-guncelle', (_event, veri: { id: number; category?: string; note?: string }) => {
+    try {
+      const id = Number(veri?.id)
+      if (!id) return { success: false, error: 'Fotoğraf seçilmedi.' }
+
+      db.prepare(`
+        UPDATE work_order_photos
+        SET category = ?, note = ?
+        WHERE id = ?
+      `).run(
+        String(veri.category || 'Araç Kabul').trim(),
+        String(veri.note || '').trim(),
+        id
+      )
+      return { success: true }
+    } catch (error) {
+      console.error('Fotoğraf güncelleme hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
 }
 
 function formatBytes(bytes: number): string {
@@ -3254,11 +3428,17 @@ async function destekSistemBilgileriGetirBackend(): Promise<any> {
   }
 }
 
-app.on('before-quit', async () => {
+let isQuitting = false
+
+app.on('before-quit', async (event) => {
+  if (isQuitting) return
   try {
     const settingsRes = ayarlariGetirBackend()
     if (settingsRes?.settings?.backup_on_exit === 'true') {
+      event.preventDefault()
       await otomatikYedekAlBackend()
+      isQuitting = true
+      app.quit()
     }
   } catch (err) {
     console.error('[BackupOnExit] Hata:', err)
@@ -3280,6 +3460,7 @@ app.on('activate', () => {
 
 app.whenReady().then(async () => {
   initDB()
+  runPhoneServerMigrations()
   ipcKopruleriniKur()
   Menu.setApplicationMenu(null)
 

@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { app } from 'electron'
 import { createRequire } from 'node:module'
+import { hashPin, verifyPin } from './security'
 
 const require = createRequire(import.meta.url)
 const Database = require('better-sqlite3')
@@ -258,7 +259,7 @@ migrationCalistir(9, () => {
     WHERE NOT EXISTS (
       SELECT 1 FROM masters WHERE name = ?
     )
-  `).run('Ali Kala', '1111', 1, 'Ali Kala')
+  `).run('Ali Kala', hashPin('1111'), 1, 'Ali Kala')
 
   db.prepare(`
     INSERT INTO masters (name, pin, is_active)
@@ -266,7 +267,7 @@ migrationCalistir(9, () => {
     WHERE NOT EXISTS (
       SELECT 1 FROM masters WHERE name = ?
     )
-  `).run('Bünyamin Kala', '2222', 1, 'Bünyamin Kala')
+  `).run('Bünyamin Kala', hashPin('2222'), 1, 'Bünyamin Kala')
 
   db.prepare(`
     INSERT INTO masters (name, pin, is_active)
@@ -274,7 +275,17 @@ migrationCalistir(9, () => {
     WHERE NOT EXISTS (
       SELECT 1 FROM masters WHERE name = ?
     )
-  `).run('Yusuf Kala', '3333', 1, 'Yusuf Kala')
+  `).run('Yusuf Kala', hashPin('3333'), 1, 'Yusuf Kala')
+})
+
+migrationCalistir(22, () => {
+  const masters = db.prepare("SELECT id, pin FROM masters").all()
+  const updateStmt = db.prepare("UPDATE masters SET pin = ? WHERE id = ?")
+  for (const m of masters) {
+    if (m.pin && m.pin.length <= 6) {
+      updateStmt.run(hashPin(m.pin), m.id)
+    }
+  }
 })
 
 migrationCalistir(10, () => {
@@ -416,6 +427,47 @@ migrationCalistir(20, () => {
       value TEXT,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+  `)
+})
+
+migrationCalistir(21, () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS work_order_photos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      work_order_id INTEGER NOT NULL,
+      file_name TEXT NOT NULL,
+      file_path TEXT NOT NULL,
+      category TEXT DEFAULT 'Araç Kabul',
+      note TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(work_order_id) REFERENCES work_orders(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_work_order_photos_wo
+    ON work_order_photos(work_order_id);
+  `)
+})
+
+migrationCalistir(23, () => {
+  db.exec(`
+    -- Foreign Key and Fast Search Performance Indexes
+    CREATE INDEX IF NOT EXISTS idx_vehicles_customer_id ON vehicles(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_vehicles_plate ON vehicles(plate);
+
+    CREATE INDEX IF NOT EXISTS idx_work_orders_vehicle_id ON work_orders(vehicle_id);
+    CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status);
+    CREATE INDEX IF NOT EXISTS idx_work_orders_created_at ON work_orders(created_at);
+    CREATE INDEX IF NOT EXISTS idx_work_orders_opened_master ON work_orders(opened_by_master_id);
+    CREATE INDEX IF NOT EXISTS idx_work_orders_closed_master ON work_orders(closed_by_master_id);
+
+    CREATE INDEX IF NOT EXISTS idx_work_order_items_wo_id ON work_order_items(work_order_id);
+    CREATE INDEX IF NOT EXISTS idx_work_order_items_part_id ON work_order_items(part_id);
+
+    CREATE INDEX IF NOT EXISTS idx_stock_movements_part_id ON stock_movements(part_id);
+    CREATE INDEX IF NOT EXISTS idx_stock_movements_wo_id ON stock_movements(work_order_id);
+
+    CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+    CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);
   `)
 })
 

@@ -1,25 +1,30 @@
 import http from 'node:http'
 import os from 'node:os'
+import crypto from 'node:crypto'
 import db from './database.js'
+import { hashPin, verifyPin } from './security'
 
 // Data migration for existing mobile work orders and items
-try {
-  db.prepare("UPDATE work_orders SET status = 'Açık' WHERE status = 'Acik'").run()
-  db.prepare("UPDATE work_orders SET status = 'Tamamlandı' WHERE status = 'Tamamlandi'").run()
-  db.prepare("UPDATE work_orders SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL").run()
-  
-  db.prepare("UPDATE work_order_items SET type = 'İşçilik' WHERE type = 'Iscilik'").run()
-  db.prepare("UPDATE work_order_items SET type = 'Parça' WHERE type = 'Parca'").run()
-  
-  db.prepare("UPDATE stock_movements SET type = 'Çıkış' WHERE type = 'Cikis'").run()
-  db.prepare("UPDATE stock_movements SET type = 'Giriş' WHERE type = 'Giris'").run()
-} catch (e) {
-  console.error('[PhoneServer] Existing work orders migration error:', e)
+export function runPhoneServerMigrations() {
+  try {
+    db.prepare("UPDATE work_orders SET status = 'Açık' WHERE status = 'Acik'").run()
+    db.prepare("UPDATE work_orders SET status = 'Tamamlandı' WHERE status = 'Tamamlandi'").run()
+    db.prepare("UPDATE work_orders SET created_at = CURRENT_TIMESTAMP WHERE created_at IS NULL").run()
+    
+    db.prepare("UPDATE work_order_items SET type = 'İşçilik' WHERE type = 'Iscilik'").run()
+    db.prepare("UPDATE work_order_items SET type = 'Parça' WHERE type = 'Parca'").run()
+    
+    db.prepare("UPDATE stock_movements SET type = 'Çıkış' WHERE type = 'Cikis'").run()
+    db.prepare("UPDATE stock_movements SET type = 'Giriş' WHERE type = 'Giris'").run()
+  } catch (e) {
+    console.error('[PhoneServer] Existing work orders migration error:', e)
+  }
 }
 
 let server: http.Server | null = null
 let currentPort = 4317
 let isRunning = false
+const activeMobileSessions = new Map<string, { master_id: number; name: string; createdAt: number }>()
 
 export interface LocalAddress {
   name: string
@@ -1462,6 +1467,28 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
 
   <script>
     let activeUser = null;
+    let activeToken = localStorage.getItem('mobActiveToken') || null;
+
+    async function authFetch(url, options = {}) {
+      const token = activeToken || localStorage.getItem('mobActiveToken') || '';
+      options = options || {};
+      options.headers = options.headers || {};
+      if (token) {
+        options.headers['Authorization'] = 'Bearer ' + token;
+        options.headers['X-Mobile-Token'] = token;
+      }
+      const res = await fetch(url, options);
+      if (res.status === 401) {
+        localStorage.removeItem('mobActiveUser');
+        localStorage.removeItem('mobActiveToken');
+        activeUser = null;
+        activeToken = null;
+        loadMasters();
+        showScreen('login');
+        throw new Error('Oturum suresi doldu veya yetkisiz erisim.');
+      }
+      return res;
+    }
     let workOrders = [];
     let selectedPart = null;
     let currentTab = 'open';
@@ -1622,7 +1649,9 @@ async function loadMasters() {
 
         if (result.success) {
           activeUser = result.usta;
+          activeToken = result.token;
           localStorage.setItem('mobActiveUser', JSON.stringify(activeUser));
+          localStorage.setItem('mobActiveToken', activeToken);
           document.getElementById('user-display-name').textContent = activeUser.name;
           document.getElementById('login-pin').value = '';
           showScreen('dashboard');
@@ -1640,7 +1669,9 @@ async function loadMasters() {
     document.getElementById('logout-btn').addEventListener('click', () => {
       if (confirm('Cikis yapmak istediginize emin misiniz?')) {
         localStorage.removeItem('mobActiveUser');
+        localStorage.removeItem('mobActiveToken');
         activeUser = null;
+        activeToken = null;
         currentTab = 'open';
         loadMasters();
         showScreen('login');
@@ -1694,7 +1725,7 @@ async function loadMasters() {
 
     async function loadDashboard() {
       try {
-        const statsRes = await fetch('/api/dashboard');
+        const statsRes = await authFetch('/api/dashboard');
         const stats = await statsRes.json();
         
         document.getElementById('stat-open').textContent = stats.acikIsEmri || 0;
@@ -1866,7 +1897,7 @@ itemsList.innerHTML = items.map(item => {
         return;
       }
       try {
-        const res = await fetch('/api/work-orders/complete', {
+        const res = await authFetch('/api/work-orders/complete', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1910,7 +1941,7 @@ itemsList.innerHTML = items.map(item => {
       historySearchTimeout = setTimeout(async () => {
         document.getElementById('history-loading').style.display = 'block';
         try {
-          const res = await fetch('/api/customer-history/search?query=' + encodeURIComponent(query));
+          const res = await authFetch('/api/customer-history/search?query=' + encodeURIComponent(query));
           const data = await res.json();
           document.getElementById('history-loading').style.display = 'none';
           if (data.success) {
@@ -2010,7 +2041,7 @@ itemsList.innerHTML = items.map(item => {
       itemsContainer.innerHTML = '<div style="text-align: center; padding: 10px; color: var(--text-secondary);">Yukleniyor...</div>';
 
       try {
-        const res = await fetch('/api/work-orders/' + wo.work_order_id);
+        const res = await authFetch('/api/work-orders/' + wo.work_order_id);
         const data = await res.json();
         if (data.success) {
           const items = data.items || [];
@@ -2071,7 +2102,7 @@ itemsList.innerHTML = items.map(item => {
 
       plakaTimeout = setTimeout(async () => {
         try {
-          const res = await fetch('/api/vehicles/search?plate=' + val);
+          const res = await authFetch('/api/vehicles/search?plate=' + val);
           const data = await res.json();
           if (data.success && data.found) {
             const v = data.vehicle;
@@ -2111,7 +2142,7 @@ itemsList.innerHTML = items.map(item => {
       }
 
       try {
-        const res = await fetch('/api/service-reception', {
+        const res = await authFetch('/api/service-reception', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2181,7 +2212,7 @@ itemsList.innerHTML = items.map(item => {
       }
 
       try {
-        const res = await fetch('/api/work-order-items/labor', {
+        const res = await authFetch('/api/work-order-items/labor', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2240,7 +2271,7 @@ itemsList.innerHTML = items.map(item => {
 
       partsTimeout = setTimeout(async () => {
         try {
-          const res = await fetch('/api/parts/search?query=' + encodeURIComponent(val));
+          const res = await authFetch('/api/parts/search?query=' + encodeURIComponent(val));
           const parts = await res.json();
           renderPartsSearchList(parts);
         } catch (e) {
@@ -2350,7 +2381,7 @@ itemsList.innerHTML = items.map(item => {
       }
 
       try {
-        const res = await fetch('/api/work-order-items/part', {
+        const res = await authFetch('/api/work-order-items/part', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -2419,9 +2450,15 @@ itemsList.innerHTML = items.map(item => {
             try {
               const { master_id, pin } = JSON.parse(body)
               const usta = db.prepare("SELECT id, name, pin FROM masters WHERE id = ? AND IFNULL(is_active, 1) = 1").get(master_id) as any
-              if (usta && usta.pin === pin) {
+              if (usta && verifyPin(pin, usta.pin)) {
+                if (usta.pin === pin) {
+                  try { db.prepare("UPDATE masters SET pin = ? WHERE id = ?").run(hashPin(pin), usta.id) } catch (e) {}
+                }
+                const token = crypto.randomBytes(16).toString('hex')
+                activeMobileSessions.set(token, { master_id: usta.id, name: usta.name, createdAt: Date.now() })
+
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-                res.end(JSON.stringify({ success: true, usta: { id: usta.id, name: usta.name } }))
+                res.end(JSON.stringify({ success: true, usta: { id: usta.id, name: usta.name }, token }))
               } else {
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
                 res.end(JSON.stringify({ success: false, error: 'Hatali PIN veya kullanici.' }))
@@ -2431,6 +2468,17 @@ itemsList.innerHTML = items.map(item => {
               res.end(JSON.stringify({ success: false, error: 'Gecersiz veri' }))
             }
           })
+          return
+        }
+
+        // ── Bearer Token Authorization Middleware for Protected API Endpoints ──
+        const authHeader = req.headers['authorization'] || req.headers['x-mobile-token']
+        const token = Array.isArray(authHeader) ? authHeader[0] : authHeader
+        const cleanToken = token ? token.replace(/^Bearer\s+/i, '').trim() : ''
+
+        if (!cleanToken || !activeMobileSessions.has(cleanToken)) {
+          res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ success: false, error: 'Oturum suresi doldu veya yetkisiz erisim. Lutfen yeniden giris yapin.', requireLogin: true }))
           return
         }
 
