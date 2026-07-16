@@ -592,43 +592,51 @@ html[data-theme="light"] .p-datatable-thead > tr > th {
   width: 100%;
 }
 
-/* ── Liste Yoğunluğu (List Density) Kuralları ───────────────────────── */
-
-/* Kompakt Görünüm (Compact) */
-html[data-density="compact"] .app-content .p-datatable:not(.p-dialog .p-datatable) .p-datatable-tbody > tr > td,
-html[data-density="compact"] .app-content .table-panel:not(.p-dialog .table-panel) table tbody > tr > td {
-  padding: 5px 10px !important;
-  font-size: 12.5px !important;
+/* Liste yoğunluğu: diyaloglar uygulama kökünün dışına taşındığından yalnızca
+   ana içerikteki listeleri hedefler. Bu, ayarı tüm ana DataTable, düz tablo
+   ve iş emri satırlarında aynı anda uygular. */
+html[data-density="compact"] .app-content {
+  --list-cell-padding: 5px 10px;
+  --list-header-padding: 6px 10px;
+  --list-cell-font-size: 12.5px;
+  --list-header-font-size: 12px;
+  --work-order-row-height: 58px;
 }
 
-html[data-density="compact"] .app-content .p-datatable:not(.p-dialog .p-datatable) .p-datatable-thead > tr > th,
-html[data-density="compact"] .app-content .table-panel:not(.p-dialog .table-panel) table thead > tr > th {
-  padding: 6px 10px !important;
-  font-size: 12px !important;
+html[data-density="normal"] .app-content {
+  --list-cell-padding: 11px 16px;
+  --list-header-padding: 12px 16px;
+  --list-cell-font-size: 14px;
+  --list-header-font-size: 13px;
+  --work-order-row-height: 72px;
 }
 
-/* Normal Görünüm (Normal) */
-html[data-density="normal"] .app-content .p-datatable:not(.p-dialog .p-datatable) .p-datatable-tbody > tr > td,
-html[data-density="normal"] .app-content .table-panel:not(.p-dialog .table-panel) table tbody > tr > td {
-  padding: 11px 16px !important;
-  font-size: 14px !important;
+html[data-density="comfortable"] .app-content {
+  --list-cell-padding: 16px 20px;
+  --list-header-padding: 16px 20px;
+  --list-cell-font-size: 15px;
+  --list-header-font-size: 14.5px;
+  --work-order-row-height: 88px;
 }
 
-html[data-density="normal"] .app-content .p-datatable:not(.p-dialog .p-datatable) .p-datatable-thead > tr > th,
-html[data-density="normal"] .app-content .table-panel:not(.p-dialog .table-panel) table thead > tr > th {
-  padding: 12px 16px !important;
-  font-size: 13.5px !important;
+html[data-density] .app-content .p-datatable-tbody > tr > td,
+html[data-density] .app-content .table-panel table tbody > tr > td {
+  padding: var(--list-cell-padding) !important;
+  font-size: var(--list-cell-font-size) !important;
 }
 
-/* Rahat (Geniş) Görünüm (Comfortable) */
-html[data-density="comfortable"] .app-content .p-datatable:not(.p-dialog .p-datatable) .p-datatable-tbody > tr > td,
-html[data-density="comfortable"] .app-content .table-panel:not(.p-dialog .table-panel) table tbody > tr > td {
-  padding: 16px 20px !important;
-  font-size: 15px !important;
+html[data-density] .app-content .p-datatable-thead > tr > th,
+html[data-density] .app-content .table-panel table thead > tr > th {
+  padding: var(--list-header-padding) !important;
+  font-size: var(--list-header-font-size) !important;
 }
 
-html[data-density="comfortable"] .app-content .p-datatable:not(.p-dialog .p-datatable) .p-datatable-thead > tr > th,
-html[data-density="comfortable"] .app-content .table-panel:not(.p-dialog .table-panel) table thead > tr > th {
-  padding: 16px 20px !important;
-  font-size: 14.5px !important;
+html[data-density] .app-content .work-orders-table-panel .table-header-row {
+  padding: var(--list-header-padding);
+  font-size: var(--list-header-font-size);
+}
+
+html[data-density] .app-content .work-orders-table-panel .work-order-table-row {
+  height: var(--work-order-row-height);
+  padding-inline: 16px;
 }
