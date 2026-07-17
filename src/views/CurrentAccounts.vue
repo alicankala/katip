@@ -671,6 +671,390 @@ const verileriYenileDetayli = async () => {
   }
 }
 
+const ekstreYazdir = () => {
+  if (!seciliCari.value) {
+    uyariMesaji('Yazdırılacak cari hesap seçilemedi.')
+    return
+  }
+
+  const cari = seciliCari.value
+  const firma = {
+    unvan: 'Kâtip',
+    altBaslik: 'Oto Servis Takip Sistemi',
+    aciklama: 'Cari Hesap Ekstre Belgesi'
+  }
+
+  const guvenliMetin = (str) => {
+    if (str === null || str === undefined) return ''
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+  }
+
+  const sortedHistory = [...islemler.value, ...odemeler.value].sort(
+    (a, b) => new Date(a.date) - new Date(b.date)
+  )
+
+  const satirlarHtml = sortedHistory.map((item, index) => {
+    const tip = item.transaction_type
+      ? item.transaction_type
+      : `Ödeme (${item.payment_method || 'Nakit'})`
+    const aciklama = item.description || item.note || '-'
+    const tutar = tlFormatla(item.amount)
+
+    return `
+      <tr>
+        <td style="text-align: center;">${index + 1}</td>
+        <td>${guvenliMetin(tarihFormatla(item.date))}</td>
+        <td>${guvenliMetin(tip)}</td>
+        <td>${guvenliMetin(aciklama)}</td>
+        <td class="right strong">${guvenliMetin(tutar)}</td>
+      </tr>
+    `
+  }).join('')
+
+  const yazdirmaPenceresi = window.open('', '_blank')
+
+  if (!yazdirmaPenceresi) {
+    hataMesaji('Yazdırma penceresi açılması engellendi. Lütfen tarayıcı izinlerini kontrol edin.')
+    return
+  }
+
+  yazdirmaPenceresi.document.write(`
+    <!doctype html>
+    <html lang="tr">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Cari Hesap Ekstresi - ${guvenliMetin(cari.name)}</title>
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            padding: 24px;
+            font-family: Arial, Helvetica, sans-serif;
+            color: #111827;
+            background: #ffffff;
+            font-size: 12.5px;
+          }
+
+          .page {
+            max-width: 980px;
+            margin: 0 auto;
+          }
+
+          .top-header {
+            display: grid;
+            grid-template-columns: 1.4fr 0.8fr;
+            gap: 18px;
+            align-items: stretch;
+            border-bottom: 3px solid #111827;
+            padding-bottom: 16px;
+            margin-bottom: 18px;
+          }
+
+          .company-name {
+            font-size: 20px;
+            font-weight: bold;
+            margin: 0;
+            color: #111827;
+          }
+
+          .company-subtitle {
+            font-size: 13px;
+            color: #4b5563;
+            margin-top: 3px;
+          }
+
+          .company-desc {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 5px;
+          }
+
+          .document-box {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+          }
+
+          .document-title {
+            font-size: 18px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            color: #111827;
+          }
+
+          .document-no {
+            font-size: 12px;
+            font-weight: bold;
+            margin-top: 4px;
+          }
+
+          .muted {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 2px;
+          }
+
+          .section {
+            margin-bottom: 18px;
+          }
+
+          .section-title {
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-bottom: 1.5px solid #111827;
+            padding-bottom: 4px;
+            margin-bottom: 8px;
+          }
+
+          .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+          }
+
+          .info-item {
+            font-size: 11.5px;
+            line-height: 1.5;
+          }
+
+          .info-item strong {
+            color: #374151;
+          }
+
+          .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-top: 8px;
+          }
+
+          .summary-card {
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 10px;
+            background: #f9fafb;
+          }
+
+          .summary-label {
+            font-size: 10.5px;
+            color: #6b7280;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+          }
+
+          .summary-value {
+            font-size: 14px;
+            font-weight: bold;
+            color: #111827;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+          }
+
+          th {
+            background: #f3f4f6;
+            color: #374151;
+            font-weight: bold;
+            text-align: left;
+            border: 1px solid #d1d5db;
+            padding: 7px 9px;
+            font-size: 11px;
+            text-transform: uppercase;
+          }
+
+          td {
+            border: 1px solid #e5e7eb;
+            padding: 7px 9px;
+            font-size: 11.5px;
+          }
+
+          tr:nth-child(even) {
+            background: #f9fafb;
+          }
+
+          .right {
+            text-align: right;
+          }
+
+          .strong {
+            font-weight: bold;
+          }
+
+          .footer-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 50px;
+            margin-top: 45px;
+            page-break-inside: avoid;
+          }
+
+          .signature-box {
+            border-top: 1px dashed #9ca3af;
+            text-align: center;
+            padding-top: 8px;
+            font-size: 11.5px;
+            font-weight: bold;
+            color: #374151;
+          }
+
+          .signature-sub {
+            font-size: 10.5px;
+            color: #6b7280;
+            margin-top: 4px;
+            font-weight: normal;
+          }
+
+          .print-actions {
+            margin-bottom: 15px;
+            text-align: right;
+          }
+
+          .print-btn {
+            background: #2563eb;
+            color: #ffffff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+          }
+
+          .print-btn:hover {
+            background: #1d4ed8;
+          }
+
+          @media print {
+            body {
+              padding: 0;
+            }
+
+            .print-actions {
+              display: none;
+            }
+
+            .section {
+              break-inside: avoid;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="page">
+          <!-- Üst kısımdan yazdır butonu kaldırıldı, sağ alttaki yüzen butonlar kullanılacak -->
+
+          <div class="top-header">
+            <div class="company-box">
+              <h1 class="company-name">${guvenliMetin(firma.unvan)}</h1>
+              <div class="company-subtitle">${guvenliMetin(firma.altBaslik)}</div>
+              <div class="company-desc">${guvenliMetin(firma.aciklama)}</div>
+            </div>
+
+            <div class="document-box">
+              <div class="document-title">CARİ HESAP EKSTRESİ</div>
+              <div class="muted">Tarih: ${guvenliMetin(new Date().toLocaleString('tr-TR'))}</div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Cari Hesap Bilgileri</div>
+            <div class="info-grid">
+              <div class="info-item">
+                <div><strong>Cari Ünvanı:</strong> ${guvenliMetin(cari.name)}</div>
+                <div><strong>Cari Tipi:</strong> ${guvenliMetin(cari.type)}</div>
+              </div>
+              <div class="info-item">
+                <div><strong>Telefon:</strong> ${guvenliMetin(cari.phone || '-')}</div>
+                <div><strong>Hesap Türü:</strong> ${guvenliMetin(cari.direction === 'Alacak' ? 'Müşteri (Alacak Senedi)' : 'Tedarikçi (Borçlu Cari)')}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">Hesap Bakiyesi Özet</div>
+            <div class="summary-cards">
+              <div class="summary-card">
+                <div class="summary-label">Toplam Borçlandırma</div>
+                <div class="summary-value">${guvenliMetin(tlFormatla(cari.total_debt))}</div>
+              </div>
+              <div class="summary-card">
+                <div class="summary-label">Yapılan Ödemeler</div>
+                <div class="summary-value" style="color: #059669;">${guvenliMetin(tlFormatla(cari.total_paid))}</div>
+              </div>
+              <div class="summary-card" style="border-color: #fca5a5; background: #fff5f5;">
+                <div class="summary-label">Kalan Bakiye (Net Borç)</div>
+                <div class="summary-value" style="color: #dc2626;">${guvenliMetin(tlFormatla(cari.remaining_debt))}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section">
+            <div class="section-title">İşlem ve Ödeme Geçmişi Detayları</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width: 40px; text-align: center;">#</th>
+                  <th style="width: 100px;">Tarih</th>
+                  <th style="width: 180px;">İşlem Türü</th>
+                  <th>Açıklama</th>
+                  <th style="width: 130px; text-align: right;">Tutar</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${satirlarHtml || '<tr><td colspan="5" style="text-align: center; color: #6b7280;">Herhangi bir işlem veya ödeme kaydı bulunamadı.</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="footer-grid">
+            <div class="signature-box">
+              Cari Firma Temsilcisi
+              <div class="signature-sub">Ad Soyad / İmza</div>
+            </div>
+
+            <div class="signature-box">
+              Yetkili Servis Temsilcisi
+              <div class="signature-sub">${guvenliMetin(firma.unvan)}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sağ alt köşede sabit duran buton paneli (yazdırma esnasında gizlenir) -->
+        <div class="print-actions" style="position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; gap: 10px;">
+          <button onclick="window.close()" style="background: #ef4444; color: white; border: none; padding: 10px 18px; border-radius: 6px; font-size: 13px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 6px;">
+            <span>❌</span>
+            <span>Kapat</span>
+          </button>
+          <button onclick="window.print()" style="background: #10b981; color: white; border: none; padding: 10px 20px; border-radius: 6px; font-size: 13px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.15); display: flex; align-items: center; gap: 6px;">
+            <span>🖨</span>
+            <span>Yazdır / PDF Kaydet</span>
+          </button>
+        </div>
+      </body>
+    </html>
+  `)
+
+  yazdirmaPenceresi.document.close()
+}
+
 onMounted(async () => {
   await carileriYukle()
   await iliskiliVerileriYukle()
@@ -1083,6 +1467,11 @@ onUnmounted(() => {
           </Column>
         </DataTable>
       </div>
+
+      <template #footer>
+        <Button label="Kapat" icon="pi pi-times" text @click="cariDetayDialog = false" />
+        <Button label="Ekstre Yazdır" icon="pi pi-print" severity="info" @click="ekstreYazdir" />
+      </template>
     </Dialog>
   </div>
 </template>

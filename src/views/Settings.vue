@@ -275,6 +275,21 @@ const adminPinDegistir = () => {
   Object.assign(adminPinForm, { eskiPin: '', yeniPin: '', yeniPinTekrar: '' })
 }
 
+const yedeklerListesi = ref([])
+const seciliYedekDosyasi = ref(null)
+
+const yedekleriYukle = async () => {
+  if (!isAdmin.value || !window.api?.yedekleriListele) return
+  try {
+    const res = await window.api.yedekleriListele()
+    if (res?.success) {
+      yedeklerListesi.value = res.backups || []
+    }
+  } catch (err) {
+    console.error('Yedekler listesi yüklenemedi:', err)
+  }
+}
+
 const veritabaniYedekle = async () => {
   if (yedekleniyor.value) return
   yedekleniyor.value = true
@@ -283,6 +298,7 @@ const veritabaniYedekle = async () => {
     if (res?.success) {
       toast.add({ severity: 'success', summary: 'Yedeklendi', detail: `Veritabanı yedeklendi.`, life: 4000 })
       await destekBilgileriniYukle()
+      await yedekleriYukle()
     } else {
       toast.add({ severity: 'error', summary: 'Hata', detail: res?.error || 'Yedekleme başarısız.', life: 4000 })
     }
@@ -323,6 +339,38 @@ const yedektenGeriYukle = async () => {
       toast.add({ severity: 'success', summary: 'Geri Yüklendi', detail: 'Yedek başarıyla geri yüklendi.', life: 4000 })
       window.dispatchEvent(new CustomEvent('app-data-refreshed'))
       await destekBilgileriniYukle()
+      await yedekleriYukle()
+    } else if (!res?.cancelled) {
+      toast.add({ severity: 'error', summary: 'Hata', detail: res?.error || 'Geri yükleme başarısız.', life: 4000 })
+    }
+  } catch (err) {
+    toast.add({ severity: 'error', summary: 'Hata', detail: 'Geri yükleme sırasında hata oluştu.', life: 4000 })
+  } finally {
+    geriYukleniyor.value = false
+  }
+}
+
+const yedekListesindenYukle = async () => {
+  if (!seciliYedekDosyasi.value) {
+    toast.add({ severity: 'warn', summary: 'Uyarı', detail: 'Lütfen listeden bir yedek dosyası seçin.', life: 3000 })
+    return
+  }
+
+  const onay = confirm(
+    'Seçilen yedek veritabanı geri yüklenecektir.\n\n' +
+    'Mevcut verileriniz geri yükleme öncesinde otomatik yedeklenecek.\n' +
+    'Devam etmek istiyor musunuz?'
+  )
+  if (!onay) return
+
+  geriYukleniyor.value = true
+  try {
+    const res = await window.api.yedektenGeriYukle(seciliYedekDosyasi.value)
+    if (res?.success) {
+      toast.add({ severity: 'success', summary: 'Geri Yüklendi', detail: 'Yedek başarıyla geri yüklendi.', life: 4000 })
+      window.dispatchEvent(new CustomEvent('app-data-refreshed'))
+      await destekBilgileriniYukle()
+      await yedekleriYukle()
     } else if (!res?.cancelled) {
       toast.add({ severity: 'error', summary: 'Hata', detail: res?.error || 'Geri yükleme başarısız.', life: 4000 })
     }
@@ -400,6 +448,7 @@ onMounted(async () => {
   await ayarlarYukle()
   if (isAdmin.value) {
     await destekBilgileriniYukle()
+    await yedekleriYukle()
   }
 })
 </script>
@@ -816,6 +865,43 @@ onMounted(async () => {
             <div class="info-item">
               <span class="info-label">Yedek Klasörü</span>
               <span class="info-val font-mono break-all">{{ destekBilgileri.backupDir }}</span>
+            </div>
+          </div>
+
+          <!-- Yedekten Kurtarma Sihirbazı -->
+          <div style="border-top: 1px dashed var(--border-color, #334155); padding-top: 16px; margin-top: 16px;">
+            <div style="font-weight: bold; margin-bottom: 6px; font-size: 0.9rem; color: var(--text-title, #fff);">Yedekten Kurtarma Sihirbazı</div>
+            <div style="color: var(--text-muted, #94a3b8); font-size: 0.8rem; margin-bottom: 12px; line-height: 1.4;">
+              Aşağıdaki listeden geri dönmek istediğiniz geçmiş bir yedek paketini seçip doğrudan geri yükleyebilirsiniz.
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+              <Dropdown
+                v-model="seciliYedekDosyasi"
+                :options="yedeklerListesi"
+                optionLabel="name"
+                optionValue="path"
+                placeholder="Geri yüklenecek yedek dosyasını seçin"
+                style="flex: 1; min-width: 280px;"
+                class="compact-dropdown"
+              >
+                <template #option="slotProps">
+                  <div style="display: flex; flex-direction: column; gap: 2px; padding: 4px 0;">
+                    <div style="font-size: 0.85rem; font-weight: 500; word-break: break-all; color: var(--text-title, #fff);">{{ slotProps.option.name }}</div>
+                    <div style="font-size: 0.72rem; color: var(--text-muted, #94a3b8);">Tarih: {{ slotProps.option.date }} | Boyut: {{ slotProps.option.size }}</div>
+                  </div>
+                </template>
+              </Dropdown>
+
+              <Button
+                label="Seçili Yedeği Yükle"
+                icon="pi pi-history"
+                severity="danger"
+                size="small"
+                :loading="geriYukleniyor"
+                :disabled="!seciliYedekDosyasi"
+                @click="yedekListesindenYukle"
+              />
             </div>
           </div>
         </div>

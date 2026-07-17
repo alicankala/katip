@@ -1,5 +1,6 @@
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
+import { decodeVin } from '../utils/vinDecoder'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -52,6 +53,49 @@ const form = reactive({
   year: null,
   mileage: null,
   chassis: ''
+})
+
+const saseDetayMetni = computed(() => {
+  if (!form.chassis || form.chassis.length < 3) return ''
+  const decoded = decodeVin(form.chassis)
+  if (!decoded) return ''
+  
+  let parts = []
+  if (decoded.brand) parts.push(`Marka: ${decoded.brand}`)
+  if (decoded.country) parts.push(`Ülke: ${decoded.country}`)
+  if (decoded.year) parts.push(`Yıl: ${decoded.year}`)
+  
+  if (form.chassis.length === 17) {
+    if (decoded.isValidChecksum) {
+      parts.push('✅ Şasi Doğrulandı')
+    } else if (decoded.checksumApplies) {
+      parts.push('⚠️ Geçersiz Şasi Kontrol Basamağı')
+    } else {
+      parts.push('✅ Şasi Formatı Geçerli')
+    }
+  }
+  return parts.join(' | ')
+})
+
+watch(() => form.chassis, (yeniSase) => {
+  if (!yeniSase) return
+  
+  const temizSase = yeniSase.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, '')
+  if (temizSase !== yeniSase) {
+    form.chassis = temizSase
+  }
+  
+  if (temizSase.length >= 17) {
+    const saseBilgisi = decodeVin(temizSase)
+    if (saseBilgisi) {
+      if (saseBilgisi.brand && !form.brand) {
+        form.brand = saseBilgisi.brand
+      }
+      if (saseBilgisi.year && !form.year) {
+        form.year = saseBilgisi.year
+      }
+    }
+  }
 })
 
 const listeleriGetir = async () => {
@@ -255,13 +299,16 @@ onUnmounted(() => {
 </div>
 
         <div class="form-group">
-  <label>Şase Numarası</label>
-  <InputText 
-    v-model="form.chassis" 
-    placeholder="Örn: VF1xxxxxxxxxxxxx" 
-    style="width: 100%" 
-  />
-</div>
+          <label>Şase Numarası</label>
+          <InputText 
+            v-model="form.chassis" 
+            placeholder="Örn: VF1xxxxxxxxxxxxx" 
+            style="width: 100%" 
+          />
+          <small v-if="saseDetayMetni" style="color: var(--text-muted, #94a3b8); margin-top: 2px; font-size: 0.78rem;">
+            {{ saseDetayMetni }}
+          </small>
+        </div>
 
       </div>
       <template #footer>

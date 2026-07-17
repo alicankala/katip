@@ -1,0 +1,74 @@
+const fs = require('node:fs');
+const path = require('node:path');
+
+const mainPath = path.join(process.cwd(), 'electron', 'main.ts');
+
+if (!fs.existsSync(mainPath)) {
+  console.error('HATA: electron/main.ts bulunamadı. Bu dosyayı dukkan-arayuz ana klasöründe çalıştır.');
+  process.exit(1);
+}
+
+let text = fs.readFileSync(mainPath, 'utf8');
+
+const backupPath = path.join(process.cwd(), 'electron', 'main.buton-oncesi-v2.ts');
+if (!fs.existsSync(backupPath)) {
+  fs.writeFileSync(backupPath, text, 'utf8');
+  console.log('Yedek alındı:', backupPath);
+}
+
+text = text
+  .replace(/^import\s+archiver.*$/gm, '')
+  .replace(/^import\s+\*\s+as\s+unzipper.*$/gm, '')
+  .replace(/^import\s+AdmZip.*$/gm, '')
+  .replace(/^import\s+\{\s*ZipArchive\s*\}.*$/gm, '')
+  .replace(/^import\s+\{\s*createRequire\s*\}.*$/gm, '')
+  .replace(/^const\s+require\s*=\s*createRequire\(import\.meta\.url\).*$/gm, '')
+  .replace(/^const\s+archiver:.*$/gm, '')
+  .replace(/^const\s+unzipper:.*$/gm, '');
+
+const channelSingle = "kanalEkle('yedekten-geri-yukle'";
+const channelDouble = 'kanalEkle("yedekten-geri-yukle"';
+
+let channelIndex = text.indexOf(channelSingle);
+if (channelIndex < 0) channelIndex = text.indexOf(channelDouble);
+
+if (channelIndex < 0) {
+  console.error('HATA: yedekten-geri-yukle kanalı bulunamadı.');
+  process.exit(1);
+}
+
+let start = text.lastIndexOf('\n  //', channelIndex);
+if (start < 0 || channelIndex - start > 400) {
+  start = text.lastIndexOf('\n', channelIndex);
+}
+if (start < 0) start = channelIndex;
+else start = start + 1;
+
+const nextSingle = "kanalEkle('veritabani-bilgileri-getir'";
+const nextDouble = 'kanalEkle("veritabani-bilgileri-getir"';
+
+let nextIndex = text.indexOf(nextSingle, channelIndex + 1);
+if (nextIndex < 0) nextIndex = text.indexOf(nextDouble, channelIndex + 1);
+
+if (nextIndex < 0) {
+  console.error('HATA: veritabani-bilgileri-getir kanalı bulunamadı.');
+  process.exit(1);
+}
+
+let end = text.lastIndexOf('\n  //', nextIndex);
+if (end < 0 || nextIndex - end > 500) {
+  end = text.lastIndexOf('\n', nextIndex);
+}
+if (end < 0) end = nextIndex;
+else end = end + 1;
+
+const replacement = '  // 19. Yedekten geri yükle\n  kanalEkle(\'yedekten-geri-yukle\', async () => {\n    try {\n      if (!win) {\n        throw new Error(\'Uygulama penceresi bulunamadı.\')\n      }\n\n      const backupDir = yedekKlasoruYoluGetir()\n      await fs.mkdir(backupDir, { recursive: true })\n\n      const secim = await dialog.showOpenDialog(win, {\n        title: \'Yedek Paketi Seç\',\n        defaultPath: backupDir,\n        properties: [\'openFile\'],\n        filters: [\n          { name: \'Kâtip Tam Yedek Paketi\', extensions: [\'zip\'] },\n          { name: \'Eski SQLite Yedeği\', extensions: [\'db\'] },\n          { name: \'Tüm Dosyalar\', extensions: [\'*\'] }\n        ]\n      })\n\n      if (secim.canceled || secim.filePaths.length === 0) {\n        return {\n          success: false,\n          cancelled: true,\n          error: \'İşlem iptal edildi.\'\n        }\n      }\n\n      const secilenYedek = secim.filePaths[0]\n      const stat = await fs.stat(secilenYedek)\n\n      if (!stat.isFile()) {\n        throw new Error(\'Seçilen yol geçerli bir dosya değil.\')\n      }\n\n      const lowerPath = secilenYedek.toLowerCase()\n\n      if (!lowerPath.endsWith(\'.zip\') && !lowerPath.endsWith(\'.db\')) {\n        throw new Error(\'Lütfen .zip veya .db uzantılı bir yedek dosyası seçin.\')\n      }\n\n      const now = new Date()\n      const stamp =\n        now.getFullYear().toString() +\n        String(now.getMonth() + 1).padStart(2, \'0\') +\n        String(now.getDate()).padStart(2, \'0\') + \'_\' +\n        String(now.getHours()).padStart(2, \'0\') +\n        String(now.getMinutes()).padStart(2, \'0\') +\n        String(now.getSeconds()).padStart(2, \'0\')\n\n      const userDataDir = app.getPath(\'userData\')\n      const activePhotosDir = path.join(userDataDir, \'fotograflar\')\n      const guvenlikDir = path.join(userDataDir, `geri-yukleme-oncesi-${stamp}`)\n      const tempDir = path.join(app.getPath(\'temp\'), `katip-restore-${stamp}`)\n\n      await fs.mkdir(guvenlikDir, { recursive: true })\n      await fs.mkdir(tempDir, { recursive: true })\n\n      const powershellTekTirnak = (value: string) => {\n        return "\'" + String(value).replace(/\'/g, "\'\'") + "\'"\n      }\n\n      const powershellCalistir = async (komut: string) => {\n        const { execFile } = await import(\'node:child_process\')\n\n        await new Promise<void>((resolve, reject) => {\n          execFile(\n            \'powershell.exe\',\n            [\'-NoProfile\', \'-ExecutionPolicy\', \'Bypass\', \'-Command\', komut],\n            { windowsHide: true },\n            (error, stdout, stderr) => {\n              if (error) {\n                reject(new Error(String(stderr || stdout || error.message)))\n                return\n              }\n\n              resolve()\n            }\n          )\n        })\n      }\n\n      const DatabaseClass = (db as any).constructor as any\n\n      const yedekDbKontrolEt = (kontrolDbPath: string) => {\n        let kontrolDb: any = null\n\n        try {\n          kontrolDb = new DatabaseClass(kontrolDbPath, {\n            readonly: true,\n            fileMustExist: true\n          })\n\n          const quick = kontrolDb.pragma(\'quick_check\', { simple: true })\n          if (String(quick).toLowerCase() !== \'ok\') {\n            throw new Error(\'SQLite kontrolü başarısız: \' + quick)\n          }\n\n          const tablolar = kontrolDb.prepare(`\n            SELECT name\n            FROM sqlite_master\n            WHERE type = \'table\'\n          `).all().map((row: any) => String(row.name))\n\n          const gerekliTablolar = [\n            \'customers\',\n            \'vehicles\',\n            \'work_orders\',\n            \'work_order_items\',\n            \'parts\',\n            \'masters\'\n          ]\n\n          const eksikler = gerekliTablolar.filter(tablo => !tablolar.includes(tablo))\n          if (eksikler.length > 0) {\n            throw new Error(\'Yedek eksik tablolar içeriyor: \' + eksikler.join(\', \'))\n          }\n        } finally {\n          try {\n            kontrolDb?.close()\n          } catch {}\n        }\n      }\n\n      const restoreSonrasiOnar = async () => {\n        let restoreDb: any = null\n\n        try {\n          restoreDb = new DatabaseClass(dbPath)\n\n          restoreDb.exec(`\n            CREATE TABLE IF NOT EXISTS app_settings (\n              id INTEGER PRIMARY KEY AUTOINCREMENT,\n              setting_key TEXT UNIQUE,\n              setting_value TEXT,\n              key TEXT UNIQUE,\n              value TEXT,\n              updated_at TEXT DEFAULT CURRENT_TIMESTAMP\n            );\n\n            CREATE TABLE IF NOT EXISTS work_order_payments (\n              id INTEGER PRIMARY KEY AUTOINCREMENT,\n              work_order_id INTEGER NOT NULL,\n              amount REAL NOT NULL DEFAULT 0,\n              payment_method TEXT NOT NULL DEFAULT \'Nakit\',\n              payment_date TEXT,\n              received_by INTEGER,\n              note TEXT,\n              is_cancelled INTEGER NOT NULL DEFAULT 0,\n              cancelled_at TEXT,\n              cancelled_by INTEGER,\n              cancel_reason TEXT,\n              created_at TEXT DEFAULT CURRENT_TIMESTAMP\n            );\n\n            CREATE TABLE IF NOT EXISTS work_order_photos (\n              id INTEGER PRIMARY KEY AUTOINCREMENT,\n              work_order_id INTEGER NOT NULL,\n              file_name TEXT NOT NULL,\n              file_path TEXT NOT NULL,\n              category TEXT DEFAULT \'Araç Kabul\',\n              note TEXT DEFAULT \'\',\n              created_at TEXT DEFAULT CURRENT_TIMESTAMP\n            );\n\n            CREATE TABLE IF NOT EXISTS work_order_logs (\n              id INTEGER PRIMARY KEY AUTOINCREMENT,\n              work_order_id INTEGER NOT NULL,\n              action TEXT,\n              old_status TEXT,\n              new_status TEXT,\n              master_id INTEGER,\n              reason TEXT,\n              created_at TEXT DEFAULT CURRENT_TIMESTAMP\n            );\n          `)\n\n          if (fsSync.existsSync(activePhotosDir)) {\n            const fotografDosyalari = await fs.readdir(activePhotosDir)\n\n            const mevcutSatir = restoreDb.prepare(`\n              SELECT id\n              FROM work_order_photos\n              WHERE file_name = ? OR file_path = ?\n              LIMIT 1\n            `)\n\n            const isEmriVar = restoreDb.prepare(`\n              SELECT id\n              FROM work_orders\n              WHERE id = ?\n              LIMIT 1\n            `)\n\n            const ekle = restoreDb.prepare(`\n              INSERT INTO work_order_photos (\n                work_order_id,\n                file_name,\n                file_path,\n                category,\n                note\n              )\n              VALUES (?, ?, ?, ?, ?)\n            `)\n\n            const guncelle = restoreDb.prepare(`\n              UPDATE work_order_photos\n              SET file_path = ?\n              WHERE id = ?\n            `)\n\n            const mevcutFotograflar = restoreDb.prepare(`\n              SELECT id, file_name, file_path\n              FROM work_order_photos\n            `).all() as any[]\n\n            const tx = restoreDb.transaction(() => {\n              for (const row of mevcutFotograflar) {\n                const fileName = String(row.file_name || path.basename(String(row.file_path || \'\')))\n                if (!fileName) continue\n\n                const yeniYol = path.join(activePhotosDir, fileName)\n                if (fsSync.existsSync(yeniYol)) {\n                  guncelle.run(yeniYol, Number(row.id))\n                }\n              }\n\n              for (const fileName of fotografDosyalari) {\n                const eslesme = /^wo_(\\d+)_/i.exec(fileName)\n                if (!eslesme) continue\n\n                const workOrderId = Number(eslesme[1])\n                if (!workOrderId) continue\n\n                if (!isEmriVar.get(workOrderId)) continue\n\n                const filePath = path.join(activePhotosDir, fileName)\n\n                if (!mevcutSatir.get(fileName, filePath)) {\n                  ekle.run(workOrderId, fileName, filePath, \'Araç Kabul\', \'\')\n                }\n              }\n            })\n\n            tx()\n          }\n        } finally {\n          try {\n            restoreDb?.close()\n          } catch {}\n        }\n      }\n\n      let yedekDbPath = \'\'\n      let yedekPhotosDir = \'\'\n\n      if (lowerPath.endsWith(\'.zip\')) {\n        console.log(\'[Restore] ZIP açılıyor:\', secilenYedek)\n\n        await powershellCalistir(\n          `$ErrorActionPreference = \'Stop\'; Expand-Archive -LiteralPath ${powershellTekTirnak(secilenYedek)} -DestinationPath ${powershellTekTirnak(tempDir)} -Force`\n        )\n\n        yedekDbPath = path.join(tempDir, \'database\', \'otoservis.db\')\n        yedekPhotosDir = path.join(tempDir, \'fotograflar\')\n\n        if (!fsSync.existsSync(yedekDbPath)) {\n          throw new Error(\'Seçilen ZIP içinde database/otoservis.db bulunamadı.\')\n        }\n      } else {\n        yedekDbPath = secilenYedek\n      }\n\n      yedekDbKontrolEt(yedekDbPath)\n\n      console.log(\'[Restore] Mevcut veriler güvenliğe alınıyor...\')\n\n      if (fsSync.existsSync(dbPath)) {\n        await fs.copyFile(dbPath, path.join(guvenlikDir, \'otoservis.db\'))\n      }\n\n      if (fsSync.existsSync(activePhotosDir)) {\n        await fs.cp(activePhotosDir, path.join(guvenlikDir, \'fotograflar\'), {\n          recursive: true,\n          force: true\n        })\n      }\n\n      try {\n        await fs.rm(dbPath + \'-wal\', { force: true })\n      } catch {}\n\n      try {\n        await fs.rm(dbPath + \'-shm\', { force: true })\n      } catch {}\n\n      db.close()\n\n      await fs.copyFile(yedekDbPath, dbPath)\n\n      if (yedekPhotosDir && fsSync.existsSync(yedekPhotosDir)) {\n        await fs.rm(activePhotosDir, { recursive: true, force: true })\n        await fs.cp(yedekPhotosDir, activePhotosDir, {\n          recursive: true,\n          force: true\n        })\n      }\n\n      await restoreSonrasiOnar()\n\n      console.log(\'[Restore] Geri yükleme tamamlandı. Uygulama kapatılıyor...\')\n\n      setTimeout(() => {\n        app.exit(0)\n      }, 1200)\n\n      return {\n        success: true,\n        restoredFrom: secilenYedek,\n        previousBackup: guvenlikDir,\n        restartRequired: true\n      }\n    } catch (error) {\n      console.error(\'Yedekten geri yükleme hatası:\', error)\n      return { success: false, error: getErrorMessage(error) }\n    }\n  })\n';
+
+text = text.slice(0, start) + replacement + '\n' + text.slice(end);
+
+fs.writeFileSync(mainPath, text, 'utf8');
+
+console.log('');
+console.log('TAMAM: Yedekten Geri Yükle butonu V2 ile düzeltildi.');
+console.log('Eski main yedeği: electron/main.buton-oncesi-v2.ts');
+console.log('');

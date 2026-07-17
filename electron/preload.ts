@@ -66,7 +66,8 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   veritabaniYedekle: () => ipcRenderer.invoke('veritabani-yedekle'),
   yedekKlasorunuAc: () => ipcRenderer.invoke('yedek-klasoru-ac'),
   yedekKlasoruAc: () => ipcRenderer.invoke('yedek-klasoru-ac'),
-  yedektenGeriYukle: () => ipcRenderer.invoke('yedekten-geri-yukle'),
+  yedektenGeriYukle: (filePath?: string) => ipcRenderer.invoke('yedekten-geri-yukle', filePath),
+  yedekleriListele: () => ipcRenderer.invoke('yedekleri-listele'),
   veritabaniBilgileriGetir: () => ipcRenderer.invoke('veritabani-bilgileri-getir'),
 
   // Cari Hesaplar

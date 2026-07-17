@@ -1,5 +1,6 @@
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
+import { decodeVin } from '../utils/vinDecoder'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
@@ -119,6 +120,49 @@ watch(
     plakaKontrolEt()
   }
 )
+
+const saseDetayMetni = computed(() => {
+  if (!form.sase || form.sase.length < 3) return ''
+  const decoded = decodeVin(form.sase)
+  if (!decoded) return ''
+  
+  let parts = []
+  if (decoded.brand) parts.push(`Marka: ${decoded.brand}`)
+  if (decoded.country) parts.push(`Ülke: ${decoded.country}`)
+  if (decoded.year) parts.push(`Yıl: ${decoded.year}`)
+  
+  if (form.sase.length === 17) {
+    if (decoded.isValidChecksum) {
+      parts.push('✅ Şasi Doğrulandı')
+    } else if (decoded.checksumApplies) {
+      parts.push('⚠️ Geçersiz Şasi Kontrol Basamağı')
+    } else {
+      parts.push('✅ Şasi Formatı Geçerli')
+    }
+  }
+  return parts.join(' | ')
+})
+
+watch(() => form.sase, (yeniSase) => {
+  if (!yeniSase) return
+  
+  const temizSase = yeniSase.toUpperCase().replace(/[^A-HJ-NPR-Z0-9]/g, '')
+  if (temizSase !== yeniSase) {
+    form.sase = temizSase
+  }
+  
+  if (temizSase.length >= 17) {
+    const saseBilgisi = decodeVin(temizSase)
+    if (saseBilgisi) {
+      if (saseBilgisi.brand && !form.marka) {
+        form.marka = saseBilgisi.brand
+      }
+      if (saseBilgisi.year && !form.yil) {
+        form.yil = saseBilgisi.year
+      }
+    }
+  }
+})
 
 const serviseAl = async () => {
   const aktifUstaBilgisi =
@@ -337,6 +381,9 @@ onMounted(() => {
       v-model="form.sase"
       placeholder="Örn: VF1xxxxxxxxxxxxx"
     />
+    <small v-if="saseDetayMetni" style="color: var(--text-muted, #94a3b8); margin-top: 2px; font-size: 0.78rem;">
+      {{ saseDetayMetni }}
+    </small>
   </div>
 
   <div class="form-group">

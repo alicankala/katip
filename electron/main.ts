@@ -1,3 +1,6 @@
+import Database from 'better-sqlite3'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 import db, {
   initDB,
   dbPath,
@@ -30,6 +33,7 @@ import QRCode from 'qrcode'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+const execFileAsync = promisify(execFile)
 
 process.env.APP_ROOT = path.join(__dirname, '..')
 
@@ -128,6 +132,315 @@ function getErrorMessage(err: unknown): string {
 function yedekKlasoruYoluGetir(): string {
   return path.join(app.getPath('userData'), 'yedekler')
 }
+
+function fotograflarKlasoruYoluGetir(): string {
+  return path.join(app.getPath('userData'), 'fotograflar')
+}
+
+type YedekTuru = 'manual' | 'automatic' | 'pre-restore'
+
+interface TamYedekSonucu {
+  success: boolean
+  path?: string
+  filename?: string
+  size?: number
+  photoCount?: number
+  photoBytes?: number
+  error?: string
+}
+
+function tarihDamgasiOlustur(now = new Date()): string {
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const date = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  const seconds = String(now.getSeconds()).padStart(2, '0')
+  return `${year}${month}${date}_${hours}${minutes}${seconds}`
+}
+
+async function yolVarMi(targetPath: string): Promise<boolean> {
+  try {
+    await fs.access(targetPath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function klasorOzetiGetir(rootDir: string): Promise<{ count: number; bytes: number }> {
+  if (!(await yolVarMi(rootDir))) return { count: 0, bytes: 0 }
+
+  let count = 0
+  let bytes = 0
+  const entries = await fs.readdir(rootDir, { withFileTypes: true })
+
+  for (const entry of entries) {
+    const entryPath = path.join(rootDir, entry.name)
+    if (entry.isDirectory()) {
+      const child = await klasorOzetiGetir(entryPath)
+      count += child.count
+      bytes += child.bytes
+    } else if (entry.isFile()) {
+      const stat = await fs.stat(entryPath)
+      count += 1
+      bytes += stat.size
+    }
+  }
+
+  return { count, bytes }
+}
+
+function yedekDosyaAdiOlustur(tur: YedekTuru, stamp: string): string {
+  if (tur === 'automatic') return `otoservis_auto_backup_${stamp}.zip`
+  if (tur === 'pre-restore') return `geri-yukleme-oncesi-tam-yedek-${stamp}.zip`
+  return `katip-tam-yedek-${stamp}.zip`
+}
+
+async function zipArsiviOlustur(
+  zipPath: string,
+  databaseSnapshotPath: string,
+  photosDir: string,
+  manifest: Record<string, unknown>
+): Promise<void> {
+  const packageRoot = await fs.mkdtemp(path.join(app.getPath('temp'), 'katip-zip-stage-'))
+
+  try {
+    const databaseDir = path.join(packageRoot, 'database')
+    const packagePhotosDir = path.join(packageRoot, 'fotograflar')
+
+    await fs.mkdir(databaseDir, { recursive: true })
+    await fs.mkdir(packagePhotosDir, { recursive: true })
+    await fs.copyFile(databaseSnapshotPath, path.join(databaseDir, 'otoservis.db'))
+
+    if (await yolVarMi(photosDir)) {
+      await fs.cp(photosDir, packagePhotosDir, { recursive: true, force: true })
+    }
+
+    await fs.writeFile(
+      path.join(packageRoot, 'manifest.json'),
+      JSON.stringify(manifest, null, 2),
+      'utf8'
+    )
+
+    await fs.mkdir(path.dirname(zipPath), { recursive: true })
+    await fs.rm(zipPath, { force: true })
+
+    await execFileAsync(
+      'tar.exe',
+      ['-a', '-c', '-f', zipPath, '-C', packageRoot, 'database', 'fotograflar', 'manifest.json'],
+      { windowsHide: true, maxBuffer: 50 * 1024 * 1024 }
+    )
+  } finally {
+    await fs.rm(packageRoot, { recursive: true, force: true })
+  }
+}
+
+async function tamYedekPaketiOlustur(tur: YedekTuru): Promise<TamYedekSonucu> {
+  const backupDir = yedekKlasoruYoluGetir()
+  const photosDir = fotograflarKlasoruYoluGetir()
+  const stamp = tarihDamgasiOlustur()
+  const backupFileName = yedekDosyaAdiOlustur(tur, stamp)
+  const backupPath = path.join(backupDir, backupFileName)
+  const tempRoot = await fs.mkdtemp(path.join(app.getPath('temp'), 'katip-full-backup-'))
+  const snapshotPath = path.join(tempRoot, 'otoservis.db')
+
+  try {
+    await fs.mkdir(backupDir, { recursive: true })
+    await db.backup(snapshotPath)
+
+    const photoSummary = await klasorOzetiGetir(photosDir)
+    const manifest = {
+      backupVersion: 1,
+      product: 'Kâtip',
+      appVersion: app.getVersion(),
+      createdAt: new Date().toISOString(),
+      databaseFile: 'database/otoservis.db',
+      photosFolder: 'fotograflar',
+      photoCount: photoSummary.count,
+      photoBytes: photoSummary.bytes
+    }
+
+    await zipArsiviOlustur(backupPath, snapshotPath, photosDir, manifest)
+    const stat = await fs.stat(backupPath)
+
+    return {
+      success: true,
+      path: backupPath,
+      filename: backupFileName,
+      size: stat.size,
+      photoCount: photoSummary.count,
+      photoBytes: photoSummary.bytes
+    }
+  } catch (error) {
+    try { await fs.rm(backupPath, { force: true }) } catch {}
+    console.error('[FullBackup] Hata:', error)
+    return { success: false, error: getErrorMessage(error) }
+  } finally {
+    try { await fs.rm(tempRoot, { recursive: true, force: true }) } catch {}
+  }
+}
+
+async function otomatikYedekleriTemizle(): Promise<void> {
+  const backupDir = yedekKlasoruYoluGetir()
+  const settingsRes = ayarlariGetirBackend()
+  const retentionCount = Number(settingsRes?.settings?.backup_retention_count) || 14
+  if (retentionCount <= 0) return
+
+  const files = await fs.readdir(backupDir)
+  const autoBackups: Array<{ name: string; path: string; time: number }> = []
+
+  for (const fileName of files) {
+    const isAutoBackup = fileName.startsWith('otoservis_auto_backup_') &&
+      (fileName.endsWith('.zip') || fileName.endsWith('.db'))
+    if (!isAutoBackup) continue
+
+    const filePath = path.join(backupDir, fileName)
+    const stat = await fs.stat(filePath)
+    autoBackups.push({ name: fileName, path: filePath, time: stat.mtimeMs })
+  }
+
+  autoBackups.sort((a, b) => b.time - a.time)
+
+  for (const item of autoBackups.slice(retentionCount)) {
+    try {
+      await fs.unlink(item.path)
+      console.log('[AutoBackup] Eski yedek silindi:', item.name)
+    } catch (error) {
+      console.warn('[AutoBackup] Eski yedek silinemedi:', item.name, error)
+    }
+  }
+}
+
+async function sonOtomatikYedekZamaniGetir(): Promise<number> {
+  const backupDir = yedekKlasoruYoluGetir()
+  await fs.mkdir(backupDir, { recursive: true })
+  const files = await fs.readdir(backupDir)
+  let newestTime = 0
+
+  for (const fileName of files) {
+    const isAutoBackup = fileName.startsWith('otoservis_auto_backup_') &&
+      (fileName.endsWith('.zip') || fileName.endsWith('.db'))
+    if (!isAutoBackup) continue
+
+    try {
+      const stat = await fs.stat(path.join(backupDir, fileName))
+      newestTime = Math.max(newestTime, stat.mtimeMs)
+    } catch (error) {
+      console.warn('[AutoBackup] Yedek tarihi okunamadı:', fileName, error)
+    }
+  }
+
+  return newestTime
+}
+
+async function zipPaketiniGuvenliCikart(zipPath: string, targetDir: string): Promise<void> {
+  const { stdout } = await execFileAsync(
+    'tar.exe',
+    ['-tf', zipPath],
+    { windowsHide: true, maxBuffer: 50 * 1024 * 1024 }
+  )
+
+  const root = path.resolve(targetDir)
+  const entries = String(stdout || '').split(/\r?\n/).filter(Boolean)
+
+  for (const rawEntry of entries) {
+    const normalizedEntryPath = String(rawEntry || '').replace(/\\/g, '/')
+    const parts = normalizedEntryPath.split('/').filter(Boolean)
+
+    if (!normalizedEntryPath || normalizedEntryPath.startsWith('/') ||
+        /^[a-zA-Z]:/.test(normalizedEntryPath) || parts.includes('..')) {
+      throw new Error(`Yedek paketinde güvenli olmayan dosya yolu var: ${normalizedEntryPath}`)
+    }
+
+    const outputPath = path.resolve(root, ...parts)
+    if (outputPath !== root && !outputPath.startsWith(root + path.sep)) {
+      throw new Error(`Yedek paketinde geçersiz dosya yolu var: ${normalizedEntryPath}`)
+    }
+  }
+
+  await fs.mkdir(targetDir, { recursive: true })
+  await execFileAsync(
+    'tar.exe',
+    ['-xf', zipPath, '-C', targetDir],
+    { windowsHide: true, maxBuffer: 50 * 1024 * 1024 }
+  )
+}
+
+function yedekZorunluTablolariniDogrula(databasePath: string): void {
+  const requiredTables = [
+    'masters',
+    'customers',
+    'vehicles',
+    'work_orders',
+    'work_order_items',
+    'parts',
+    'work_order_payments',
+    'work_order_photos',
+    'app_settings'
+  ]
+
+  const backupDb = new Database(databasePath, { readonly: true, fileMustExist: true })
+
+  try {
+    const rows = backupDb.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+    `).all() as Array<{ name: string }>
+
+    const existingTables = new Set(rows.map(row => String(row.name)))
+    const missingTables = requiredTables.filter(table => !existingTables.has(table))
+
+    if (missingTables.length > 0) {
+      throw new Error(
+        'Bu yedek eksik olduğu için geri yüklenmedi. Eksik tablolar: ' +
+        missingTables.join(', ')
+      )
+    }
+  } finally {
+    backupDb.close()
+  }
+}
+
+function yedekVeritabanindakiFotografYollariniDuzelt(databasePath: string, photosDir: string): void {
+  const restoreDb = new Database(databasePath, { fileMustExist: true })
+
+  try {
+    const tableExists = restoreDb.prepare(`
+      SELECT name FROM sqlite_master
+      WHERE type = 'table' AND name = 'work_order_photos'
+    `).get()
+    if (!tableExists) return
+
+    const rows = restoreDb.prepare(`
+      SELECT id, file_name, file_path FROM work_order_photos
+    `).all() as Array<{ id: number; file_name?: string; file_path?: string }>
+
+    const update = restoreDb.prepare(`
+      UPDATE work_order_photos SET file_name = ?, file_path = ? WHERE id = ?
+    `)
+
+    const transaction = restoreDb.transaction(() => {
+      for (const row of rows) {
+        const rawName = String(row.file_name || row.file_path || '').trim()
+        const safeFileName = path.basename(rawName)
+        if (!safeFileName) continue
+        update.run(safeFileName, path.join(photosDir, safeFileName), Number(row.id))
+      }
+    })
+    transaction()
+  } finally {
+    restoreDb.close()
+  }
+}
+
+async function sqliteYanDosyalariniSil(): Promise<void> {
+  for (const suffix of ['-wal', '-shm']) {
+    try { await fs.rm(dbPath + suffix, { force: true }) } catch {}
+  }
+}
+
 function stokHareketiKaydet(veri: {
   partId: number
   workOrderId?: number | null
@@ -1171,13 +1484,30 @@ if (mileage !== null) {
 // 13. İş emri sil
 kanalEkle('is-emri-sil', (_event, id: any) => {
   const transaction = db.transaction(() => {
-    const workOrderId = Number(id)
+    const workOrderId =
+      typeof id === 'object' && id !== null
+        ? Number(id.id)
+        : Number(id)
+
+    const activeMasterId =
+      typeof id === 'object' &&
+      id !== null &&
+      id.active_master_id !== undefined &&
+      id.active_master_id !== null &&
+      id.active_master_id !== '' &&
+      id.active_master_id !== 'admin'
+        ? Number(id.active_master_id)
+        : null
+
+    if (!workOrderId) {
+      throw new Error('Silinecek iş emri bulunamadı.')
+    }
 
     const isEmri = db.prepare(`
       SELECT *
       FROM work_orders
       WHERE id = ?
-    `).get(workOrderId)
+    `).get(workOrderId) as any
 
     if (!isEmri) {
       throw new Error('Silinecek iş emri bulunamadı.')
@@ -1190,49 +1520,86 @@ kanalEkle('is-emri-sil', (_event, id: any) => {
     `).get(workOrderId) as any
 
     if (aktifOdeme && Number(aktifOdeme.count) > 0) {
-      throw new Error('Bu iş emrinde tahsilat kaydı bulunduğu için silinemez. Önce tahsilat kayıtlarını kontrol edin.')
+      throw new Error('Bu iş emrinde tahsilat kaydı bulunduğu için silinemez. Önce tahsilat kaydını iptal edin.')
     }
+
+    const fotograflar = db.prepare(`
+      SELECT *
+      FROM work_order_photos
+      WHERE work_order_id = ?
+    `).all(workOrderId) as any[]
 
     const kalemler = db.prepare(`
       SELECT *
       FROM work_order_items
       WHERE work_order_id = ?
-    `).all(workOrderId)
+    `).all(workOrderId) as any[]
 
     for (const kalem of kalemler) {
-      if (kalem.type === 'Parça' && kalem.part_id) {
+      if ((kalem.type === 'Parça' || kalem.type === 'Parca') && kalem.part_id) {
         const partId = Number(kalem.part_id)
         const miktar = Number(kalem.quantity) || 0
 
-        const parca = db.prepare(`
-          SELECT stock FROM parts WHERE id = ?
-        `).get(partId) as any
+        if (partId && miktar > 0) {
+          const parca = db.prepare(`
+            SELECT stock
+            FROM parts
+            WHERE id = ?
+          `).get(partId) as any
 
-        const eskiStok = Number(parca?.stock) || 0
-        const yeniStok = eskiStok + miktar
+          const eskiStok = Number(parca?.stock) || 0
+          const yeniStok = eskiStok + miktar
 
-        db.prepare(`
-          UPDATE parts
-          SET stock = ?
-          WHERE id = ?
-        `).run(yeniStok, partId)
+          db.prepare(`
+            UPDATE parts
+            SET stock = ?
+            WHERE id = ?
+          `).run(yeniStok, partId)
 
-        stokHareketiKaydet({
-          partId,
-          workOrderId,
-          type: 'Giriş',
-          quantity: miktar,
-          oldStock: eskiStok,
-          newStock: yeniStok,
-          note: 'İş emri silindiği için stok geri eklendi'
-        })
+          stokHareketiKaydet({
+            partId,
+            workOrderId: null,
+            type: 'Giriş',
+            quantity: miktar,
+            oldStock: eskiStok,
+            newStock: yeniStok,
+            masterId: activeMasterId,
+            note: `İş emri #${workOrderId} silindiği için stok geri eklendi`
+          })
+        }
       }
     }
-db.prepare(`
-  UPDATE stock_movements
-  SET work_order_id = NULL
-  WHERE work_order_id = ?
-`).run(workOrderId)
+
+    // Bu iş emrine bağlı eski stok hareketleri iş emri silinince foreign key hatası vermesin.
+    try {
+      db.prepare(`
+        UPDATE stock_movements
+        SET work_order_id = NULL
+        WHERE work_order_id = ?
+      `).run(workOrderId)
+    } catch (e) {
+      db.prepare(`
+        DELETE FROM stock_movements
+        WHERE work_order_id = ?
+      `).run(workOrderId)
+    }
+
+    // Önce bağlı kayıtları sil, sonra ana iş emrini sil.
+    db.prepare(`
+      DELETE FROM work_order_payments
+      WHERE work_order_id = ?
+    `).run(workOrderId)
+
+    db.prepare(`
+      DELETE FROM work_order_photos
+      WHERE work_order_id = ?
+    `).run(workOrderId)
+
+    db.prepare(`
+      DELETE FROM work_order_logs
+      WHERE work_order_id = ?
+    `).run(workOrderId)
+
     db.prepare(`
       DELETE FROM work_order_items
       WHERE work_order_id = ?
@@ -1243,6 +1610,19 @@ db.prepare(`
       WHERE id = ?
     `).run(workOrderId)
 
+    for (const fotograf of fotograflar) {
+      const filePath = String(fotograf.file_path || '')
+      if (!filePath) continue
+
+      try {
+        if (fsSync.existsSync(filePath)) {
+          fsSync.unlinkSync(filePath)
+        }
+      } catch (e) {
+        console.warn('[Photos] İş emri silinirken fotoğraf dosyası silinemedi:', filePath, e)
+      }
+    }
+
     return { success: true }
   })
 
@@ -1250,8 +1630,7 @@ db.prepare(`
     return transaction()
   } catch (error) {
     console.error('İş emri silme hatası:', error)
-    const err = error as Error
-    return { success: false, error: err.message || String(error) }
+    return { success: false, error: getErrorMessage(error) }
   }
 })
 
@@ -2535,52 +2914,9 @@ kanalEkle('servis-gecmisi-ara', (_event, aramaMetni: any) => {
   }
 })
 
-  // 17. Veritabanı yedekle
+  // 17. Veritabanı + fotoğrafları tek ZIP paketinde yedekle
   kanalEkle('veritabani-yedekle', async () => {
-    try {
-      console.log('[Yedekleme] Islem basladi...')
-
-      const backupDir = yedekKlasoruYoluGetir()
-      console.log('[Yedekleme] Yedek klasoru yolu:', backupDir)
-
-      await fs.mkdir(backupDir, { recursive: true })
-      console.log('[Yedekleme] Klasor hazir')
-
-      const now = new Date()
-      const year = now.getFullYear()
-      const month = String(now.getMonth() + 1).padStart(2, '0')
-      const date = String(now.getDate()).padStart(2, '0')
-      const hours = String(now.getHours()).padStart(2, '0')
-      const minutes = String(now.getMinutes()).padStart(2, '0')
-      const seconds = String(now.getSeconds()).padStart(2, '0')
-
-      const timeStamp = `${year}-${month}-${date}-${hours}${minutes}${seconds}`
-      const backupFileName = `otoservis-yedek-${timeStamp}.db`
-      const backupPath = path.join(backupDir, backupFileName)
-
-      console.log('[Yedekleme] Yedek dosya adi:', backupFileName)
-      console.log('[Yedekleme] Yedek dosya tam yolu:', backupPath)
-
-      console.log('[Yedekleme] db.backup() cagriliyor...')
-      await db.backup(backupPath)
-      console.log('[Yedekleme] db.backup() basarili')
-
-      const kontrol = await fs.stat(backupPath)
-
-      console.log('[Yedekleme] Dosya dogrulandi:', {
-        path: backupPath,
-        size: kontrol.size
-      })
-
-      return {
-        success: true,
-        path: backupPath,
-        size: kontrol.size
-      }
-    } catch (error) {
-      console.error('[Yedekleme] Hata olustu:', error)
-      return { success: false, error: getErrorMessage(error) }
-    }
+    return await tamYedekPaketiOlustur('manual')
   })
     // 18. Yedek klasörünü aç
   kanalEkle('yedek-klasoru-ac', async () => {
@@ -2605,7 +2941,7 @@ kanalEkle('servis-gecmisi-ara', (_event, aramaMetni: any) => {
     }
   })
   // 19. Yedekten geri yükle
-  kanalEkle('yedekten-geri-yukle', async () => {
+  kanalEkle('yedekten-geri-yukle', async (_event, secilenDosyaYolu?: string) => {
     try {
       if (!win) {
         throw new Error('Uygulama penceresi bulunamadı.')
@@ -2614,85 +2950,294 @@ kanalEkle('servis-gecmisi-ara', (_event, aramaMetni: any) => {
       const backupDir = yedekKlasoruYoluGetir()
       await fs.mkdir(backupDir, { recursive: true })
 
-      const secim = await dialog.showOpenDialog(win, {
-        title: 'Yedek Veritabanı Seç',
-        defaultPath: backupDir,
-        properties: ['openFile'],
-        filters: [
-          { name: 'SQLite Veritabanı', extensions: ['db'] },
-          { name: 'Tüm Dosyalar', extensions: ['*'] }
-        ]
-      })
+      let secilenYedek = ''
+      if (secilenDosyaYolu) {
+        secilenYedek = secilenDosyaYolu
+      } else {
+        const secim = await dialog.showOpenDialog(win, {
+          title: 'Yedek Paketi Seç',
+          defaultPath: backupDir,
+          properties: ['openFile'],
+          filters: [
+            { name: 'Kâtip Tam Yedek Paketi', extensions: ['zip'] },
+            { name: 'Eski SQLite Yedeği', extensions: ['db'] },
+            { name: 'Tüm Dosyalar', extensions: ['*'] }
+          ]
+        })
 
-      if (secim.canceled || secim.filePaths.length === 0) {
-        return {
-          success: false,
-          cancelled: true,
-          error: 'İşlem iptal edildi.'
+        if (secim.canceled || secim.filePaths.length === 0) {
+          return {
+            success: false,
+            cancelled: true,
+            error: 'İşlem iptal edildi.'
+          }
         }
+
+        secilenYedek = secim.filePaths[0]
       }
-
-      const secilenYedek = secim.filePaths[0]
-
       const stat = await fs.stat(secilenYedek)
+
       if (!stat.isFile()) {
         throw new Error('Seçilen yol geçerli bir dosya değil.')
       }
 
-      if (!secilenYedek.toLowerCase().endsWith('.db')) {
-        throw new Error('Lütfen .db uzantılı bir yedek dosyası seçin.')
-      }
+      const lowerPath = secilenYedek.toLowerCase()
 
-      console.log('[Geri Yukleme] Secilen yedek doğrulaniyor...')
-      const dogrulama = verifyBackupDatabase(secilenYedek)
-      if (!dogrulama.valid) {
-        console.error('[Geri Yukleme] Dogrulama basarisiz:', dogrulama.error)
-        throw new Error(`Seçilen yedek dosyası geçersiz veya bozuk: ${dogrulama.error}`)
+      if (!lowerPath.endsWith('.zip') && !lowerPath.endsWith('.db')) {
+        throw new Error('Lütfen .zip veya .db uzantılı bir yedek dosyası seçin.')
       }
-      console.log('[Geri Yukleme] Dogrulama basarili.')
 
       const now = new Date()
-      const year = now.getFullYear()
-      const month = String(now.getMonth() + 1).padStart(2, '0')
-      const date = String(now.getDate()).padStart(2, '0')
-      const hours = String(now.getHours()).padStart(2, '0')
-      const minutes = String(now.getMinutes()).padStart(2, '0')
-      const seconds = String(now.getSeconds()).padStart(2, '0')
-      const timeStamp = `${year}-${month}-${date}-${hours}${minutes}${seconds}`
+      const stamp =
+        now.getFullYear().toString() +
+        String(now.getMonth() + 1).padStart(2, '0') +
+        String(now.getDate()).padStart(2, '0') + '_' +
+        String(now.getHours()).padStart(2, '0') +
+        String(now.getMinutes()).padStart(2, '0') +
+        String(now.getSeconds()).padStart(2, '0')
 
-      const mevcutDbYedekPath = path.join(
-        backupDir,
-        `geri-yukleme-oncesi-yedek-${timeStamp}.db`
-      )
+      const userDataDir = app.getPath('userData')
+      const activePhotosDir = path.join(userDataDir, 'fotograflar')
+      const guvenlikDir = path.join(userDataDir, `geri-yukleme-oncesi-${stamp}`)
+      const tempDir = path.join(app.getPath('temp'), `katip-restore-${stamp}`)
 
-      console.log('[Geri Yukleme] Secilen yedek:', secilenYedek)
-      console.log('[Geri Yukleme] Mevcut veritabani:', dbPath)
-      console.log('[Geri Yukleme] Onceki veritabani yedegi:', mevcutDbYedekPath)
+      await fs.mkdir(guvenlikDir, { recursive: true })
+      await fs.mkdir(tempDir, { recursive: true })
 
-      await db.backup(mevcutDbYedekPath)
+      const yedekDbKontrolEt = (kontrolDbPath: string) => {
+        let kontrolDb: any = null
 
+        try {
+          kontrolDb = new Database(kontrolDbPath, {
+            readonly: true,
+            fileMustExist: true
+          })
+
+          const quick = kontrolDb.pragma('quick_check', { simple: true })
+          if (String(quick).toLowerCase() !== 'ok') {
+            throw new Error('SQLite kontrolü başarısız: ' + quick)
+          }
+
+          const tablolar = kontrolDb.prepare(`
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table'
+          `).all().map((row: any) => String(row.name))
+
+          const gerekliTablolar = [
+            'customers',
+            'vehicles',
+            'work_orders',
+            'work_order_items',
+            'parts',
+            'masters'
+          ]
+
+          const eksikler = gerekliTablolar.filter(tablo => !tablolar.includes(tablo))
+          if (eksikler.length > 0) {
+            throw new Error('Yedek eksik tablolar içeriyor: ' + eksikler.join(', '))
+          }
+        } finally {
+          try {
+            kontrolDb?.close()
+          } catch {}
+        }
+      }
+
+      const restoreSonrasiOnar = async () => {
+        try {
+          if (fsSync.existsSync(activePhotosDir)) {
+            const fotografDosyalari = await fs.readdir(activePhotosDir)
+
+            const mevcutSatir = db.prepare(`
+              SELECT id
+              FROM work_order_photos
+              WHERE file_name = ? OR file_path = ?
+              LIMIT 1
+            `)
+
+            const isEmriVar = db.prepare(`
+              SELECT id
+              FROM work_orders
+              WHERE id = ?
+              LIMIT 1
+            `)
+
+            const ekle = db.prepare(`
+              INSERT INTO work_order_photos (
+                work_order_id,
+                file_name,
+                file_path,
+                category,
+                note
+              )
+              VALUES (?, ?, ?, ?, ?)
+            `)
+
+            const guncelle = db.prepare(`
+              UPDATE work_order_photos
+              SET file_path = ?
+              WHERE id = ?
+            `)
+
+            const mevcutFotograflar = db.prepare(`
+              SELECT id, file_name, file_path
+              FROM work_order_photos
+            `).all() as any[]
+
+            const tx = db.transaction(() => {
+              for (const row of mevcutFotograflar) {
+                const fileName = String(row.file_name || path.basename(String(row.file_path || '')))
+                if (!fileName) continue
+
+                const yeniYol = path.join(activePhotosDir, fileName)
+                if (fsSync.existsSync(yeniYol)) {
+                  guncelle.run(yeniYol, Number(row.id))
+                }
+              }
+
+              for (const fileName of fotografDosyalari) {
+                const eslesme = /^wo_(\d+)_/i.exec(fileName)
+                if (!eslesme) continue
+
+                const workOrderId = Number(eslesme[1])
+                if (!workOrderId) continue
+
+                if (!isEmriVar.get(workOrderId)) continue
+
+                const filePath = path.join(activePhotosDir, fileName)
+
+                if (!mevcutSatir.get(fileName, filePath)) {
+                  ekle.run(workOrderId, fileName, filePath, 'Araç Kabul', '')
+                }
+              }
+            })
+
+            tx()
+          }
+        } catch (error) {
+          console.error('Fotoğraf yollarını onarma hatası:', error)
+        }
+      }
+
+      let yedekDbPath = ''
+      let yedekPhotosDir = ''
+
+      if (lowerPath.endsWith('.zip')) {
+        console.log('[Restore] ZIP açılıyor:', secilenYedek)
+
+        await zipPaketiniGuvenliCikart(secilenYedek, tempDir)
+
+        yedekDbPath = path.join(tempDir, 'database', 'otoservis.db')
+        yedekPhotosDir = path.join(tempDir, 'fotograflar')
+
+        if (!fsSync.existsSync(yedekDbPath)) {
+          throw new Error('Seçilen ZIP içinde database/otoservis.db bulunamadı.')
+        }
+      } else {
+        yedekDbPath = secilenYedek
+      }
+
+      yedekDbKontrolEt(yedekDbPath)
+
+      console.log('[Restore] Mevcut veriler güvenliğe alınıyor...')
+
+      if (fsSync.existsSync(dbPath)) {
+        await fs.copyFile(dbPath, path.join(guvenlikDir, 'otoservis.db'))
+      }
+
+      if (fsSync.existsSync(activePhotosDir)) {
+        await fs.cp(activePhotosDir, path.join(guvenlikDir, 'fotograflar'), {
+          recursive: true,
+          force: true
+        })
+      }
+
+      // Veritabanı bağlantısını kapat
       db.close()
 
-      await fs.copyFile(secilenYedek, dbPath)
+      // Geçici veritabanı dosyalarını sil
+      try {
+        await fs.rm(dbPath + '-wal', { force: true })
+      } catch {}
 
-console.log('[Geri Yukleme] Yedek geri yuklendi. Uygulama kapatilacak...')
+      try {
+        await fs.rm(dbPath + '-shm', { force: true })
+      } catch {}
 
-setTimeout(() => {
-  app.quit()
-}, 1200)
+      // Yedek veritabanını kopyala
+      await fs.copyFile(yedekDbPath, dbPath)
 
-return {
-  success: true,
-  restoredFrom: secilenYedek,
-  previousBackup: mevcutDbYedekPath,
-  restartRequired: true
-}
+      if (yedekPhotosDir && fsSync.existsSync(yedekPhotosDir)) {
+        await fs.rm(activePhotosDir, { recursive: true, force: true })
+        await fs.cp(yedekPhotosDir, activePhotosDir, {
+          recursive: true,
+          force: true
+        })
+      }
+
+      // Veritabanı bağlantısını yeniden aç ve şemaları güncelle (initDB)
+      const yenileSonuc = await uygulamaVerileriniYenileBackend()
+      if (!yenileSonuc.success) {
+        throw new Error('Veritabanı yenileme hatası: ' + yenileSonuc.message)
+      }
+
+      // Geri yükleme sonrası onarım/fotoğraf bağlama işlemlerini yap
+      await restoreSonrasiOnar()
+
+      console.log('[Restore] Geri yükleme tamamlandı. Uygulama kapatılıyor...')
+
+      setTimeout(() => {
+        app.exit(0)
+      }, 1200)
+
+      return {
+        success: true,
+        restoredFrom: secilenYedek,
+        previousBackup: guvenlikDir,
+        restartRequired: true
+      }
     } catch (error) {
-      console.error('Yedekten geri yukleme hatasi:', error)
+      console.error('Yedekten geri yükleme hatası:', error)
       return { success: false, error: getErrorMessage(error) }
     }
   })
-    // 20. Veritabanı bilgilerini getir
+
+  // 19b. Yedekleri listele
+  kanalEkle('yedekleri-listele', async () => {
+    try {
+      const backupDir = yedekKlasoruYoluGetir()
+      await fs.mkdir(backupDir, { recursive: true })
+      const files = await fs.readdir(backupDir)
+      const list: any[] = []
+
+      for (const fileName of files) {
+        const lowerName = fileName.toLowerCase()
+        if (lowerName.endsWith('.zip') || lowerName.endsWith('.db')) {
+          const filePath = path.join(backupDir, fileName)
+          const stat = await fs.stat(filePath)
+          list.push({
+            name: fileName,
+            path: filePath,
+            size: formatBytes(stat.size),
+            sizeBytes: stat.size,
+            time: stat.mtimeMs,
+            date: new Date(stat.mtimeMs).toLocaleString('tr-TR'),
+            isZip: lowerName.endsWith('.zip')
+          })
+        }
+      }
+
+      // En yeni yedek en başta olacak şekilde sırala
+      list.sort((a, b) => b.time - a.time)
+
+      return { success: true, backups: list }
+    } catch (error) {
+      console.error('[YedekListele] Hata:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
   kanalEkle('veritabani-bilgileri-getir', async () => {
     try {
       const backupDir = yedekKlasoruYoluGetir()
@@ -3393,61 +3938,13 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-async function otomatikYedekAlBackend(): Promise<{ success: boolean; path?: string; filename?: string; error?: string }> {
-  try {
-    const backupDir = yedekKlasoruYoluGetir()
-    await fs.mkdir(backupDir, { recursive: true })
-
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, '0')
-    const date = String(now.getDate()).padStart(2, '0')
-    const hours = String(now.getHours()).padStart(2, '0')
-    const minutes = String(now.getMinutes()).padStart(2, '0')
-    const seconds = String(now.getSeconds()).padStart(2, '0')
-
-    const timeStamp = `${year}${month}${date}_${hours}${minutes}${seconds}`
-    const backupFileName = `otoservis_auto_backup_${timeStamp}.db`
-    const backupPath = path.join(backupDir, backupFileName)
-
-    await db.backup(backupPath)
-
-    // Retention cleanup
-    const settingsRes = ayarlariGetirBackend()
-    const retentionCount = Number(settingsRes?.settings?.backup_retention_count) || 20
-
-    if (retentionCount > 0) {
-      const files = await fs.readdir(backupDir)
-      const autoBackups: Array<{ name: string; path: string; time: number }> = []
-
-      for (const f of files) {
-        if (f.startsWith('otoservis_auto_backup_') && f.endsWith('.db')) {
-          const fp = path.join(backupDir, f)
-          const stat = await fs.stat(fp)
-          autoBackups.push({ name: f, path: fp, time: stat.mtimeMs })
-        }
-      }
-
-      autoBackups.sort((a, b) => b.time - a.time) // Newest first
-
-      if (autoBackups.length > retentionCount) {
-        const toDelete = autoBackups.slice(retentionCount)
-        for (const item of toDelete) {
-          try {
-            await fs.unlink(item.path)
-            console.log('[AutoBackup] Retention cleanup: deleted', item.name)
-          } catch (e) {
-            console.warn('[AutoBackup] Retention cleanup failed for', item.name, e)
-          }
-        }
-      }
-    }
-
-    return { success: true, path: backupPath, filename: backupFileName }
-  } catch (error) {
-    console.error('[AutoBackup] Hata:', error)
-    return { success: false, error: getErrorMessage(error) }
+async function otomatikYedekAlBackend(): Promise<TamYedekSonucu> {
+  const result = await tamYedekPaketiOlustur('automatic')
+  if (result.success) {
+    try { await otomatikYedekleriTemizle() }
+    catch (error) { console.warn('[AutoBackup] Saklama temizliği yapılamadı:', error) }
   }
+  return result
 }
 
 async function destekSistemBilgileriGetirBackend(): Promise<any> {
@@ -3468,7 +3965,7 @@ async function destekSistemBilgileriGetirBackend(): Promise<any> {
       const files = await fs.readdir(backupDir)
       let newest: { name: string; path: string; time: number; size: number } | null = null
       for (const f of files) {
-        if (f.endsWith('.db')) {
+        if (f.endsWith('.zip') || f.endsWith('.db')) {
           const fp = path.join(backupDir, f)
           const stat = await fs.stat(fp)
           if (!newest || stat.mtimeMs > newest.time) {
@@ -3512,68 +4009,27 @@ async function destekSistemBilgileriGetirBackend(): Promise<any> {
 let otomatikYedekTimer: ReturnType<typeof setInterval> | null = null
 let otomatikYedekCalisiyor = false
 
-async function otomatikYedekKontrolEt(): Promise<void> {
+async function otomatikYedekKontrolEt(force = false): Promise<void> {
   if (otomatikYedekCalisiyor) return
 
   try {
     const settingsRes = ayarlariGetirBackend()
     const settings = settingsRes?.settings || {}
+    if (settings.automatic_backup_enabled !== 'true') return
 
-    if (settings.automatic_backup_enabled !== 'true') {
-      return
-    }
+    if (!force) {
+      const intervalHours = Math.max(1, Number(settings.backup_interval_hours) || 24)
+      const lastBackupTime = await sonOtomatikYedekZamaniGetir()
+      const intervalMilliseconds = intervalHours * 60 * 60 * 1000
 
-    // Ayarlarda değer yoksa günde bir kez yedek alır.
-    const intervalHours = Math.max(
-      1,
-      Number(settings.backup_interval_hours) || 12
-    )
-
-    const backupDir = yedekKlasoruYoluGetir()
-    await fs.mkdir(backupDir, { recursive: true })
-
-    const files = await fs.readdir(backupDir)
-    let sonOtomatikYedekZamani = 0
-
-    for (const fileName of files) {
-      if (
-        !fileName.startsWith('otoservis_auto_backup_') ||
-        !fileName.endsWith('.db')
-      ) {
-        continue
-      }
-
-      try {
-        const filePath = path.join(backupDir, fileName)
-        const stat = await fs.stat(filePath)
-
-        if (stat.mtimeMs > sonOtomatikYedekZamani) {
-          sonOtomatikYedekZamani = stat.mtimeMs
-        }
-      } catch (error) {
-        console.warn('[AutoBackup] Yedek tarihi okunamadı:', fileName)
-      }
-    }
-
-    const intervalMilliseconds = intervalHours * 60 * 60 * 1000
-    const gecenSure = Date.now() - sonOtomatikYedekZamani
-
-    if (
-      sonOtomatikYedekZamani > 0 &&
-      gecenSure < intervalMilliseconds
-    ) {
-      return
+      if (lastBackupTime > 0 && Date.now() - lastBackupTime < intervalMilliseconds) return
     }
 
     otomatikYedekCalisiyor = true
+    const result = await otomatikYedekAlBackend()
 
-    const sonuc = await otomatikYedekAlBackend()
-
-    if (sonuc.success) {
-      console.log('[AutoBackupScheduler] Yedek alındı:', sonuc.path)
-    } else {
-      console.error('[AutoBackupScheduler] Yedek alınamadı:', sonuc.error)
-    }
+    if (result.success) console.log('[AutoBackupScheduler] Tam yedek paketi alındı:', result.path)
+    else console.error('[AutoBackupScheduler] Yedek alınamadı:', result.error)
   } catch (error) {
     console.error('[AutoBackupScheduler] Hata:', error)
   } finally {
@@ -3586,32 +4042,47 @@ function otomatikYedekZamanlayicisiniBaslat(): void {
     clearInterval(otomatikYedekTimer)
   }
 
-  // Program açılır açılmaz son yedeğin tarihini kontrol et.
-  void otomatikYedekKontrolEt()
+  // Program açılır açılmaz otomatik arkaplan yedeğini doğrudan al (force = true)
+  void otomatikYedekKontrolEt(true)
 
-  // Her 15 dakikada bir süre dolmuş mu diye kontrol et.
+  // Her 15 dakikada bir süre dolmuş mu diye kontrol et (force = false)
   otomatikYedekTimer = setInterval(() => {
-    void otomatikYedekKontrolEt()
+    void otomatikYedekKontrolEt(false)
   }, 15 * 60 * 1000)
 }
 let isQuitting = false
 
-app.on('before-quit', async (event) => {
+app.on('before-quit', (event) => {
   if (isQuitting) return
+
   try {
     const settingsRes = ayarlariGetirBackend()
-    if (settingsRes?.settings?.backup_on_exit === 'true') {
+    const settings = settingsRes?.settings || {}
+    if (settings.backup_on_exit === 'true') {
+      // Çıkış işlemini senkron olarak engelle
       event.preventDefault()
-      await otomatikYedekAlBackend()
-      isQuitting = true
-      app.quit()
+
+      // Asenkron olarak yedek al ve ardından uygulamayı kapat
+      void (async () => {
+        try {
+          const result = await otomatikYedekAlBackend()
+          if (!result.success) console.error('[BackupOnExit] Yedek alınamadı:', result.error)
+        } catch (error) {
+          console.error('[BackupOnExit] Hata:', error)
+        } finally {
+          isQuitting = true
+          app.quit()
+        }
+      })()
     }
-  } catch (err) {
-    console.error('[BackupOnExit] Hata:', err)
+  } catch (error) {
+    console.error('[BackupOnExit] Hata:', error)
+    isQuitting = true
+    app.quit()
   }
 })
 
-app.on('window-all-closed', () => {
+app.on('window-all-closed' , () => {
   if (process.platform !== 'darwin') {
     app.quit()
     win = null
