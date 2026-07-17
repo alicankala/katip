@@ -1,5 +1,15 @@
 const wmiMap: Record<string, { brand: string; country: string }> = {
+  'NL1': { brand: 'Togg', country: 'Türkiye' },
+  'NLA': { brand: 'Honda', country: 'Türkiye' },
+  'NLN': { brand: 'Karsan', country: 'Türkiye' },
+  'NLR': { brand: 'Otokar', country: 'Türkiye' },
+  'NLT': { brand: 'Temsa', country: 'Türkiye' },
+  'NMC': { brand: 'BMC', country: 'Türkiye' },
+  'NLE': { brand: 'Mercedes-Benz', country: 'Türkiye' },
+  'NMB': { brand: 'Mercedes-Benz', country: 'Türkiye' },
   'NM0': { brand: 'Ford', country: 'Türkiye' },
+  'NM1': { brand: 'Renault', country: 'Türkiye' },
+  'NM4': { brand: 'Fiat', country: 'Türkiye' },
   'NMT': { brand: 'Toyota', country: 'Türkiye' },
   'NL3': { brand: 'Hyundai', country: 'Türkiye' },
   'NLH': { brand: 'Honda', country: 'Türkiye' },
@@ -141,7 +151,11 @@ export function decodeVin(vin: string): VinInfo | null {
       'Honda',
       'Mazda',
       'Mitsubishi',
-      'Nissan'
+      'Nissan',
+      'Otokar',
+      'Temsa',
+      'BMC',
+      'Karsan'
     ]
     
     if (extractedYear) {

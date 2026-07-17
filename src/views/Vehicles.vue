@@ -98,6 +98,15 @@ watch(() => form.chassis, (yeniSase) => {
   }
 })
 
+watch(() => form.plate, (yeniPlaka) => {
+  if (!yeniPlaka) return
+  
+  const temizPlaka = yeniPlaka.toUpperCase().replace(/\s/g, '')
+  if (temizPlaka !== yeniPlaka) {
+    form.plate = temizPlaka
+  }
+})
+
 const listeleriGetir = async () => {
   araclar.value = await window.api.araclariGetir()
   musterilerListesi.value = await window.api.musterileriGetir()
@@ -270,7 +279,7 @@ onUnmounted(() => {
 
         <div class="form-group">
           <label>Plaka</label>
-          <InputText v-model="form.plate" placeholder="Örn: 06 ABC 123" style="width: 100%" autofocus />
+          <InputText v-model="form.plate" placeholder="Örn: 06ABC123" style="width: 100%; text-transform: uppercase;" @keydown.space.prevent autofocus />
         </div>
 
         <div style="display: flex; gap: 10px;">

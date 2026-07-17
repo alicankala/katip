@@ -116,7 +116,12 @@ const plakaKontrolEt = () => {
 
 watch(
   () => form.plaka,
-  () => {
+  (yeniPlaka) => {
+    if (!yeniPlaka) return
+    const temizPlaka = yeniPlaka.toUpperCase().replace(/\s/g, '')
+    if (temizPlaka !== yeniPlaka) {
+      form.plaka = temizPlaka
+    }
     plakaKontrolEt()
   }
 )
@@ -330,7 +335,9 @@ onMounted(() => {
             <label>Plaka *</label>
 <InputText
   v-model="form.plaka"
-  placeholder="Örn: 34 ABC 123"
+  placeholder="Örn: 34ABC123"
+  style="text-transform: uppercase;"
+  @keydown.space.prevent
   @blur="plakaKontrolEt"
 />
 <div
