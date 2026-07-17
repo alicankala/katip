@@ -3509,7 +3509,91 @@ async function destekSistemBilgileriGetirBackend(): Promise<any> {
     return { success: false, error: getErrorMessage(error) }
   }
 }
+let otomatikYedekTimer: ReturnType<typeof setInterval> | null = null
+let otomatikYedekCalisiyor = false
 
+async function otomatikYedekKontrolEt(): Promise<void> {
+  if (otomatikYedekCalisiyor) return
+
+  try {
+    const settingsRes = ayarlariGetirBackend()
+    const settings = settingsRes?.settings || {}
+
+    if (settings.automatic_backup_enabled !== 'true') {
+      return
+    }
+
+    // Ayarlarda değer yoksa günde bir kez yedek alır.
+    const intervalHours = Math.max(
+      1,
+      Number(settings.backup_interval_hours) || 12
+    )
+
+    const backupDir = yedekKlasoruYoluGetir()
+    await fs.mkdir(backupDir, { recursive: true })
+
+    const files = await fs.readdir(backupDir)
+    let sonOtomatikYedekZamani = 0
+
+    for (const fileName of files) {
+      if (
+        !fileName.startsWith('otoservis_auto_backup_') ||
+        !fileName.endsWith('.db')
+      ) {
+        continue
+      }
+
+      try {
+        const filePath = path.join(backupDir, fileName)
+        const stat = await fs.stat(filePath)
+
+        if (stat.mtimeMs > sonOtomatikYedekZamani) {
+          sonOtomatikYedekZamani = stat.mtimeMs
+        }
+      } catch (error) {
+        console.warn('[AutoBackup] Yedek tarihi okunamadı:', fileName)
+      }
+    }
+
+    const intervalMilliseconds = intervalHours * 60 * 60 * 1000
+    const gecenSure = Date.now() - sonOtomatikYedekZamani
+
+    if (
+      sonOtomatikYedekZamani > 0 &&
+      gecenSure < intervalMilliseconds
+    ) {
+      return
+    }
+
+    otomatikYedekCalisiyor = true
+
+    const sonuc = await otomatikYedekAlBackend()
+
+    if (sonuc.success) {
+      console.log('[AutoBackupScheduler] Yedek alındı:', sonuc.path)
+    } else {
+      console.error('[AutoBackupScheduler] Yedek alınamadı:', sonuc.error)
+    }
+  } catch (error) {
+    console.error('[AutoBackupScheduler] Hata:', error)
+  } finally {
+    otomatikYedekCalisiyor = false
+  }
+}
+
+function otomatikYedekZamanlayicisiniBaslat(): void {
+  if (otomatikYedekTimer) {
+    clearInterval(otomatikYedekTimer)
+  }
+
+  // Program açılır açılmaz son yedeğin tarihini kontrol et.
+  void otomatikYedekKontrolEt()
+
+  // Her 15 dakikada bir süre dolmuş mu diye kontrol et.
+  otomatikYedekTimer = setInterval(() => {
+    void otomatikYedekKontrolEt()
+  }, 15 * 60 * 1000)
+}
 let isQuitting = false
 
 app.on('before-quit', async (event) => {
@@ -3546,15 +3630,7 @@ app.whenReady().then(async () => {
   ipcKopruleriniKur()
   Menu.setApplicationMenu(null)
 
-  // Auto backup on startup if enabled
-  try {
-    const settingsRes = ayarlariGetirBackend()
-    if (settingsRes?.settings?.automatic_backup_enabled === 'true') {
-      otomatikYedekAlBackend()
-    }
-  } catch (err) {
-    console.error('[AutoBackupOnStart] Hata:', err)
-  }
+otomatikYedekZamanlayicisiniBaslat()
 
   createWindow()
 })
