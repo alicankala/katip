@@ -953,8 +953,8 @@ const kalemGuncelleKaydet = async () => {
     return
   }
 
-  if (kalemDuzenleForm.type === 'Parça' && !kalemDuzenleForm.part_id) {
-    uyariMesaji('Lütfen kullanılacak parçayı seçin.')
+  if (kalemDuzenleForm.type === 'Parça' && !kalemDuzenleForm.part_id && !kalemDuzenleForm.description) {
+    uyariMesaji('Lütfen parça adı veya açıklaması yazın.')
     return
   }
 
@@ -1025,8 +1025,8 @@ const kalemKaydet = async () => {
     return
   }
 
-  if (kalemForm.type === 'Parça' && !kalemForm.part_id) {
-    uyariMesaji('Lütfen kullanılacak parçayı seçin.')
+  if (kalemForm.type === 'Parça' && !kalemForm.part_id && !kalemForm.description) {
+    uyariMesaji('Lütfen parça adı veya açıklaması yazın.')
     return
   }
 
@@ -2415,14 +2415,11 @@ onUnmounted(() => {
       </Dropdown>
     </div>
 
-    <div
-      v-else
-      class="form-group"
-    >
-      <label>İşçilik Açıklaması</label>
+    <div class="form-group">
+      <label>{{ kalemDuzenleForm.type === 'Parça' ? 'Açıklama / Parça Adı' : 'İşçilik Açıklaması *' }}</label>
       <InputText
         v-model="kalemDuzenleForm.description"
-        placeholder="Örn: Yağ bakım işçiliği"
+        :placeholder="kalemDuzenleForm.type === 'Parça' ? 'Katalog dışı ise buraya yazın (Örn: 5W-30 Motor Yağı)' : 'Örn: Yağ bakım işçiliği'"
         style="width: 100%"
       />
     </div>
@@ -2565,7 +2562,7 @@ onUnmounted(() => {
           >
           <h3 style="margin-top: 0;">Yeni Kalem Ekle</h3>
 
-          <div style="display: grid; grid-template-columns: 130px 1fr 110px 130px 120px; gap: 10px; align-items: end;">
+          <div :style="{ display: 'grid', gridTemplateColumns: kalemForm.type === 'Parça' ? '120px 220px 1fr 80px 110px 100px' : '120px 1fr 80px 110px 100px', gap: '10px', alignItems: 'end' }">
             <div class="form-group">
               <label>Tip</label>
               <Dropdown
@@ -2598,11 +2595,11 @@ onUnmounted(() => {
               </Dropdown>
             </div>
 
-            <div v-else class="form-group">
-              <label>İşçilik Açıklaması</label>
+            <div class="form-group">
+              <label>{{ kalemForm.type === 'Parça' ? 'Açıklama / Parça Adı' : 'İşçilik Açıklaması *' }}</label>
               <InputText
                 v-model="kalemForm.description"
-                placeholder="Örn: Yağ bakım işçiliği"
+                :placeholder="kalemForm.type === 'Parça' ? 'Katalog dışı ise buraya yazın (Örn: 5W-30 Motor Yağı)' : 'Örn: Yağ bakım işçiliği'"
                 style="width: 100%"
               />
             </div>
@@ -2927,104 +2924,89 @@ onUnmounted(() => {
         </div>
 
         <!-- SEKME 4: İşlem Geçmişi & Maliyet / Kâr Hesabı -->
-        <div v-if="detaySekmesi === 'gecmis'" style="display: flex; flex-direction: column; gap: 14px;">
-          <div>
-            <h3>Ek Bilgiler</h3>
-            <p>İşlem geçmişi ve iç maliyet/kâr hesabı gerektiğinde açılır.</p>
+        <div v-if="detaySekmesi === 'gecmis'" style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px; align-items: start;">
+          <!-- Sol Kolon: İşlem Geçmişi -->
+          <div class="work-order-log-panel" style="margin: 0; background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 18px; border-radius: 10px;">
+            <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 1.1rem; color: var(--text-title); display: flex; align-items: center; gap: 8px;">
+              <i class="pi pi-history" style="color: var(--accent-color);"></i>
+              İşlem Geçmişi ({{ isEmriLoglari.length }})
+            </h3>
+            
+            <div v-if="isEmriLoglari.length === 0" style="color: var(--text-muted); font-size: 0.9rem; padding: 10px 0;">
+              Henüz bir işlem kaydı bulunmuyor.
+            </div>
+            
+            <div v-else style="max-height: 400px; overflow-y: auto; padding-right: 6px; display: flex; flex-direction: column; gap: 10px;">
+              <div
+                v-for="log in isEmriLoglari"
+                :key="log.id"
+                class="work-order-log-item"
+                style="background: rgba(15, 23, 42, 0.4); border: 1px solid var(--border-color); padding: 10px 12px; border-radius: 6px;"
+              >
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
+                  <strong style="color: var(--text-title); font-size: 0.9rem;">{{ log.action }}</strong>
+                  <span style="font-size: 0.75rem; color: var(--text-muted); text-align: right;">
+                    {{ log.master_name || 'Usta' }}<br/>{{ tarihFormatla(log.created_at) }}
+                  </span>
+                </div>
+                <p style="margin: 4px 0 0; font-size: 0.82rem; color: var(--text-secondary); line-height: 1.3;">{{ log.reason || '-' }}</p>
+              </div>
+            </div>
           </div>
 
-          <div class="extra-info-actions">
-            <Button
-              :label="islemGecmisiAcik ? 'İşlem Geçmişini Gizle' : `İşlem Geçmişi (${isEmriLoglari.length})`"
-              icon="pi pi-history"
-              size="small"
-              severity="secondary"
-              outlined
-              :disabled="isEmriLoglari.length === 0"
-              @click="islemGecmisiAcik = !islemGecmisiAcik"
-            />
-
-            <Button
-              :label="maliyetKarAcik ? 'Maliyet / Kârı Gizle' : 'İç Maliyet / Kâr'"
-              icon="pi pi-chart-line"
-              size="small"
-              severity="info"
-              outlined
-              @click="maliyetKarAcik = !maliyetKarAcik"
-            />
-          </div>
-        </div>
-
-        <div
-          v-if="islemGecmisiAcik && isEmriLoglari.length > 0"
-          class="work-order-log-panel"
-        >
-          <h3>İşlem Geçmişi</h3>
-
-          <div
-            v-for="log in isEmriLoglari"
-            :key="log.id"
-            class="work-order-log-item"
-          >
-            <div>
-              <strong>{{ log.action }}</strong>
-              <span>
-                {{ log.master_name || 'Usta bilinmiyor' }}
-                -
-                {{ tarihFormatla(log.created_at) }}
-              </span>
+          <!-- Sağ Kolon: İç Maliyet / Kâr Hesabı -->
+          <div class="internal-profit-panel" style="margin: 0; background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 18px; border-radius: 10px;">
+            <div class="internal-profit-header" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px;">
+              <div>
+                <h3 style="margin: 0; font-size: 1.1rem; color: var(--text-title); display: flex; align-items: center; gap: 8px;">
+                  <i class="pi pi-chart-line" style="color: var(--accent-color);"></i>
+                  İç Maliyet / Kâr Hesabı
+                </h3>
+                <p style="margin: 4px 0 0; font-size: 0.8rem; color: var(--text-muted);">Müşteri fişinde gösterilmeyen servis içi kâr hesabı.</p>
+              </div>
+              <Tag
+                :value="maliyetOzeti.netKar >= 0 ? 'Kârlı' : 'Zarar'"
+                :severity="maliyetOzeti.netKar >= 0 ? 'success' : 'danger'"
+                style="font-weight: bold;"
+              />
             </div>
 
-            <p>{{ log.reason || '-' }}</p>
-          </div>
-        </div>
+            <div class="profit-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; text-align: center;">
+              <div class="profit-card" style="background: rgba(15, 23, 42, 0.4); padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+                <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Parça Alış Maliyeti</span>
+                <strong style="font-size: 1rem; color: var(--text-primary); display: block; margin-top: 4px;">{{ tlFormatla(maliyetOzeti.parcaMaliyeti) }}</strong>
+              </div>
 
-        <div
-          v-if="maliyetKarAcik"
-          class="internal-profit-panel"
-        >
-          <div class="internal-profit-header">
-            <div>
-              <h3>İç Maliyet / Kâr Hesabı</h3>
-              <p>Bu bölüm sadece servis içi takip içindir, müşteri fişinde gösterilmez.</p>
-            </div>
+              <div class="profit-card" style="background: rgba(15, 23, 42, 0.4); padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+                <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Parça Satış Toplamı</span>
+                <strong style="font-size: 1rem; color: var(--text-primary); display: block; margin-top: 4px;">{{ tlFormatla(maliyetOzeti.parcaSatisi) }}</strong>
+              </div>
 
-            <Tag
-              :value="maliyetOzeti.netKar >= 0 ? 'Kârlı' : 'Zarar'"
-              :severity="maliyetOzeti.netKar >= 0 ? 'success' : 'danger'"
-            />
-          </div>
+              <div class="profit-card" style="background: rgba(15, 23, 42, 0.4); padding: 10px 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+                <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">İşçilik Geliri</span>
+                <strong style="font-size: 1rem; color: var(--text-primary); display: block; margin-top: 4px;">{{ tlFormatla(maliyetOzeti.iscilikGeliri) }}</strong>
+              </div>
 
-          <div class="profit-grid">
-            <div class="profit-card">
-              <span>Parça Alış Maliyeti</span>
-              <strong>{{ tlFormatla(maliyetOzeti.parcaMaliyeti) }}</strong>
-            </div>
+              <div class="profit-card" style="background: rgba(16, 185, 129, 0.1); padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.2);">
+                <span style="font-size: 0.75rem; color: #34d399; display: block;">Toplam Ciro / Satış</span>
+                <strong style="font-size: 1rem; color: #34d399; display: block; margin-top: 4px;">{{ tlFormatla(maliyetOzeti.toplamSatis) }}</strong>
+              </div>
 
-            <div class="profit-card">
-              <span>Parça Satış Toplamı</span>
-              <strong>{{ tlFormatla(maliyetOzeti.parcaSatisi) }}</strong>
-            </div>
+              <div class="profit-card" style="background: rgba(239, 68, 68, 0.1); padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2);">
+                <span style="font-size: 0.75rem; color: #f87171; display: block;">Toplam Parça Maliyeti</span>
+                <strong style="font-size: 1rem; color: #f87171; display: block; margin-top: 4px;">{{ tlFormatla(maliyetOzeti.toplamMaliyet) }}</strong>
+              </div>
 
-            <div class="profit-card">
-              <span>İşçilik Geliri</span>
-              <strong>{{ tlFormatla(maliyetOzeti.iscilikGeliri) }}</strong>
-            </div>
-
-            <div class="profit-card">
-              <span>Toplam Tahsilat</span>
-              <strong>{{ tlFormatla(maliyetOzeti.toplamSatis) }}</strong>
-            </div>
-
-            <div class="profit-card">
-              <span>Toplam Maliyet</span>
-              <strong>{{ tlFormatla(maliyetOzeti.toplamMaliyet) }}</strong>
-            </div>
-
-            <div class="profit-card profit-card-main">
-              <span>Net Kâr</span>
-              <strong>{{ tlFormatla(maliyetOzeti.netKar) }}</strong>
-              <small>Kâr oranı: {{ yuzdeFormatla(maliyetOzeti.karOrani) }}</small>
+              <div class="profit-card profit-card-main" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.2), rgba(5, 150, 105, 0.2)); padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.3); grid-column: span 2; display: grid; grid-template-columns: 1fr 1fr; text-align: center; align-items: center;">
+                <div>
+                  <span style="font-size: 0.75rem; color: #a7f3d0; display: block;">Net Kâr</span>
+                  <strong style="font-size: 1.15rem; color: #10b981; display: block; margin-top: 2px;">{{ tlFormatla(maliyetOzeti.netKar) }}</strong>
+                </div>
+                <div>
+                  <span style="font-size: 0.75rem; color: #a7f3d0; display: block;">Kâr Oranı</span>
+                  <strong style="font-size: 1.15rem; color: #10b981; display: block; margin-top: 2px;">{{ yuzdeFormatla(maliyetOzeti.karOrani) }}</strong>
+                </div>
+              </div>
             </div>
           </div>
         </div>

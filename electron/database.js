@@ -196,6 +196,7 @@ CREATE TABLE IF NOT EXISTS work_orders (
       quantity REAL DEFAULT 1,
       unit_price REAL DEFAULT 0,
       total_price REAL DEFAULT 0,
+      buy_price REAL DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(work_order_id) REFERENCES work_orders(id),
       FOREIGN KEY(part_id) REFERENCES parts(id)
@@ -473,6 +474,19 @@ migrationCalistir(23, () => {
 
     CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
     CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(name);
+  `)
+})
+
+migrationCalistir(24, () => {
+  kolonEkleEksikse('work_order_items', 'buy_price', 'REAL DEFAULT 0')
+  db.exec(`
+    UPDATE work_order_items
+    SET buy_price = (
+      SELECT IFNULL(parts.buy_price, 0)
+      FROM parts
+      WHERE parts.id = work_order_items.part_id
+    )
+    WHERE type = 'Parça' AND part_id IS NOT NULL;
   `)
 })
 

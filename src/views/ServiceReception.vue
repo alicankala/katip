@@ -221,21 +221,83 @@ const serviseAl = async () => {
         customerId = musteriRes.id
       }
 
-const aracRes = await window.api.aracEkle({
-  customer_id: customerId,
-  plate: plakaTemizle(form.plaka),
-  brand: form.marka,
-  model: form.model,
-  year: form.yil || null,
-  mileage: form.km || null,
-  chassis: form.sase
-})
+      const aracRes = await window.api.aracEkle({
+        customer_id: customerId,
+        plate: plakaTemizle(form.plaka),
+        brand: form.marka,
+        model: form.model,
+        year: form.yil || null,
+        mileage: form.km || null,
+        chassis: form.sase
+      })
 
       if (!aracRes?.success) {
         throw new Error(aracRes?.error || 'Araç oluşturulamadı.')
       }
 
       vehicleId = aracRes.id
+    } else {
+      // Araç zaten kayıtlı, müşteri ve araç bilgilerindeki değişiklikleri denetle ve güncelle
+      let customerId = null
+      const mevcutMusteri = mevcutMusteriBul()
+
+      if (mevcutMusteri) {
+        customerId = mevcutMusteri.id
+        
+        // Müşteri bilgileri formda güncellenmişse veritabanında da güncelle
+        const trimmedName = String(form.musteriAd || '').trim()
+        const trimmedPhone = String(form.musteriTel || '').trim()
+        if (mevcutMusteri.name !== trimmedName || mevcutMusteri.phone !== trimmedPhone) {
+          const musteriGuncelleRes = await window.api.musteriGuncelle({
+            id: customerId,
+            name: trimmedName,
+            phone: trimmedPhone,
+            note: mevcutMusteri.note || 'Servis kabulden güncellendi'
+          })
+          if (!musteriGuncelleRes?.success) {
+            throw new Error(musteriGuncelleRes?.error || 'Müşteri bilgileri güncellenemedi.')
+          }
+        }
+      } else {
+        // Yeni bir müşteri bilgisi girildiyse (Araç sahibi değişmişse)
+        const musteriRes = await window.api.musteriEkle({
+          name: form.musteriAd,
+          phone: form.musteriTel,
+          note: 'Servis kabulden (yeni sahibi) oluşturuldu'
+        })
+
+        if (!musteriRes?.success) {
+          throw new Error(musteriRes?.error || 'Yeni araç sahibi oluşturulamadı.')
+        }
+
+        customerId = musteriRes.id
+      }
+
+      // Araç bilgilerinde değişiklik var mı kontrol et
+      const plateChanged = plakaTemizle(form.plaka) !== plakaTemizle(mevcutArac.plate)
+      const brandChanged = String(form.marka || '').trim() !== String(mevcutArac.brand || '').trim()
+      const modelChanged = String(form.model || '').trim() !== String(mevcutArac.model || '').trim()
+      const yearChanged = (form.yil ? Number(form.yil) : null) !== (mevcutArac.year ? Number(mevcutArac.year) : null)
+      const chassisChanged = String(form.sase || '').trim() !== String(mevcutArac.chassis || '').trim()
+      const mileageChanged = (form.km ? Number(form.km) : null) !== (mevcutArac.mileage ? Number(mevcutArac.mileage) : null)
+      const customerChanged = customerId !== mevcutArac.customer_id
+
+      if (plateChanged || brandChanged || modelChanged || yearChanged || chassisChanged || mileageChanged || customerChanged) {
+        const aracGuncelleRes = await window.api.aracGuncelle({
+          id: vehicleId,
+          customer_id: customerId,
+          plate: plakaTemizle(form.plaka),
+          brand: form.marka,
+          model: form.model,
+          year: form.yil || null,
+          mileage: form.km || null,
+          chassis: form.sase
+        })
+
+        if (!aracGuncelleRes?.success) {
+          throw new Error(aracGuncelleRes?.error || 'Araç bilgileri güncellenemedi.')
+        }
+      }
     }
 
 const isEmriRes = await window.api.isEmriEkle({

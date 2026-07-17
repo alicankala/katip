@@ -2163,13 +2163,13 @@ kanalEkle('is-emri-tamamla-ve-odeme-kaydet', (_event, veri: any) => {
 kanalEkle('is-emri-kalemleri-getir', (_event, workOrderId: any) => {
   try {
     const kalemler = db.prepare(`
-SELECT 
-  work_order_items.*,
-  parts.code AS part_code,
-  parts.name AS part_name,
-  parts.buy_price AS part_buy_price,
-  parts.sell_price AS part_sell_price
-FROM work_order_items
+      SELECT 
+        work_order_items.*,
+        parts.code AS part_code,
+        parts.name AS part_name,
+        work_order_items.buy_price AS part_buy_price,
+        parts.sell_price AS part_sell_price
+      FROM work_order_items
       LEFT JOIN parts ON work_order_items.part_id = parts.id
       WHERE work_order_items.work_order_id = ?
       ORDER BY work_order_items.id DESC
@@ -2197,6 +2197,7 @@ kanalEkle('is-emri-kalem-ekle', (_event, kalem: any) => {
   kalem.active_master_id !== ''
     ? Number(kalem.active_master_id)
     : null
+    let buyPrice = 0
 
     if (!workOrderId) {
       throw new Error('İş emri seçilmedi.')
@@ -2206,40 +2207,38 @@ kanalEkle('is-emri-kalem-ekle', (_event, kalem: any) => {
       throw new Error('Kalem tipi seçilmedi.')
     }
 
-    if (type === 'Parça') {
-      if (!partId) {
-        throw new Error('Parça seçilmedi.')
-      }
-
-      const parca = db.prepare('SELECT * FROM parts WHERE id = ?').get(partId)
+    if (type === 'Parça' && partId) {
+      const parca = db.prepare('SELECT * FROM parts WHERE id = ?').get(partId) as any
 
       if (!parca) {
         throw new Error('Seçilen parça bulunamadı.')
       }
 
+      buyPrice = Number(parca.buy_price) || 0
+
       if (Number(parca.stock || 0) < quantity) {
         throw new Error(`Stok yetersiz. Mevcut stok: ${parca.stock}`)
       }
 
-const eskiStok = Number(parca.stock) || 0
-const yeniStok = eskiStok - quantity
+      const eskiStok = Number(parca.stock) || 0
+      const yeniStok = eskiStok - quantity
 
-db.prepare(`
-  UPDATE parts
-  SET stock = ?
-  WHERE id = ?
-`).run(yeniStok, partId)
+      db.prepare(`
+        UPDATE parts
+        SET stock = ?
+        WHERE id = ?
+      `).run(yeniStok, partId)
 
-stokHareketiKaydet({
-  partId,
-  workOrderId,
-  type: 'Çıkış',
-  quantity,
-  oldStock: eskiStok,
-  newStock: yeniStok,
-  masterId: activeMasterId,
-  note: 'İş emrinde kullanıldı'
-})
+      stokHareketiKaydet({
+        partId,
+        workOrderId,
+        type: 'Çıkış',
+        quantity,
+        oldStock: eskiStok,
+        newStock: yeniStok,
+        masterId: activeMasterId,
+        note: 'İş emrinde kullanıldı'
+      })
     }
 
     const aciklama = type === 'Parça'
@@ -2248,8 +2247,8 @@ stokHareketiKaydet({
 
     const info = db.prepare(`
       INSERT INTO work_order_items 
-      (work_order_id, type, part_id, description, quantity, unit_price, total_price)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      (work_order_id, type, part_id, description, quantity, unit_price, total_price, buy_price)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       workOrderId,
       type,
@@ -2257,7 +2256,8 @@ stokHareketiKaydet({
       aciklama,
       quantity,
       unitPrice,
-      totalPrice
+      totalPrice,
+      buyPrice
     )
 
     isEmriToplaminiGuncelle(workOrderId)
@@ -2305,8 +2305,8 @@ kanalEkle('is-emri-kalem-guncelle', (_event, veri: any) => {
       throw new Error('Kalem tipi seçilmelidir.')
     }
 
-    if (yeniTip === 'Parça' && !yeniPartId) {
-      throw new Error('Parça seçilmelidir.')
+    if (yeniTip === 'Parça' && !yeniPartId && !yeniAciklama) {
+      throw new Error('Katalog dışı parça için açıklama/ad belirtilmelidir.')
     }
 
     if (yeniTip === 'İşçilik' && !yeniAciklama) {
@@ -2452,6 +2452,16 @@ kanalEkle('is-emri-kalem-guncelle', (_event, veri: any) => {
       }
     }
 
+    let yeniBuyPrice = 0
+    if (yeniTip === 'Parça') {
+      if (yeniPartId === eskiPartId) {
+        yeniBuyPrice = Number(eskiKalem.buy_price) || 0
+      } else {
+        const parca = db.prepare('SELECT buy_price FROM parts WHERE id = ?').get(yeniPartId) as any
+        yeniBuyPrice = parca ? (Number(parca.buy_price) || 0) : 0
+      }
+    }
+
     db.prepare(`
       UPDATE work_order_items
       SET
@@ -2460,7 +2470,8 @@ kanalEkle('is-emri-kalem-guncelle', (_event, veri: any) => {
         description = ?,
         quantity = ?,
         unit_price = ?,
-        total_price = ?
+        total_price = ?,
+        buy_price = ?
       WHERE id = ?
     `).run(
       yeniTip,
@@ -2469,6 +2480,7 @@ kanalEkle('is-emri-kalem-guncelle', (_event, veri: any) => {
       yeniMiktar,
       yeniBirimFiyat,
       yeniToplam,
+      yeniBuyPrice,
       kalemId
     )
 
@@ -2618,7 +2630,7 @@ kanalEkle('karlilik-raporu-getir', () => {
 
         COALESCE(SUM(CASE
           WHEN work_order_items.type = 'Parça'
-          THEN work_order_items.quantity * IFNULL(parts.buy_price, 0)
+          THEN work_order_items.quantity * IFNULL(work_order_items.buy_price, 0)
           ELSE 0
         END), 0) AS parca_maliyet_toplami,
 
@@ -2632,7 +2644,7 @@ kanalEkle('karlilik-raporu-getir', () => {
 
         COALESCE(SUM(CASE
           WHEN work_order_items.type = 'Parça'
-          THEN work_order_items.quantity * IFNULL(parts.buy_price, 0)
+          THEN work_order_items.quantity * IFNULL(work_order_items.buy_price, 0)
           ELSE 0
         END), 0) AS toplam_maliyet
 

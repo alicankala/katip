@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -111,6 +111,19 @@ const cariForm = reactive({
   phone: '',
   note: '',
   direction: 'Borç'
+})
+
+// Cari tipi değiştikçe borç/alacak yönünü otomatik belirle
+watch(() => cariForm.type, (newType) => {
+  if (!newType) return
+  const t = newType.toLowerCase()
+  const borcTipleri = ['parçacı', 'kaportacı', 'boyacı', 'turbocu', 'rektefiyeci', 'tornacı', 'elektrikçi', 'egzozcu', 'döşemeci']
+  const isBorc = borcTipleri.some(bt => t.includes(bt))
+  if (isBorc) {
+    cariForm.direction = 'Borç'
+  } else if (t.includes('müşteri') || t.includes('alıcı') || t.includes('firma')) {
+    cariForm.direction = 'Alacak'
+  }
 })
 
 const islemForm = reactive({
@@ -632,6 +645,58 @@ const giderSil = (gider) => {
           await giderleriYukle()
         } else {
           hataMesaji(res?.error || 'Gider silinemedi.')
+        }
+      } catch (error) {
+        hataMesaji('Silme sırasında hata oluştu.')
+      }
+    }
+  })
+}
+
+const cariIslemSil = (islem) => {
+  confirmDialog.require({
+    message: `"${islem.description || 'Açıklamasız'}" başlıklı işlemi silmek istediğinize emin misiniz?`,
+    header: 'İşlem Silme Onayı',
+    icon: 'pi pi-exclamation-triangle',
+    rejectLabel: 'Vazgeç',
+    acceptLabel: 'Sil',
+    rejectClass: 'p-button-secondary p-button-outlined',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        const res = await window.api.cariIslemSil(islem.id)
+        if (res?.success) {
+          basariMesaji('Cari işlem silindi.')
+          await cariDetaylariniYukle(seciliCari.value)
+          await carileriYukle()
+        } else {
+          hataMesaji(res?.error || 'İşlem silinemedi.')
+        }
+      } catch (error) {
+        hataMesaji('Silme sırasında hata oluştu.')
+      }
+    }
+  })
+}
+
+const cariOdemeSil = (odeme) => {
+  confirmDialog.require({
+    message: `"${odeme.description || 'Açıklamasız'}" başlıklı ödeme kaydını silmek istediğinize emin misiniz?`,
+    header: 'Ödeme Silme Onayı',
+    icon: 'pi pi-exclamation-triangle',
+    rejectLabel: 'Vazgeç',
+    acceptLabel: 'Sil',
+    rejectClass: 'p-button-secondary p-button-outlined',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        const res = await window.api.cariOdemeSil(odeme.id)
+        if (res?.success) {
+          basariMesaji('Cari ödeme kaydı silindi.')
+          await cariDetaylariniYukle(seciliCari.value)
+          await carileriYukle()
+        } else {
+          hataMesaji(res?.error || 'Ödeme silinemedi.')
         }
       } catch (error) {
         hataMesaji('Silme sırasında hata oluştu.')
@@ -1260,16 +1325,29 @@ onUnmounted(() => {
         </div>
 
         <div class="form-group">
-          <label>Cari Yönü (Tip) <span class="zorunlu-alan">*</span></label>
+          <label>Cari Yönü (Kategori) <span class="zorunlu-alan">*</span></label>
           <div style="display: flex; gap: 16px; margin-top: 4px; background: var(--bg-active-box); padding: 10px; border-radius: 8px; border: 1px solid var(--border-color);">
             <div style="display: flex; align-items: center; gap: 6px;">
               <input type="radio" id="dir-borc" value="Borç" v-model="cariForm.direction" style="width: 16px; height: 16px; accent-color: #ef4444;" />
-              <label for="dir-borc" style="cursor: pointer; margin: 0; font-size: 0.88rem; color: var(--text-title);">Borç (Tedarikçi)</label>
+              <label for="dir-borc" style="cursor: pointer; margin: 0; font-size: 0.88rem; color: var(--text-title);">Borç (Taşeron Usta / Tedarikçi)</label>
             </div>
             <div style="display: flex; align-items: center; gap: 6px;">
               <input type="radio" id="dir-alacak" value="Alacak" v-model="cariForm.direction" style="width: 16px; height: 16px; accent-color: #10b981;" />
-              <label for="dir-alacak" style="cursor: pointer; margin: 0; font-size: 0.88rem; color: var(--text-title);">Alacak (Müşteri)</label>
+              <label for="dir-alacak" style="cursor: pointer; margin: 0; font-size: 0.88rem; color: var(--text-title);">Alacak (Kurumsal Müşteri / Firma)</label>
             </div>
+          </div>
+          <!-- Yardımcı Bilgilendirme Kutusu -->
+          <div style="font-size: 0.82rem; padding: 10px 14px; border-radius: 8px; line-height: 1.45; border: 1px solid; margin-top: 6px; display: flex; align-items: flex-start; gap: 8px;"
+               :style="cariForm.direction === 'Borç' 
+                 ? 'background: rgba(239, 68, 68, 0.08); border-color: rgba(239, 68, 68, 0.2); color: #f87171;' 
+                 : 'background: rgba(16, 185, 129, 0.08); border-color: rgba(16, 185, 129, 0.2); color: #34d399;'">
+            <span style="font-size: 1.1rem; margin-top: -2px;">ℹ️</span>
+            <span v-if="cariForm.direction === 'Borç'">
+              <strong>Dış Hizmet / Tedarikçi:</strong> Boyacı, rektefiyeci, parçacı gibi dışarıya yaptırdığınız işler ve aldığınız parçalar için <strong>ödeme yapacağınız</strong> cariler içindir.
+            </span>
+            <span v-else>
+              <strong>Kurumsal Müşteri / Alacak:</strong> Sürekli çalıştığınız kurumsal firmalar, filolar veya vadeli hizmet verdiğiniz ve <strong>tahsilat yapacağınız</strong> cariler içindir. (Bireysel müşterilerin servis ödemeleri İş Emirleri bölümünden takip edilir)
+            </span>
           </div>
         </div>
         
@@ -1463,6 +1541,18 @@ onUnmounted(() => {
           <Column header="Tutar" style="text-align: right; width: 120px;">
             <template #body="slotProps">
               <strong>{{ tlFormatla(slotProps.data.amount) }}</strong>
+            </template>
+          </Column>
+          <Column header="İşlem" style="width: 80px; text-align: center;">
+            <template #body="slotProps">
+              <Button
+                icon="pi pi-trash"
+                outlined
+                rounded
+                severity="danger"
+                size="small"
+                @click="slotProps.data.transaction_type ? cariIslemSil(slotProps.data) : cariOdemeSil(slotProps.data)"
+              />
             </template>
           </Column>
         </DataTable>
