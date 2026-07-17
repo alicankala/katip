@@ -9,6 +9,5 @@ export function verifyPin(enteredPin: string, storedDbPin: string): boolean {
   if (!storedDbPin) return false
   const cleanEntered = String(enteredPin || '').trim()
   const cleanStored = String(storedDbPin || '').trim()
-  if (cleanStored === cleanEntered) return true
   return cleanStored === hashPin(cleanEntered)
 }
