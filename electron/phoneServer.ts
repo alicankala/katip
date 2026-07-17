@@ -1659,11 +1659,23 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       <!-- Labor & Parts -->
     </div>
 
-    <div class="detail-card" style="padding: 12px;">
-      <div class="detail-row" style="border: none;">
-        <span class="detail-label" style="font-size: 15px; font-weight: 700; color: var(--text-primary);">Toplam Tutar</span>
-        <span id="hist-wo-total" class="detail-value" style="font-size: 16px; font-weight: 700; color: var(--accent);">-</span>
-      <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-top: 18px;">
+<div class="detail-card" style="padding: 12px;">
+  <div class="detail-row" style="border: none;">
+    <span class="detail-label"
+          style="font-size: 15px; font-weight: 700; color: var(--text-primary);">
+      Toplam Tutar
+    </span>
+
+    <span id="hist-wo-total"
+          class="detail-value"
+          style="font-size: 16px; font-weight: 700; color: var(--accent);">
+      -
+    </span>
+  </div>
+</div>
+
+<div class="section-title"
+     style="display: flex; justify-content: space-between; align-items: center; margin-top: 18px;">
   <span>
     <i class="pi pi-camera"></i>
     Servis Fotoğrafları (<span id="hist-photo-count">0</span>)
@@ -1702,9 +1714,10 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     </div>
   </div>
 </div>
-      
 
-  <script>
+</div>
+
+<script>
     let activeUser = null;
     let activeToken = localStorage.getItem('mobActiveToken') || null;
 
