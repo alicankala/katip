@@ -11,6 +11,7 @@ import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import PrintPreviewDialog from '../components/work-orders/PrintPreviewDialog.vue'
+import EditItemDialog from '../components/work-orders/EditItemDialog.vue'
 
 const isEmirleri = ref([])
 const araclarListesi = ref([])
@@ -933,7 +934,10 @@ const kalemDuzenle = (kalem) => {
   kalemDialogAcik.value = true
 }
 
-const kalemGuncelleKaydet = async () => {
+const kalemGuncelleKaydet = async (payload) => {
+  if (payload) {
+    Object.assign(kalemDuzenleForm, payload)
+  }
   if (!kalemDuzenleForm.id) {
     hataMesaji('Düzenlenecek kalem bulunamadı.')
     return
@@ -1708,100 +1712,12 @@ onUnmounted(() => {
   v-if="seciliIsEmri"
   class="inline-kalem-panel"
 >
-<Dialog
-  v-model:visible="kalemDialogAcik"
-  header="Kalem Düzenle"
-  :style="{ width: '720px' }"
-  modal
->
-  <div style="display: flex; flex-direction: column; gap: 15px; padding-top: 10px;">
-    <div class="form-group">
-      <label>Tip</label>
-      <Dropdown
-        v-model="kalemDuzenleForm.type"
-        :options="kalemTipleri"
-        style="width: 100%"
-        @change="Object.assign(kalemDuzenleForm, { part_id: null, description: '', quantity: 1, unit_price: 0 })"
-      />
-    </div>
-
-    <div
-      v-if="kalemDuzenleForm.type === 'Parça'"
-      class="form-group"
-    >
-      <label>Parça Seç</label>
-      <Dropdown
-        v-model="kalemDuzenleForm.part_id"
-        :options="parcalarListesi"
-        optionLabel="name"
-        optionValue="id"
-        filter
-        placeholder="Parça ara..."
-        style="width: 100%"
-        @change="kalemDuzenleParcaSecildi($event.value)"
-      >
-        <template #option="slotProps">
-          <div>
-            <strong>{{ slotProps.option.code }}</strong>
-            - {{ slotProps.option.name }}
-            <span style="color: #aaa;"> | Stok: {{ slotProps.option.stock }}</span>
-          </div>
-        </template>
-      </Dropdown>
-    </div>
-
-    <div class="form-group">
-      <label>{{ kalemDuzenleForm.type === 'Parça' ? 'Açıklama / Parça Adı' : 'İşçilik Açıklaması *' }}</label>
-      <InputText
-        v-model="kalemDuzenleForm.description"
-        :placeholder="kalemDuzenleForm.type === 'Parça' ? 'Katalog dışı ise buraya yazın (Örn: 5W-30 Motor Yağı)' : 'Örn: Yağ bakım işçiliği'"
-        style="width: 100%"
-      />
-    </div>
-
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-      <div class="form-group">
-        <label>Miktar</label>
-        <InputText
-          type="number"
-          v-model="kalemDuzenleForm.quantity"
-          style="width: 100%"
-        />
-      </div>
-
-      <div class="form-group">
-        <label>Birim Fiyat</label>
-        <InputText
-          type="number"
-          v-model="kalemDuzenleForm.unit_price"
-          style="width: 100%"
-        />
-      </div>
-    </div>
-
-    <div
-      style="background: var(--bg-active-box); border: 1px solid var(--border-color); padding: 12px; border-radius: 8px; color: var(--text-secondary);"
-    >
-      Parça miktarı veya parça seçimi değişirse stok hareketi otomatik güncellenir.
-    </div>
-  </div>
-
-  <template #footer>
-    <Button
-      label="İptal"
-      icon="pi pi-times"
-      text
-      @click="kalemDialogAcik = false"
+    <EditItemDialog
+      v-model:visible="kalemDialogAcik"
+      :form="kalemDuzenleForm"
+      :parcalarListesi="parcalarListesi"
+      @save="kalemGuncelleKaydet"
     />
-
-    <Button
-      label="Güncelle"
-      icon="pi pi-check"
-      severity="success"
-      @click="kalemGuncelleKaydet"
-    />
-  </template>
-</Dialog>
   <div class="inline-kalem-header">
     <div>
       <h3>{{ seciliIsEmri.plate }} - İş Emri Kalemleri</h3>
