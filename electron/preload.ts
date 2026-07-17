@@ -92,6 +92,10 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   telefonErisimiBaslat: (port) => ipcRenderer.invoke('telefon-erisimi-baslat', port),
   telefonErisimiDurdur: () => ipcRenderer.invoke('telefon-erisimi-durdur'),
   telefonErisimiDurumGetir: () => ipcRenderer.invoke('telefon-erisimi-durum-getir'),
+  telefonEslesmeQrOlustur: (masterId?: number) => ipcRenderer.invoke('telefon-eslesme-qr-olustur', masterId),
+  telefonOturumlariGetir: () => ipcRenderer.invoke('telefon-oturumlari-getir'),
+  telefonOturumKapat: (token: string) => ipcRenderer.invoke('telefon-oturum-kapat', token),
+  telefonTumOturumlariKapat: () => ipcRenderer.invoke('telefon-tum-oturumlari-kapat'),
 
   // Veri Yenileme & Ayarlar
   uygulamaVerileriniYenile: () => ipcRenderer.invoke('uygulama-verilerini-yenile'),

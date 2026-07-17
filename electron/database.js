@@ -37,6 +37,11 @@ function normalizeString(str) {
 }
 
 function ozellestirilmisFonksiyonlariTanimla(targetDb) {
+  try {
+    targetDb.pragma('foreign_keys = ON;');
+  } catch (err) {
+    console.warn('[DB] PRAGMA foreign_keys set warning:', err);
+  }
   targetDb.function('normalize_text', (val) => {
     return normalizeString(val);
   });
@@ -479,7 +484,7 @@ export const DEFAULT_SETTINGS = {
   list_density: 'normal',
   work_orders_default_filter: 'Açık',
   show_critical_stock_warnings: 'true',
-  phone_server_auto_start: 'true',
+  phone_server_auto_start: 'false',
   default_payment_method: 'Nakit',
   ask_payment_on_completion: 'true',
   warn_unpaid_completion: 'true',

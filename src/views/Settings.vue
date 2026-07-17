@@ -43,7 +43,7 @@ const ayarlarForm = reactive({
   list_density: 'normal',
   work_orders_default_filter: 'Açık',
   show_critical_stock_warnings: true,
-  phone_server_auto_start: true,
+  phone_server_auto_start: false,
   default_payment_method: 'Nakit',
   ask_payment_on_completion: true,
   warn_unpaid_completion: true,
@@ -133,7 +133,7 @@ const ayarlarYukle = async () => {
       ayarlarForm.list_density = s.list_density || 'normal'
       ayarlarForm.work_orders_default_filter = s.work_orders_default_filter || 'Açık'
       ayarlarForm.show_critical_stock_warnings = s.show_critical_stock_warnings !== 'false'
-      ayarlarForm.phone_server_auto_start = s.phone_server_auto_start !== 'false'
+      ayarlarForm.phone_server_auto_start = s.phone_server_auto_start === 'true'
       ayarlarForm.default_payment_method = s.default_payment_method || 'Nakit'
       ayarlarForm.ask_payment_on_completion = s.ask_payment_on_completion !== 'false'
       ayarlarForm.warn_unpaid_completion = s.warn_unpaid_completion !== 'false'

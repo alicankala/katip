@@ -1,6 +1,9 @@
 import http from 'node:http'
 import os from 'node:os'
 import crypto from 'node:crypto'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { app } from 'electron'
 import db from './database.js'
 import { hashPin, verifyPin } from './security'
 
@@ -16,15 +19,155 @@ export function runPhoneServerMigrations() {
     
     db.prepare("UPDATE stock_movements SET type = 'Çıkış' WHERE type = 'Cikis'").run()
     db.prepare("UPDATE stock_movements SET type = 'Giriş' WHERE type = 'Giris'").run()
+    db.prepare(`
+  UPDATE work_order_photos
+  SET category = 'Araç Kabul'
+  WHERE category IN (
+    'Ön',
+    'Arka',
+    'Sol',
+    'Sağ',
+    'KM / Gösterge'
+  )
+`).run()
+
+db.prepare(`
+  UPDATE work_order_photos
+  SET category = 'Hasar / Çizik'
+  WHERE category = 'Hasar / Diğer'
+`).run()
+
+db.prepare(`
+  UPDATE work_order_photos
+  SET category = 'Araç Kabul'
+  WHERE category IS NULL
+     OR TRIM(category) = ''
+`).run()
   } catch (e) {
     console.error('[PhoneServer] Existing work orders migration error:', e)
   }
 }
 
+export interface MobileSession {
+  token: string
+  master_id: number
+  name: string
+  createdAt: number
+  lastActiveAt: number
+  ip: string
+  userAgent: string
+}
+
+export interface PairingTokenInfo {
+  token: string
+  master_id: number
+  master_name: string
+  expiresAt: number
+  createdAt: number
+}
+
 let server: http.Server | null = null
 let currentPort = 4317
 let isRunning = false
-const activeMobileSessions = new Map<string, { master_id: number; name: string; createdAt: number }>()
+const activeMobileSessions = new Map<string, MobileSession>()
+const activePairingTokens = new Map<string, PairingTokenInfo>()
+
+interface FailedLoginRecord {
+  count: number
+  lockUntil: number
+  firstAttemptAt: number
+}
+const failedLoginAttempts = new Map<string, FailedLoginRecord>()
+
+function checkLoginRateLimit(ip: string): { locked: boolean; remainingSeconds: number } {
+  const record = failedLoginAttempts.get(ip)
+  if (!record) return { locked: false, remainingSeconds: 0 }
+
+  if (record.lockUntil > Date.now()) {
+    const rem = Math.ceil((record.lockUntil - Date.now()) / 1000)
+    return { locked: true, remainingSeconds: rem }
+  }
+
+  if (Date.now() - record.firstAttemptAt > 5 * 60 * 1000) {
+    failedLoginAttempts.delete(ip)
+    return { locked: false, remainingSeconds: 0 }
+  }
+
+  return { locked: false, remainingSeconds: 0 }
+}
+
+function recordLoginFailure(ip: string) {
+  const now = Date.now()
+  const record = failedLoginAttempts.get(ip) || { count: 0, lockUntil: 0, firstAttemptAt: now }
+
+  if (now - record.firstAttemptAt > 5 * 60 * 1000) {
+    record.count = 1
+    record.firstAttemptAt = now
+    record.lockUntil = 0
+  } else {
+    record.count += 1
+  }
+
+  if (record.count >= 15) {
+    record.lockUntil = now + 60 * 1000
+  }
+
+  failedLoginAttempts.set(ip, record)
+}
+
+function recordLoginSuccess(ip: string) {
+  failedLoginAttempts.delete(ip)
+}
+
+export function generatePairingToken(masterId?: number, durationSeconds = 30) {
+  let masterName = 'Tüm Ustalar / Genel'
+  let mId = Number(masterId) || 0
+  if (mId > 0) {
+    const usta = db.prepare('SELECT id, name FROM masters WHERE id = ?').get(mId) as any
+    if (usta) {
+      masterName = usta.name
+    }
+  }
+  const token = crypto.randomBytes(16).toString('hex')
+  const expiresAt = Date.now() + durationSeconds * 1000
+  const pairingObj: PairingTokenInfo = {
+    token,
+    master_id: mId,
+    master_name: masterName,
+    expiresAt,
+    createdAt: Date.now()
+  }
+  activePairingTokens.set(token, pairingObj)
+  const port = getCurrentPort()
+  const ip = getLocalIPAddress()
+  const vTag = token.substring(0, 8)
+  const url = mId > 0 ? `http://${ip}:${port}/?master_id=${mId}&v=${vTag}` : `http://${ip}:${port}/?v=${vTag}`
+  return { success: true, token, pairingUrl: url, expiresAt, masterName }
+}
+
+export function getMobileSessionsList(): MobileSession[] {
+  const list: MobileSession[] = []
+  for (const sess of activeMobileSessions.values()) {
+    list.push({ ...sess })
+  }
+  return list.sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+}
+
+export function revokeMobileSession(token: string) {
+  const cleanToken = String(token || '').trim()
+  activeMobileSessions.delete(cleanToken)
+  for (const [key, sess] of activeMobileSessions.entries()) {
+    if (key === cleanToken || sess.token === cleanToken) {
+      activeMobileSessions.delete(key)
+    }
+  }
+  return { success: true }
+}
+
+export function revokeAllMobileSessions() {
+  activeMobileSessions.clear()
+  return { success: true }
+}
 
 export interface LocalAddress {
   name: string
@@ -883,6 +1026,26 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       flex: 1;
     }
 
+    /* Photo Category Pill Badges */
+    .photo-cat-pill {
+      font-size: 11.5px;
+      padding: 5px 12px;
+      border-radius: 99px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      cursor: pointer;
+      white-space: nowrap;
+      user-select: none;
+      transition: all 0.15s ease;
+    }
+    .photo-cat-pill.active {
+      background: rgba(56, 189, 248, 0.2);
+      color: #38bdf8;
+      border-color: rgba(56, 189, 248, 0.4);
+      font-weight: 600;
+    }
+
     /* Result Card Styles */
     .result-card {
       background-color: var(--bg-primary);
@@ -1196,6 +1359,45 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
         </button>
       </div>
     </div>
+
+    <!-- Vehicle Photos Panel -->
+    <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-top: 18px;">
+      <span><i class="pi pi-camera"></i> Arac Fotograflari (<span id="det-photo-count">0</span>)</span>
+      <button id="det-take-photo-btn" class="btn btn-secondary" style="width: auto; height: 32px; padding: 0 10px; font-size: 12.5px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
+        <i class="pi pi-camera"></i> Foto Cek / Ekle
+      </button>
+    </div>
+
+    <input type="file" id="mobile-photo-file" accept="image/*" capture="environment" style="display: none;" />
+
+    <div class="card" style="padding: 12px; margin-bottom: 20px;">
+      <!-- Category Badges -->
+<div id="photo-category-bar" style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 10px;">
+  <span class="photo-cat-pill active" data-cat="Tümü">
+    Tümü (<span id="photo-count-all">0</span>)
+  </span>
+
+  <span class="photo-cat-pill" data-cat="Araç Kabul">
+    Araç Kabul (<span id="photo-count-reception">0</span>)
+  </span>
+
+  <span class="photo-cat-pill" data-cat="Hasar / Çizik">
+    Hasar / Çizik (<span id="photo-count-damage">0</span>)
+  </span>
+
+  <span class="photo-cat-pill" data-cat="Sökülen Parça">
+    Sökülen Parça (<span id="photo-count-removed">0</span>)
+  </span>
+
+  <span class="photo-cat-pill" data-cat="Tamir Sonrası">
+    Tamir Sonrası (<span id="photo-count-after">0</span>)
+  </span>
+</div>
+
+      <div id="det-photos-list" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+        <!-- Photo Cards -->
+      </div>
+    </div>
   </div>
 
   <!-- SCREEN 4: NEW RECEPTION -->
@@ -1461,9 +1663,46 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       <div class="detail-row" style="border: none;">
         <span class="detail-label" style="font-size: 15px; font-weight: 700; color: var(--text-primary);">Toplam Tutar</span>
         <span id="hist-wo-total" class="detail-value" style="font-size: 16px; font-weight: 700; color: var(--accent);">-</span>
-      </div>
+      <div class="section-title" style="display: flex; justify-content: space-between; align-items: center; margin-top: 18px;">
+  <span>
+    <i class="pi pi-camera"></i>
+    Servis Fotoğrafları (<span id="hist-photo-count">0</span>)
+  </span>
+</div>
+
+<div class="card" style="padding: 12px; margin-bottom: 20px;">
+  <div id="hist-photo-category-bar"
+       style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 8px; margin-bottom: 10px;">
+
+    <span class="photo-cat-pill active" data-cat="Tümü">
+      Tümü (<span id="hist-photo-count-all">0</span>)
+    </span>
+
+    <span class="photo-cat-pill" data-cat="Araç Kabul">
+      Araç Kabul (<span id="hist-photo-count-reception">0</span>)
+    </span>
+
+    <span class="photo-cat-pill" data-cat="Hasar / Çizik">
+      Hasar / Çizik (<span id="hist-photo-count-damage">0</span>)
+    </span>
+
+    <span class="photo-cat-pill" data-cat="Sökülen Parça">
+      Sökülen Parça (<span id="hist-photo-count-removed">0</span>)
+    </span>
+
+    <span class="photo-cat-pill" data-cat="Tamir Sonrası">
+      Tamir Sonrası (<span id="hist-photo-count-after">0</span>)
+    </span>
+  </div>
+
+  <div id="hist-wo-photos-list"
+       style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+    <div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 12px;">
+      Fotoğraf bulunmuyor.
     </div>
   </div>
+</div>
+      
 
   <script>
     let activeUser = null;
@@ -1483,7 +1722,6 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
         localStorage.removeItem('mobActiveToken');
         activeUser = null;
         activeToken = null;
-        loadMasters();
         showScreen('login');
         throw new Error('Oturum suresi doldu veya yetkisiz erisim.');
       }
@@ -1538,8 +1776,7 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       }
     }
 
-window.addEventListener('DOMContentLoaded', () => {
-  // Clear any hashes to force landing on the main screen
+window.addEventListener('DOMContentLoaded', async () => {
   if (window.location.hash) {
     try {
       history.replaceState('', document.title, window.location.pathname + window.location.search);
@@ -1548,31 +1785,50 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Clear all localStorage keys completely to reset any session
-  try {
-    localStorage.clear();
-  } catch (e) {}
+  const urlParams = new URLSearchParams(window.location.search);
+  const targetMasterId = urlParams.get('master_id') || urlParams.get('usta') || urlParams.get('master');
 
-  // Clear sessionStorage
-  try {
-    sessionStorage.clear();
-  } catch (e) {}
+  if (targetMasterId) {
+    try {
+      history.replaceState('', document.title, window.location.pathname);
+    } catch (e) {}
+    localStorage.removeItem('mobActiveToken');
+    localStorage.removeItem('mobActiveUser');
+    activeToken = null;
+    activeUser = null;
+    await loadMasters(targetMasterId);
+    showScreen('login');
+    return;
+  }
 
-  // Reset input fields
-  try {
-    const inputs = document.querySelectorAll('input, select, textarea');
-    inputs.forEach(input => {
-      if (input.tagName === 'SELECT') {
-        input.selectedIndex = 0;
-      } else {
-        input.value = '';
+  const storedToken = localStorage.getItem('mobActiveToken');
+  const storedUser = localStorage.getItem('mobActiveUser');
+  if (storedToken && storedUser) {
+    try {
+      activeToken = storedToken;
+      activeUser = JSON.parse(storedUser);
+      const checkRes = await fetch('/api/dashboard', {
+        headers: {
+          'Authorization': 'Bearer ' + storedToken,
+          'X-Mobile-Token': storedToken
+        }
+      });
+      if (checkRes.ok) {
+        const userElem = document.getElementById('user-display-name');
+        if (userElem && activeUser.name) {
+          userElem.textContent = activeUser.name;
+        }
+        showScreen('dashboard');
+        loadDashboard();
+        return;
       }
-    });
-  } catch (e) {}
+    } catch (e) {}
+  }
 
-  // Reset active user state variable
+  localStorage.removeItem('mobActiveToken');
+  localStorage.removeItem('mobActiveUser');
+  activeToken = null;
   activeUser = null;
-
   loadMasters();
   showScreen('login');
 });
@@ -1585,12 +1841,35 @@ window.addEventListener('pageshow', (event) => {
       sessionStorage.clear();
     } catch (e) {}
     activeUser = null;
+    activeToken = null;
     loadMasters();
     showScreen('login');
   }
 });
 
-async function loadMasters() {
+// Periodic session check to instantly logout phone if session is revoked from desktop
+setInterval(async () => {
+  if (activeToken && screens.dashboard.style.display !== 'none') {
+    try {
+      const pingRes = await fetch('/api/dashboard', {
+        headers: {
+          'Authorization': 'Bearer ' + activeToken,
+          'X-Mobile-Token': activeToken
+        }
+      });
+      if (pingRes.status === 401) {
+        localStorage.removeItem('mobActiveUser');
+        localStorage.removeItem('mobActiveToken');
+        activeUser = null;
+        activeToken = null;
+        loadMasters();
+        showScreen('login');
+      }
+    } catch (e) {}
+  }
+}, 4000);
+
+async function loadMasters(selectedMasterId) {
   try {
     const res = await fetch('/api/masters?t=' + Date.now(), {
       cache: 'no-store'
@@ -1611,12 +1890,23 @@ async function loadMasters() {
       return;
     }
 
-    let html = '<option value="" disabled selected>Lutfen Seciniz</option>';
+    const selIdStr = selectedMasterId ? String(selectedMasterId) : '';
+    let html = '<option value="" disabled' + (!selIdStr ? ' selected' : '') + '>Lutfen Seciniz</option>';
     html += masters
-      .map(m => '<option value="' + m.id + '">' + m.name + '</option>')
+      .map(m => {
+        const isSel = selIdStr && (String(m.id) === selIdStr);
+        return '<option value="' + m.id + '"' + (isSel ? ' selected' : '') + '>' + m.name + '</option>';
+      })
       .join('');
 
     select.innerHTML = html;
+    if (selIdStr) {
+      select.value = selIdStr;
+      setTimeout(() => {
+        const pinInput = document.getElementById('login-pin');
+        if (pinInput) pinInput.focus();
+      }, 150);
+    }
   } catch (e) {
     console.error('Ustalar yuklenemedi:', e);
     const select = document.getElementById('login-master');
@@ -1626,18 +1916,36 @@ async function loadMasters() {
   }
 }
 
+    document.getElementById('login-pin').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        document.getElementById('login-btn').click();
+      }
+    });
+
     document.getElementById('login-btn').addEventListener('click', async () => {
+      const loginBtn = document.getElementById('login-btn');
       const masterId = document.getElementById('login-master').value;
-      const pin = document.getElementById('login-pin').value;
+      const pinRaw = document.getElementById('login-pin').value;
+      const pin = pinRaw.replace(/\\D/g, '').slice(0, 4);
       const errorDiv = document.getElementById('login-error');
       
       errorDiv.style.display = 'none';
 
-      if (!pin || pin.length !== 4) {
-        errorDiv.textContent = 'Lutfen 4 haneli PIN kodunuzu girin.';
+      if (!masterId) {
+        errorDiv.textContent = 'Lutfen listeden bir usta secin.';
         errorDiv.style.display = 'block';
         return;
       }
+
+      if (!pin) {
+        errorDiv.textContent = 'Lutfen PIN kodunuzu girin.';
+        errorDiv.style.display = 'block';
+        return;
+      }
+
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Giris yapiliyor...';
 
       try {
         const res = await fetch('/api/login', {
@@ -1654,15 +1962,21 @@ async function loadMasters() {
           localStorage.setItem('mobActiveToken', activeToken);
           document.getElementById('user-display-name').textContent = activeUser.name;
           document.getElementById('login-pin').value = '';
+          loginBtn.disabled = false;
+          loginBtn.textContent = 'Giris Yap';
           showScreen('dashboard');
           loadDashboard();
         } else {
-          errorDiv.textContent = result.error || 'Giris basarisiz.';
+          errorDiv.textContent = result.error || 'Giris basarisiz. PIN yanlis olabilir.';
           errorDiv.style.display = 'block';
+          loginBtn.disabled = false;
+          loginBtn.textContent = 'Giris Yap';
         }
       } catch (e) {
-        errorDiv.textContent = 'Sunucuyla baglanti kurulamadi.';
+        errorDiv.textContent = 'Sunucuyla baglanti kurulamadi. Telefon ayarlarinizi kontrol edin.';
         errorDiv.style.display = 'block';
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Giris Yap';
       }
     });
 
@@ -1754,9 +2068,14 @@ async function loadMasters() {
       updateTabVisuals();
       try {
         const url = currentTab === 'open' ? '/api/work-orders' : '/api/work-orders/completed';
-        const listRes = await fetch(url);
-        workOrders = await listRes.json();
-        renderWorkOrders(workOrders);
+        const listRes = await authFetch(url, {
+  cache: 'no-store'
+});
+
+const data = await listRes.json();
+workOrders = Array.isArray(data) ? data : [];
+
+renderWorkOrders(workOrders);
       } catch (e) {
         console.error('Is emirleri yukleme hatasi:', e);
         if (container) {
@@ -1776,8 +2095,12 @@ async function loadMasters() {
       }
 
       container.innerHTML = list.map(item => {
-        const badgeClass = (item.status === 'Açık' || item.status === 'Acik') ? 'acik' : 'tamamlandi';
-        const badgeText = (item.status === 'Açık' || item.status === 'Acik') ? 'Acik' : 'Tamamlandi';
+const tamamlandi = item.status === 'Tamamlandı';
+
+const badgeClass = tamamlandi ? 'tamamlandi' : 'acik';
+const badgeText = tamamlandi
+  ? 'Tamamlandi'
+  : (item.status || 'Acik');
         return '<div class="list-item" onclick="viewDetails(' + item.id + ')">' +
           '<div class="item-header">' +
             '<span class="plate-badge">' + (item.plate || 'PLAKASIZ') + '</span>' +
@@ -1816,7 +2139,9 @@ async function loadMasters() {
 
     async function viewDetails(id) {
       try {
-        const res = await fetch('/api/work-orders/' + id);
+        const res = await authFetch('/api/work-orders/' + id, {
+  cache: 'no-store'
+});
         const data = await res.json();
         
         if (!data.success) {
@@ -1841,7 +2166,7 @@ async function loadMasters() {
         const statusText = wo.status === 'Açık' ? 'Acik' : (wo.status === 'Tamamlandı' ? 'Tamamlandi' : (wo.status || 'Acik'));
         const statusBadge = document.getElementById('det-status');
         statusBadge.textContent = statusText;
-        if (wo.status === 'Açık' || wo.status === 'Acik') {
+        if (wo.status !== 'Tamamlandı') {
           statusBadge.className = 'badge-status acik';
           document.getElementById('detail-actions-wrapper').style.display = 'flex';
         } else {
@@ -1855,25 +2180,250 @@ async function loadMasters() {
         if (items.length === 0) {
           itemsList.innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 10px; font-size: 13px;">Yapilan islem / parca kaydi bulunmuyor.</div>';
         } else {
-itemsList.innerHTML = items.map(item => {
-  return '<div class="item-row">' +
-    '<div class="item-row-header">' +
-      '<span>' + (item.description || 'Isimsiz Kalem') + '</span>' +
-      '<span class="color-accent">' + tlFormat(item.total_price) + '</span>' +
-    '</div>' +
-    '<div class="item-row-sub">' +
-      '<span>' + (item.type === 'Parça' || item.type === 'Parca' ? 'Yedek Parca' : 'Iscilik') + '</span>' +
-      '<span>' + item.quantity + ' ' + (item.type === 'Parça' || item.type === 'Parca' ? 'Adet' : 'Saat') + ' x ' + tlFormat(item.unit_price) + '</span>' +
-    '</div>' +
-  '</div>';
-}).join('');
+        itemsList.innerHTML = items.map(item => {
+          return '<div class="item-row">' +
+            '<div class="item-row-header">' +
+              '<span>' + (item.description || 'Isimsiz Kalem') + '</span>' +
+              '<span class="color-accent">' + tlFormat(item.total_price) + '</span>' +
+            '</div>' +
+            '<div class="item-row-sub">' +
+              '<span>' + (item.type === 'Parça' || item.type === 'Parca' ? 'Yedek Parca' : 'Iscilik') + '</span>' +
+              '<span>' + item.quantity + ' ' + (item.type === 'Parça' || item.type === 'Parca' ? 'Adet' : 'Saat') + ' x ' + tlFormat(item.unit_price) + '</span>' +
+            '</div>' +
+          '</div>';
+        }).join('');
         }
 
+        await loadOrderPhotos(id);
         showScreen('details');
       } catch (e) {
         console.error('Detay yukleme hatasi:', e);
         alert('Sunucu hatasi.');
       }
+    }
+
+let currentPhotoFilter = 'Tümü';
+let currentPhotoCategory = 'Araç Kabul';
+let mobilePhotos = [];
+
+document.querySelectorAll('.photo-cat-pill').forEach(pill => {
+  pill.addEventListener('click', () => {
+    document.querySelectorAll('.photo-cat-pill').forEach(p => {
+      p.classList.remove('active');
+    });
+
+    pill.classList.add('active');
+
+    const selectedCategory = pill.dataset.cat || 'Tümü';
+    currentPhotoFilter = selectedCategory;
+
+    // Tümü yalnızca filtre içindir, fotoğraf kategorisi olarak kaydedilmez.
+    if (selectedCategory !== 'Tümü') {
+      currentPhotoCategory = selectedCategory;
+    }
+
+    renderMobilePhotos();
+  });
+});
+
+    document.getElementById('det-take-photo-btn').addEventListener('click', () => {
+      document.getElementById('mobile-photo-file').click();
+    });
+
+    document.getElementById('mobile-photo-file').addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      const orderId = document.getElementById('detail-back-btn').dataset.orderId;
+      if (!orderId) return;
+
+      try {
+        const base64Data = await compressAndBase64(file);
+        const res = await authFetch('/api/upload-photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            work_order_id: orderId,
+            category: currentPhotoCategory,
+            image_base64: base64Data
+          })
+        });
+        const data = await res.json();
+        if (data.success) {
+          e.target.value = '';
+          await loadOrderPhotos(orderId);
+        } else {
+          alert(data.error || 'Fotoğraf yüklenemedi.');
+        }
+      } catch (err) {
+        console.error('Fotoğraf yükleme hatası:', err);
+        alert('Fotoğraf yüklenirken hata oluştu.');
+      }
+    });
+
+function updateMobilePhotoCounts() {
+  const counts = {
+    all: mobilePhotos.length,
+    reception: mobilePhotos.filter(p => p.category === 'Araç Kabul').length,
+    damage: mobilePhotos.filter(p => p.category === 'Hasar / Çizik').length,
+    removed: mobilePhotos.filter(p => p.category === 'Sökülen Parça').length,
+    after: mobilePhotos.filter(p => p.category === 'Tamir Sonrası').length
+  };
+
+  const allElem = document.getElementById('photo-count-all');
+  const receptionElem = document.getElementById('photo-count-reception');
+  const damageElem = document.getElementById('photo-count-damage');
+  const removedElem = document.getElementById('photo-count-removed');
+  const afterElem = document.getElementById('photo-count-after');
+
+  if (allElem) allElem.textContent = counts.all;
+  if (receptionElem) receptionElem.textContent = counts.reception;
+  if (damageElem) damageElem.textContent = counts.damage;
+  if (removedElem) removedElem.textContent = counts.removed;
+  if (afterElem) afterElem.textContent = counts.after;
+}
+
+function renderMobilePhotos() {
+  const container = document.getElementById('det-photos-list');
+  const countLbl = document.getElementById('det-photo-count');
+  const orderId = document.getElementById('detail-back-btn').dataset.orderId;
+
+  if (!container) return;
+
+  updateMobilePhotoCounts();
+
+  if (countLbl) {
+    countLbl.textContent = mobilePhotos.length;
+  }
+
+  const filteredPhotos = currentPhotoFilter === 'Tümü'
+    ? mobilePhotos
+    : mobilePhotos.filter(p => p.category === currentPhotoFilter);
+
+  if (filteredPhotos.length === 0) {
+    container.innerHTML =
+      '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 12px; font-size: 12px;">' +
+      'Bu kategoride fotoğraf bulunmuyor.' +
+      '</div>';
+    return;
+  }
+
+  container.innerHTML = filteredPhotos.map(p => {
+    const safeCategory = String(p.category || 'Araç Kabul')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    return '<div style="position: relative; background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden; border: 1px solid var(--border);">' +
+      '<img src="' + p.url + '" style="width: 100%; height: 110px; object-fit: cover; display: block; cursor: pointer;" onclick="viewFullPhoto(this.src)" />' +
+      '<div style="padding: 4px 6px; font-size: 10.5px; display: flex; justify-content: space-between; align-items: center; background: rgba(15,23,42,0.85); color: var(--text-primary);">' +
+        '<span style="font-weight: 600; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">' +
+          safeCategory +
+        '</span>' +
+        '<button style="background: none; border: none; color: #f87171; font-size: 12px; cursor: pointer; padding: 2px;" onclick="deleteMobilePhoto(' + p.id + ',' + orderId + ')">' +
+          '<i class="pi pi-trash"></i>' +
+        '</button>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+}
+
+async function loadOrderPhotos(orderId) {
+  const container = document.getElementById('det-photos-list');
+
+  if (!container) return;
+
+  container.innerHTML =
+    '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 10px; font-size: 12px;">' +
+    'Fotoğraflar yükleniyor...' +
+    '</div>';
+
+  try {
+    const res = await authFetch(
+      '/api/work-order-photos?work_order_id=' + orderId,
+      { cache: 'no-store' }
+    );
+
+    const data = await res.json();
+
+    mobilePhotos =
+      data.success && Array.isArray(data.fotograflar)
+        ? data.fotograflar
+        : [];
+
+    renderMobilePhotos();
+  } catch (e) {
+    console.error('Fotoğraflar okunamadı:', e);
+    mobilePhotos = [];
+
+    container.innerHTML =
+      '<div style="grid-column: 1 / -1; text-align: center; color: var(--warning); padding: 10px; font-size: 12px;">' +
+      'Fotoğraflar alınamadı.' +
+      '</div>';
+  }
+}
+
+    async function deleteMobilePhoto(photoId, orderId) {
+      if (!confirm('Bu fotoğrafı silmek istediğinize emin misiniz?')) return;
+      try {
+        const res = await authFetch('/api/delete-photo', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ photo_id: photoId })
+        });
+        const data = await res.json();
+        if (data.success) {
+          await loadOrderPhotos(orderId);
+        } else {
+          alert(data.error || 'Fotoğraf silinemedi.');
+        }
+      } catch (e) {
+        alert('Fotoğraf silinirken hata oluştu.');
+      }
+    }
+
+    function viewFullPhoto(url) {
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+      modal.onclick = () => document.body.removeChild(modal);
+      const img = document.createElement('img');
+      img.src = url;
+      img.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;border-radius:8px;';
+      modal.appendChild(img);
+      document.body.appendChild(modal);
+    }
+
+    function compressAndBase64(file, maxWidth = 1280, quality = 0.75) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            if (width > maxWidth || height > maxWidth) {
+              if (width > height) {
+                height = Math.round((height * maxWidth) / width);
+                width = maxWidth;
+              } else {
+                width = Math.round((width * maxWidth) / height);
+                height = maxWidth;
+              }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+const dataUrl = canvas.toDataURL('image/jpeg', quality);
+resolve(dataUrl);
+            resolve(dataUrl);
+          };
+          img.onerror = reject;
+          img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
     }
 
     // Work order item remover
@@ -2008,6 +2558,11 @@ itemsList.innerHTML = items.map(item => {
               '<div style="font-size: 12.5px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 250px;">' +
                 '<strong>Sikayet:</strong> ' + (wo.complaint || '-') +
               '</div>' +
+              '<div style="font-size: 12px; margin-top: 5px; color: var(--text-secondary);">' +
+  '<i class="pi pi-camera"></i> ' +
+  Number(wo.photo_count || 0) +
+  ' fotoğraf' +
+'</div>' +
             '</div>' +
           '</div>';
         }).join('');
@@ -2018,7 +2573,204 @@ itemsList.innerHTML = items.map(item => {
     document.getElementById('history-detail-back-btn').addEventListener('click', () => {
       showScreen('customerHistory');
     });
+let historyWorkOrderPhotos = [];
+let historyPhotoFilter = 'Tümü';
 
+function normalizeHistoryPhotoCategory(category) {
+  const cat = String(category || 'Araç Kabul').trim();
+
+  if (
+    cat === 'Ön' ||
+    cat === 'Arka' ||
+    cat === 'Sol' ||
+    cat === 'Sağ' ||
+    cat === 'KM / Gösterge'
+  ) {
+    return 'Araç Kabul';
+  }
+
+  if (cat === 'Hasar / Diğer') {
+    return 'Hasar / Çizik';
+  }
+
+  if (
+    cat === 'Araç Kabul' ||
+    cat === 'Hasar / Çizik' ||
+    cat === 'Sökülen Parça' ||
+    cat === 'Tamir Sonrası'
+  ) {
+    return cat;
+  }
+
+  return 'Araç Kabul';
+}
+
+function escapeHistoryPhotoText(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function resetHistoryPhotoFilter() {
+  historyPhotoFilter = 'Tümü';
+
+  document
+    .querySelectorAll('#hist-photo-category-bar .photo-cat-pill')
+    .forEach(function(pill) {
+      pill.classList.toggle(
+        'active',
+        pill.dataset.cat === 'Tümü'
+      );
+    });
+}
+
+function updateHistoryPhotoCounts() {
+  const allCount = historyWorkOrderPhotos.length;
+
+  const receptionCount = historyWorkOrderPhotos.filter(function(photo) {
+    return photo.category === 'Araç Kabul';
+  }).length;
+
+  const damageCount = historyWorkOrderPhotos.filter(function(photo) {
+    return photo.category === 'Hasar / Çizik';
+  }).length;
+
+  const removedCount = historyWorkOrderPhotos.filter(function(photo) {
+    return photo.category === 'Sökülen Parça';
+  }).length;
+
+  const afterCount = historyWorkOrderPhotos.filter(function(photo) {
+    return photo.category === 'Tamir Sonrası';
+  }).length;
+
+  document.getElementById('hist-photo-count').textContent = allCount;
+  document.getElementById('hist-photo-count-all').textContent = allCount;
+  document.getElementById('hist-photo-count-reception').textContent = receptionCount;
+  document.getElementById('hist-photo-count-damage').textContent = damageCount;
+  document.getElementById('hist-photo-count-removed').textContent = removedCount;
+  document.getElementById('hist-photo-count-after').textContent = afterCount;
+}
+
+function renderHistoryWorkOrderPhotos() {
+  const container = document.getElementById('hist-wo-photos-list');
+
+  updateHistoryPhotoCounts();
+
+  const visiblePhotos =
+    historyPhotoFilter === 'Tümü'
+      ? historyWorkOrderPhotos
+      : historyWorkOrderPhotos.filter(function(photo) {
+          return photo.category === historyPhotoFilter;
+        });
+
+  if (visiblePhotos.length === 0) {
+    container.innerHTML =
+      '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 14px; font-size: 12px;">' +
+        'Bu kategoride fotoğraf bulunmuyor.' +
+      '</div>';
+
+    return;
+  }
+
+  container.innerHTML = visiblePhotos.map(function(photo) {
+    const safeCategory = escapeHistoryPhotoText(photo.category);
+    const safeNote = escapeHistoryPhotoText(photo.note);
+
+    return (
+      '<div style="background: rgba(0,0,0,0.3); border-radius: 8px; overflow: hidden; border: 1px solid var(--border);">' +
+
+        '<img src="' + photo.url + '"' +
+          ' style="width: 100%; height: 110px; object-fit: cover; display: block; cursor: pointer;"' +
+          ' onclick="viewFullPhoto(this.src)" />' +
+
+        '<div style="padding: 6px; background: rgba(15,23,42,0.9);">' +
+
+          '<div style="font-size: 11px; font-weight: 700; color: var(--accent);">' +
+            safeCategory +
+          '</div>' +
+
+          (safeNote
+            ? '<div style="font-size: 10.5px; color: var(--text-secondary); margin-top: 3px;">' +
+                safeNote +
+              '</div>'
+            : '') +
+
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+async function loadHistoryWorkOrderPhotos(workOrderId) {
+  const container = document.getElementById('hist-wo-photos-list');
+
+  historyWorkOrderPhotos = [];
+  resetHistoryPhotoFilter();
+  updateHistoryPhotoCounts();
+
+  container.innerHTML =
+    '<div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 14px;">' +
+      'Fotoğraflar yükleniyor...' +
+    '</div>';
+
+  try {
+    const res = await authFetch(
+      '/api/work-order-photos?work_order_id=' + workOrderId,
+      { cache: 'no-store' }
+    );
+
+    const data = await res.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Fotoğraflar alınamadı.');
+    }
+
+    historyWorkOrderPhotos = Array.isArray(data.fotograflar)
+      ? data.fotograflar
+          .filter(function(photo) {
+            return Boolean(photo.url);
+          })
+          .map(function(photo) {
+            return {
+              id: photo.id,
+              url: photo.url,
+              note: photo.note || '',
+              created_at: photo.created_at,
+              category: normalizeHistoryPhotoCategory(photo.category)
+            };
+          })
+      : [];
+
+    renderHistoryWorkOrderPhotos();
+  } catch (error) {
+    console.error('Geçmiş fotoğrafları yükleme hatası:', error);
+
+    container.innerHTML =
+      '<div style="grid-column: 1 / -1; text-align: center; color: var(--warning); padding: 14px;">' +
+        'Fotoğraflar alınamadı.' +
+      '</div>';
+  }
+}
+
+document
+  .querySelectorAll('#hist-photo-category-bar .photo-cat-pill')
+  .forEach(function(pill) {
+    pill.addEventListener('click', function() {
+      document
+        .querySelectorAll('#hist-photo-category-bar .photo-cat-pill')
+        .forEach(function(otherPill) {
+          otherPill.classList.remove('active');
+        });
+
+      pill.classList.add('active');
+      historyPhotoFilter = pill.dataset.cat || 'Tümü';
+
+      renderHistoryWorkOrderPhotos();
+    });
+  });
     window.viewHistoryWorkOrderDetail = async function(wIdx) {
       if (!selectedVehicle) return;
       const wo = selectedVehicle.workOrders[wIdx];
@@ -2036,6 +2788,7 @@ itemsList.innerHTML = items.map(item => {
       document.getElementById('hist-wo-closed-master').textContent = wo.closed_by_master_name || '-';
       document.getElementById('hist-wo-complaint').textContent = wo.complaint || '-';
       document.getElementById('hist-wo-total').textContent = tlFormat(wo.total_amount);
+      loadHistoryWorkOrderPhotos(wo.work_order_id);
 
       const itemsContainer = document.getElementById('history-wo-items-container');
       itemsContainer.innerHTML = '<div style="text-align: center; padding: 10px; color: var(--text-secondary);">Yukleniyor...</div>';
@@ -2411,7 +3164,8 @@ itemsList.innerHTML = items.map(item => {
 </html>`
 
     const tryListen = (port: number) => {
-      const tempServer = http.createServer((req, res) => {
+      const tempServer = http.createServer(async (req, res) => {
+        try { req.setEncoding('utf8') } catch (e) {}
         const url = req.url || '/'
         const parsedUrl = new URL(url, 'http://localhost')
         const pathName = parsedUrl.pathname
@@ -2442,30 +3196,138 @@ itemsList.innerHTML = items.map(item => {
           return
         }
 
-        // 3. API: Login verification
+        // 3. API: QR / Pairing Token Authentication
+        if (pathName === '/api/pair') {
+          const processPairing = (pToken: string) => {
+            const cleanPToken = String(pToken || '').trim()
+            if (!cleanPToken || !activePairingTokens.has(cleanPToken)) {
+              res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: false, error: 'Geçersiz veya süresi dolmuş QR Kod / Eşleşme kodu.' }))
+              return
+            }
+            const info = activePairingTokens.get(cleanPToken)!
+            if (Date.now() > info.expiresAt) {
+              activePairingTokens.delete(cleanPToken)
+              res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: false, error: 'QR Kodunun süresi dolmuş. Lütfen bilgisayardan yeni QR Kod üretin.' }))
+              return
+            }
+
+            const token = crypto.randomBytes(24).toString('hex')
+            const ip = String(req.socket.remoteAddress || '').replace(/^.*:/, '')
+            const userAgent = String(req.headers['user-agent'] || 'Bilinmeyen Cihaz')
+
+            activeMobileSessions.set(token, {
+              token,
+              master_id: info.master_id,
+              name: info.master_name,
+              createdAt: Date.now(),
+              lastActiveAt: Date.now(),
+              ip,
+              userAgent
+            })
+
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({
+              success: true,
+              token,
+              usta: { id: info.master_id, name: info.master_name }
+            }))
+          }
+
+          if (req.method === 'POST') {
+            let body = ''
+            req.on('data', chunk => body += chunk)
+            req.on('end', () => {
+              try {
+                const parsed = JSON.parse(body || '{}')
+                const pToken = parsed.pair_token || parsed.pair || parsed.token
+                processPairing(pToken)
+              } catch (e) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+                res.end(JSON.stringify({ success: false, error: 'Geçersiz istek gövdesi.' }))
+              }
+            })
+          } else {
+            const urlObj = new URL(req.url || '', `http://${req.headers.host || 'localhost'}`)
+            const pToken = urlObj.searchParams.get('pair_token') || urlObj.searchParams.get('pair') || ''
+            processPairing(pToken)
+          }
+          return
+        }
+
+        // 3b. API: Login verification
         if (pathName === '/api/login' && req.method === 'POST') {
+          const ip = String(req.socket.remoteAddress || req.headers['x-forwarded-for'] || '127.0.0.1').replace(/^.*:/, '')
+          const rateCheck = checkLoginRateLimit(ip)
+          if (rateCheck.locked) {
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({
+              success: false,
+              error: `Çok fazla hatalı PIN girildi. Lütfen ${rateCheck.remainingSeconds} saniye sonra tekrar deneyin.`
+            }))
+            return
+          }
+
           let body = ''
-          req.on('data', chunk => body += chunk)
+          req.on('data', chunk => body += String(chunk))
           req.on('end', () => {
             try {
-              const { master_id, pin } = JSON.parse(body)
-              const usta = db.prepare("SELECT id, name, pin FROM masters WHERE id = ? AND IFNULL(is_active, 1) = 1").get(master_id) as any
-              if (usta && verifyPin(pin, usta.pin)) {
-                if (usta.pin === pin) {
-                  try { db.prepare("UPDATE masters SET pin = ? WHERE id = ?").run(hashPin(pin), usta.id) } catch (e) {}
+              const { master_id, pin } = JSON.parse(body || '{}')
+              const mId = Number(master_id) || 0
+              const cleanPin = String(pin || '').trim()
+
+              if (!mId) {
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+                res.end(JSON.stringify({ success: false, error: 'Lütfen usta seçiniz.' }))
+                return
+              }
+
+              if (!cleanPin) {
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+                res.end(JSON.stringify({ success: false, error: 'Lütfen PIN kodunuzu giriniz.' }))
+                return
+              }
+
+              const usta = db.prepare("SELECT id, name, pin FROM masters WHERE id = ? AND IFNULL(is_active, 1) = 1").get(mId) as any
+              if (!usta) {
+                res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+                res.end(JSON.stringify({ success: false, error: 'Seçilen usta sistemde bulunamadı.' }))
+                return
+              }
+
+              if (verifyPin(cleanPin, usta.pin)) {
+                recordLoginSuccess(ip)
+                if (String(usta.pin || '').trim() === cleanPin) {
+                  try { db.prepare("UPDATE masters SET pin = ? WHERE id = ?").run(hashPin(cleanPin), usta.id) } catch (e) {}
                 }
-                const token = crypto.randomBytes(16).toString('hex')
-                activeMobileSessions.set(token, { master_id: usta.id, name: usta.name, createdAt: Date.now() })
+                const token = crypto.randomBytes(24).toString('hex')
+                const userAgent = String(req.headers['user-agent'] || 'Bilinmeyen Cihaz')
+
+                activeMobileSessions.set(token, {
+                  token,
+                  master_id: usta.id,
+                  name: usta.name,
+                  createdAt: Date.now(),
+                  lastActiveAt: Date.now(),
+                  ip,
+                  userAgent
+                })
 
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
                 res.end(JSON.stringify({ success: true, usta: { id: usta.id, name: usta.name }, token }))
               } else {
+                recordLoginFailure(ip)
+                const postCheck = checkLoginRateLimit(ip)
+                const errMsg = postCheck.locked
+                  ? 'Çok fazla hatalı PIN girildiği için erişim 1 dakika kilitlendi.'
+                  : 'Hatalı PIN girdiniz. Lütfen 4 haneli PIN kodunuzu kontrol edin.'
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
-                res.end(JSON.stringify({ success: false, error: 'Hatali PIN veya kullanici.' }))
+                res.end(JSON.stringify({ success: false, error: errMsg }))
               }
             } catch (e: any) {
-              res.writeHead(400, { 'Content-Type': 'application/json' })
-              res.end(JSON.stringify({ success: false, error: 'Gecersiz veri' }))
+              res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: false, error: 'Geçersiz giriş isteği' }))
             }
           })
           return
@@ -2476,11 +3338,13 @@ itemsList.innerHTML = items.map(item => {
         const token = Array.isArray(authHeader) ? authHeader[0] : authHeader
         const cleanToken = token ? token.replace(/^Bearer\s+/i, '').trim() : ''
 
-        if (!cleanToken || !activeMobileSessions.has(cleanToken)) {
+        const currentSession = activeMobileSessions.get(cleanToken)
+        if (!cleanToken || !currentSession) {
           res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' })
-          res.end(JSON.stringify({ success: false, error: 'Oturum suresi doldu veya yetkisiz erisim. Lutfen yeniden giris yapin.', requireLogin: true }))
+          res.end(JSON.stringify({ success: false, error: 'Oturum süresi doldu veya yetkisiz erişim. Lütfen yeniden giriş yapın.', requireLogin: true }))
           return
         }
+        currentSession.lastActiveAt = Date.now()
 
         // 4. API: Dashboard statistics count
         if (pathName === '/api/dashboard') {
@@ -2544,7 +3408,128 @@ itemsList.innerHTML = items.map(item => {
           }
           return
         }
- 
+
+        // 4.5. API: Work Order Photos Endpoints
+        if (pathName === '/api/work-order-photos' && req.method === 'GET') {
+          try {
+            const woId = Number(parsedUrl.searchParams.get('work_order_id'))
+            if (!woId) {
+              res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: false, error: 'İş emri seçilmedi.' }))
+              return
+            }
+
+            const rows = db.prepare(`
+              SELECT * FROM work_order_photos
+              WHERE work_order_id = ?
+              ORDER BY id DESC
+            `).all(woId) as any[]
+
+            const fotograflar: any[] = []
+            for (const row of rows) {
+              let url = ''
+              try {
+                const fileData = await fs.readFile(row.file_path)
+                const ext = path.extname(row.file_path).toLowerCase().replace('.', '') || 'jpeg'
+                const mimeType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+                url = `data:${mimeType};base64,${fileData.toString('base64')}`
+              } catch (e) {
+                console.warn('[Photos] Dosya okunamadı:', row.file_path, e)
+              }
+
+              fotograflar.push({
+                id: row.id,
+                work_order_id: row.work_order_id,
+                file_name: row.file_name,
+                category: row.category || 'Araç Kabul',
+                note: row.note || '',
+                created_at: row.created_at,
+                url
+              })
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({ success: true, fotograflar }))
+          } catch (err: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json' })
+            res.end(JSON.stringify({ success: false, error: err.message }))
+          }
+          return
+        }
+
+        if (pathName === '/api/upload-photo' && req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => body += chunk)
+          req.on('end', async () => {
+            try {
+              const { work_order_id, category, note, image_base64 } = JSON.parse(body || '{}')
+              const woId = Number(work_order_id)
+              if (!woId || !image_base64) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+                res.end(JSON.stringify({ success: false, error: 'Eksik veri gönderildi.' }))
+                return
+              }
+
+              const photoDir = path.join(app.getPath('userData'), 'fotograflar')
+              await fs.mkdir(photoDir, { recursive: true })
+
+              const catName = String(category || 'Araç Kabul').trim()
+              const noteText = String(note || '').trim()
+              const cleanBase64 = String(image_base64).replace(/^data:image\/\w+;base64,/, '')
+              const imageBuffer = Buffer.from(cleanBase64, 'base64')
+
+              const targetFileName = `wo_${woId}_mob_${Date.now()}.jpg`
+              const targetPath = path.join(photoDir, targetFileName)
+
+              await fs.writeFile(targetPath, imageBuffer)
+
+              db.prepare(`
+                INSERT INTO work_order_photos (work_order_id, file_name, file_path, category, note)
+                VALUES (?, ?, ?, ?, ?)
+              `).run(woId, targetFileName, targetPath, catName, noteText)
+
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: true, message: 'Fotoğraf yüklendi.' }))
+            } catch (err: any) {
+              console.error('[PhotoUpload] Hata:', err)
+              res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: false, error: 'Fotoğraf kaydedilemedi: ' + err.message }))
+            }
+          })
+          return
+        }
+
+        if (pathName === '/api/delete-photo' && req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => body += chunk)
+          req.on('end', async () => {
+            try {
+              const { photo_id } = JSON.parse(body || '{}')
+              const id = Number(photo_id)
+              if (!id) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+                res.end(JSON.stringify({ success: false, error: 'Geçersiz ID' }))
+                return
+              }
+
+              const photo = db.prepare('SELECT * FROM work_order_photos WHERE id = ?').get(id) as any
+              if (photo && photo.file_path) {
+                try {
+                  await fs.unlink(photo.file_path)
+                } catch (e) {}
+              }
+              db.prepare('DELETE FROM work_order_photos WHERE id = ?').run(id)
+
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: true }))
+            } catch (err: any) {
+              res.writeHead(500, { 'Content-Type': 'application/json' })
+              res.end(JSON.stringify({ success: false, error: err.message }))
+            }
+          })
+          return
+        }
+
         // 5. API: Get Open Work Orders List
         if (pathName === '/api/work-orders') {
           try {
@@ -2560,7 +3545,7 @@ itemsList.innerHTML = items.map(item => {
               LEFT JOIN vehicles v ON wo.vehicle_id = v.id 
               LEFT JOIN customers c ON v.customer_id = c.id 
               LEFT JOIN masters m ON wo.opened_by_master_id = m.id 
-              WHERE wo.status = 'Açık' 
+              WHERE IFNULL(wo.status, 'Açık') != 'Tamamlandı' 
               ORDER BY wo.created_at DESC
             `).all()
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
@@ -2589,7 +3574,7 @@ itemsList.innerHTML = items.map(item => {
               LEFT JOIN masters m ON wo.opened_by_master_id = m.id 
               WHERE wo.status = 'Tamamlandı' 
               ORDER BY wo.id DESC
-              LIMIT 100
+             
             `).all()
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
             res.end(JSON.stringify(rows))
@@ -2692,9 +3677,14 @@ itemsList.innerHTML = items.map(item => {
                   wo.status,
                   wo.description AS complaint,
                   opened_master.name AS opened_by_master_name,
-                  closed_master.name AS closed_by_master_name,
-                  (
-                    SELECT SUM(total_price) 
+closed_master.name AS closed_by_master_name,
+(
+  SELECT COUNT(*)
+  FROM work_order_photos
+  WHERE work_order_id = wo.id
+) AS photo_count,
+(
+  SELECT SUM(total_price)
                     FROM work_order_items 
                     WHERE work_order_id = wo.id
                   ) AS total_amount

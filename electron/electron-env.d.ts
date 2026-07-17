@@ -99,5 +99,9 @@ veritabaniBilgileriGetir: () => Promise<any>
     isEmriFotografYukleDialog: (veri: { work_order_id: number; category?: string; note?: string }) => Promise<{ success: boolean; count?: number; canceled?: boolean; error?: string }>
     isEmriFotografSil: (photoId: number) => Promise<{ success: boolean; error?: string }>
     isEmriFotografGuncelle: (veri: { id: number; category?: string; note?: string }) => Promise<{ success: boolean; error?: string }>
+    telefonEslesmeQrOlustur: (masterId?: number) => Promise<{ success: boolean; token?: string; pairingUrl?: string; qrDataUrl?: string; expiresAt?: number; masterName?: string; error?: string }>
+    telefonOturumlariGetir: () => Promise<{ success: boolean; sessions?: any[]; error?: string }>
+    telefonOturumKapat: (token: string) => Promise<{ success: boolean; error?: string }>
+    telefonTumOturumlariKapat: () => Promise<{ success: boolean; error?: string }>
   }
 }

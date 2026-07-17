@@ -26,4 +26,25 @@ export default defineConfig({
         : {},
     }),
   ],
+  build: {
+    chunkSizeWarningLimit: 600,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('primevue') || id.includes('@primevue') || id.includes('primeicons')) {
+              return 'vendor-primevue'
+            }
+            if (id.includes('chart.js') || id.includes('vue-chartjs')) {
+              return 'vendor-charts'
+            }
+            if (id.includes('vue') || id.includes('vue-router') || id.includes('pinia')) {
+              return 'vendor-vue'
+            }
+            return 'vendor-libs'
+          }
+        }
+      }
+    }
+  }
 })

@@ -192,9 +192,114 @@ const disaridanCikisYap = () => {
   cikisYap()
 }
 const showPhoneAccessModal = ref(false)
-const togglePhoneAccessModal = () => {
+const activePhoneTab = ref('qr')
+const qrCodeUrl = ref('')
+const pairingUrl = ref('')
+const qrMasterId = ref(null)
+const qrExpiresAt = ref(null)
+const qrKalanSaniye = ref(0)
+let qrTimer = null
+const mobilOturumlar = ref([])
+const qrYukleniyor = ref(false)
+
+const togglePhoneAccessModal = async () => {
   showPhoneAccessModal.value = !showPhoneAccessModal.value
+  if (showPhoneAccessModal.value) {
+    await telefonErisimiDurumGetir()
+    await mobilOturumlariYukle()
+    if (telefonErisimi.value.running && (!qrCodeUrl.value || qrKalanSaniye.value <= 0)) {
+      await qrKodOlustur()
+    }
+  }
 }
+
+const qrKodOlustur = async () => {
+  if (!window.api?.telefonEslesmeQrOlustur) return
+  qrYukleniyor.value = true
+  try {
+    const res = await window.api.telefonEslesmeQrOlustur(qrMasterId.value)
+    if (res?.success) {
+      qrCodeUrl.value = res.qrDataUrl || ''
+      pairingUrl.value = res.pairingUrl || ''
+      qrExpiresAt.value = res.expiresAt || 0
+      startQrTimer()
+    } else {
+      toast.add({ severity: 'error', summary: 'Hata', detail: res?.error || 'QR üretilemedi', life: 3000 })
+    }
+  } catch (e) {
+    console.error('QR Oluşturma Hatası:', e)
+  } finally {
+    qrYukleniyor.value = false
+  }
+}
+
+const startQrTimer = () => {
+  if (qrTimer) clearInterval(qrTimer)
+  const updateKalan = () => {
+    if (!qrExpiresAt.value) {
+      qrKalanSaniye.value = 0
+      return
+    }
+    const diff = Math.max(0, Math.floor((qrExpiresAt.value - Date.now()) / 1000))
+    qrKalanSaniye.value = diff
+    if (diff <= 0) {
+      if (qrTimer) {
+        clearInterval(qrTimer)
+        qrTimer = null
+      }
+      if (showPhoneAccessModal.value && telefonErisimi.value.running && activePhoneTab.value === 'qr') {
+        qrKodOlustur()
+      }
+    }
+  }
+  updateKalan()
+  qrTimer = setInterval(updateKalan, 1000)
+}
+
+const formatKalanSaniye = (sec) => {
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
+
+const mobilOturumlariYukle = async () => {
+  if (!window.api?.telefonOturumlariGetir) return
+  try {
+    const res = await window.api.telefonOturumlariGetir()
+    if (res?.success) {
+      mobilOturumlar.value = res.sessions || []
+    }
+  } catch (e) {
+    console.error('Mobil oturumları yükleme hatası:', e)
+  }
+}
+
+const oturumKapat = async (token) => {
+  if (!window.api?.telefonOturumKapat) return
+  try {
+    const res = await window.api.telefonOturumKapat(token)
+    if (res?.success) {
+      toast.add({ severity: 'info', summary: 'Bilgi', detail: 'Cihaz bağlantısı kesildi.', life: 2500 })
+      await mobilOturumlariYukle()
+    }
+  } catch (e) {
+    console.error('Oturum kapatma hatası:', e)
+  }
+}
+
+const tumOturumlariKapat = async () => {
+  if (!window.api?.telefonTumOturumlariKapat) return
+  try {
+    const res = await window.api.telefonTumOturumlariKapat()
+    if (res?.success) {
+      toast.add({ severity: 'warn', summary: 'Bilgi', detail: 'Tüm cihaz bağlantıları kesildi.', life: 2500 })
+      await mobilOturumlariYukle()
+    }
+  } catch (e) {
+    console.error('Tüm oturumları kapatma hatası:', e)
+  }
+}
+
 const kopyalaAdres = async (text) => {
   try {
     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -207,10 +312,12 @@ const kopyalaAdres = async (text) => {
       document.execCommand('copy')
       document.body.removeChild(input)
     }
+    toast.add({ severity: 'success', summary: 'Başarılı', detail: 'Bağlantı adresi kopyalandı.', life: 2000 })
   } catch (err) {
     console.error('Kopyalama hatasi:', err)
   }
 }
+
 const telefonErisimi = ref({
   running: false,
   port: 4317,
@@ -239,6 +346,7 @@ const telefonErisimiBaslat = async () => {
       telefonErisimi.value.port = res.port
       telefonErisimi.value.ip = res.ip
       telefonErisimi.value.ips = res.ips || []
+      await qrKodOlustur()
     } else {
       alert('Telefon erişimi başlatılamadı: ' + (res?.error || 'Bilinmeyen hata'))
     }
@@ -253,6 +361,7 @@ const telefonErisimiDurdur = async () => {
     const res = await window.api.telefonErisimiDurdur()
     if (res?.success) {
       telefonErisimi.value.running = false
+      qrCodeUrl.value = ''
     } else {
       alert('Telefon erişimi durdurulamadı.')
     }
@@ -311,7 +420,7 @@ onMounted(async () => {
   ustalariYukle()
   window.addEventListener('usta-cikis-yapildi', disaridanCikisYap)
 
-  let autoStartPhone = true
+  let autoStartPhone = false
   if (window.api?.ayarlariGetir) {
     try {
       const sRes = await window.api.ayarlariGetir()
@@ -329,8 +438,8 @@ onMounted(async () => {
         const density = set.list_density || 'normal'
         document.documentElement.setAttribute('data-density', density)
 
-        if (set.phone_server_auto_start === 'false') {
-          autoStartPhone = false
+        if (set.phone_server_auto_start === 'true') {
+          autoStartPhone = true
         }
       }
     } catch (err) {
@@ -631,29 +740,121 @@ v-for="item in menuItems.slice(6, 8)"
     <div class="phone-modal-content">
       <div class="phone-card-header">
         <i class="pi pi-mobile phone-icon"></i>
-        <h3>Telefon Erişimi</h3>
+        <h3>Mobil Telefon Erişimi</h3>
         <span class="status-badge" :class="{ 'status-active': telefonErisimi.running }">
           {{ telefonErisimi.running ? 'Açık' : 'Kapalı' }}
         </span>
       </div>
       
+      <!-- Tab Butonları -->
+      <div class="phone-tab-bar">
+        <button 
+          class="phone-tab-btn" 
+          :class="{ active: activePhoneTab === 'qr' }"
+          @click="activePhoneTab = 'qr'"
+        >
+          <i class="pi pi-qrcode"></i> QR ile Bağlan
+        </button>
+        <button 
+          class="phone-tab-btn" 
+          :class="{ active: activePhoneTab === 'devices' }"
+          @click="activePhoneTab = 'devices'; mobilOturumlariYukle()"
+        >
+          <i class="pi pi-desktop"></i> Bağlı Cihazlar ({{ mobilOturumlar.length }})
+        </button>
+      </div>
+
       <div class="phone-card-body">
-        <div v-if="telefonErisimi.running" class="phone-address-box">
-          <span class="address-label">Bağlantı Adresi:</span>
-          <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
-            <code class="address-value" style="flex: 1;">http://{{ telefonErisimi.ip }}:{{ telefonErisimi.port }}</code>
-            <button 
-              class="phone-btn btn-refresh" 
-              style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"
-              @click="kopyalaAdres('http://' + telefonErisimi.ip + ':' + telefonErisimi.port)"
-              title="Adresi Kopyala"
-            >
-              <i class="pi pi-copy"></i>
-            </button>
+        <!-- Tab 1: QR Kod ile Bağlan -->
+        <div v-if="activePhoneTab === 'qr'" class="phone-tab-content">
+          <div v-if="telefonErisimi.running" class="qr-section">
+            <div class="qr-master-selector">
+              <label>Giriş Yapacak Usta:</label>
+              <select v-model="qrMasterId" @change="qrKodOlustur" class="qr-select">
+                <option :value="null">Tüm Ustalar / Genel</option>
+                <option v-for="u in ustalar" :key="u.id" :value="u.id">{{ u.name }}</option>
+              </select>
+            </div>
+
+            <div class="qr-display-box">
+              <img v-if="qrCodeUrl" :src="qrCodeUrl" alt="Mobil Eşleşme QR Kodu" class="qr-img" />
+              <div v-else class="qr-spinner">
+                <i class="pi pi-spin pi-spinner" style="font-size: 24px;"></i>
+                <span>QR Kod Hazırlanıyor...</span>
+              </div>
+            </div>
+
+            <div class="qr-info-row">
+              <span class="qr-timer-badge" :class="{ expired: qrKalanSaniye <= 0 }">
+                <i class="pi pi-clock"></i>
+                {{ qrKalanSaniye > 0 ? `Geçerlilik: ${formatKalanSaniye(qrKalanSaniye)}` : 'Süresi Doldu' }}
+              </span>
+              <button class="phone-btn btn-refresh-qr" @click="qrKodOlustur" :disabled="qrYukleniyor" title="Yeni QR Üret">
+                <i class="pi pi-refresh" :class="{ 'pi-spin': qrYukleniyor }"></i> Yeni QR
+              </button>
+            </div>
+
+            <div class="phone-address-box">
+              <span class="address-label">Bağlantı Adresi:</span>
+              <div style="display: flex; gap: 8px; align-items: center; width: 100%;">
+                <code class="address-value" style="flex: 1;">{{ pairingUrl || ('http://' + telefonErisimi.ip + ':' + telefonErisimi.port) }}</code>
+                <button 
+                  class="phone-btn btn-refresh" 
+                  style="width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;"
+                  @click="kopyalaAdres(pairingUrl || ('http://' + telefonErisimi.ip + ':' + telefonErisimi.port))"
+                  title="Adresi Kopyala"
+                >
+                  <i class="pi pi-copy"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="phone-info-text text-center" style="padding: 24px 12px;">
+            <i class="pi pi-power-off" style="font-size: 32px; color: var(--text-muted); margin-bottom: 8px; display: block;"></i>
+            Telefon bağlantısını başlatmak için aşağıdaki "Başlat" butonuna tıklayın.
           </div>
         </div>
-        <div v-else class="phone-info-text">
-          Telefon bağlantısı için servisi başlatın.
+
+        <!-- Tab 2: Bağlı Mobil Cihazlar -->
+        <div v-if="activePhoneTab === 'devices'" class="phone-tab-content">
+          <div class="devices-header">
+            <span>Aktif Mobil Oturumlar</span>
+            <button 
+              v-if="mobilOturumlar.length > 0" 
+              class="phone-btn btn-stop-all"
+              @click="tumOturumlariKapat"
+            >
+              Tümünü Kes
+            </button>
+          </div>
+
+          <div v-if="mobilOturumlar.length === 0" class="empty-devices">
+            <i class="pi pi-mobile" style="font-size: 28px; color: var(--text-muted);"></i>
+            <span>Henüz bağlı mobil cihaz bulunmuyor.</span>
+          </div>
+
+          <div v-else class="devices-list">
+            <div v-for="s in mobilOturumlar" :key="s.token" class="device-card">
+              <div class="device-info">
+                <div class="device-name">
+                  <i class="pi pi-user"></i> {{ s.name }}
+                  <span class="device-ip">({{ s.ip || 'Yerel Ağ' }})</span>
+                </div>
+                <div class="device-meta">
+                  <span>Giriş: {{ new Date(s.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) }}</span>
+                  <span>· Son Aktif: {{ new Date(s.lastActiveAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) }}</span>
+                </div>
+              </div>
+              <button 
+                class="btn-revoke-device" 
+                @click="oturumKapat(s.token)" 
+                title="Cihaz Bağlantısını Kes"
+              >
+                <i class="pi pi-times"></i> Kes
+              </button>
+            </div>
+          </div>
         </div>
       </div>
       
@@ -672,7 +873,7 @@ v-for="item in menuItems.slice(6, 8)"
         >
           <i class="pi pi-stop"></i> Durdur
         </button>
-        <button class="phone-btn btn-refresh" @click="telefonErisimiDurumGetir" title="Yenile">
+        <button class="phone-btn btn-refresh" @click="telefonErisimiDurumGetir(); mobilOturumlariYukle();" title="Yenile">
           <i class="pi pi-refresh"></i>
         </button>
         <button class="phone-btn btn-close" @click="showPhoneAccessModal = false">
@@ -824,12 +1025,12 @@ v-for="item in menuItems.slice(6, 8)"
 
 .phone-modal-content {
   width: 100%;
-  max-width: 360px;
+  max-width: 420px;
   background: var(--bg-panel);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  padding: 24px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  padding: 22px 24px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -858,14 +1059,13 @@ v-for="item in menuItems.slice(6, 8)"
 }
 
 .status-badge {
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 5px;
-  background: rgba(245, 158, 11, 0.1);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  color: #fb923c;
-  text-transform: uppercase;
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
 }
 
 .status-badge.status-active {
@@ -874,11 +1074,228 @@ v-for="item in menuItems.slice(6, 8)"
   color: #34d399;
 }
 
-.phone-card-body {
-  font-size: 12.5px;
-  min-height: 36px;
+.phone-tab-bar {
+  display: flex;
+  gap: 6px;
+  background: var(--bg-primary, rgba(0,0,0,0.2));
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color-soft);
+}
+
+.phone-tab-btn {
+  flex: 1;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.phone-tab-btn:hover {
+  color: var(--text-title);
+}
+
+.phone-tab-btn.active {
+  background: var(--bg-active-box, rgba(255,255,255,0.08));
+  color: var(--accent-color, #38bdf8);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.phone-card-body {
+  font-size: 12.5px;
+}
+
+.phone-tab-content {
+  width: 100%;
+}
+
+.qr-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.qr-master-selector {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.qr-select {
+  flex: 1;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: var(--bg-input, #1e293b);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.qr-display-box {
+  background: #ffffff;
+  padding: 14px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 190px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.qr-img {
+  width: 175px;
+  height: 175px;
+  object-fit: contain;
+}
+
+.qr-spinner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.qr-info-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.qr-timer-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.1);
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.qr-timer-badge.expired {
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.btn-refresh-qr {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.qr-help-text {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.devices-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-title);
+  margin-bottom: 10px;
+}
+
+.btn-stop-all {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  padding: 2px 8px;
+  font-size: 11px;
+}
+
+.empty-devices {
+  text-align: center;
+  padding: 32px 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.devices-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.device-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color-soft);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.device-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.device-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.device-ip {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.device-meta {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.btn-revoke-device {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-revoke-device:hover {
+  background: rgba(239, 68, 68, 0.2);
 }
 
 .phone-address-box {
@@ -897,7 +1314,7 @@ v-for="item in menuItems.slice(6, 8)"
 .address-value {
   display: block;
   font-family: monospace;
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: #34d399;
   background: rgba(16, 185, 129, 0.05);
   border: 1px dashed rgba(16, 185, 129, 0.2);

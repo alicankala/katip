@@ -9,11 +9,24 @@ import db, {
   veritabaniKontrolEtBackend
 } from './database.js'
 import { hashPin, verifyPin } from './security'
-import { app, BrowserWindow, ipcMain, shell, dialog, Menu, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, Menu, nativeImage, type IpcMainInvokeEvent } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import fsSync, { promises as fs } from 'node:fs'
-import { startPhoneServer, stopPhoneServer, isServerRunning, getCurrentPort, getLocalIPAddress, getLocalIPAddresses, runPhoneServerMigrations } from './phoneServer.js'
+import {
+  startPhoneServer,
+  stopPhoneServer,
+  isServerRunning,
+  getCurrentPort,
+  getLocalIPAddress,
+  getLocalIPAddresses,
+  runPhoneServerMigrations,
+  generatePairingToken,
+  getMobileSessionsList,
+  revokeMobileSession,
+  revokeAllMobileSessions
+} from './phoneServer.js'
+import QRCode from 'qrcode'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -3123,6 +3136,61 @@ return {
     }
   })
 
+  // 38. Telefon Erişimi - QR Kod / Eşleşme Jeneratörü
+  kanalEkle('telefon-eslesme-qr-olustur', async (_event, masterId?: number) => {
+    try {
+      const pairRes = generatePairingToken(masterId, 30)
+      const qrDataUrl = await QRCode.toDataURL(pairRes.pairingUrl, {
+        width: 320,
+        margin: 2,
+        color: {
+          dark: '#0f172a',
+          light: '#ffffff'
+        }
+      })
+      return {
+        ...pairRes,
+        qrDataUrl
+      }
+    } catch (error) {
+      console.error('[PhoneServer] QR gen error:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 39. Telefon Erişimi - Aktif Cihaz/Oturum Listesi
+  kanalEkle('telefon-oturumlari-getir', () => {
+    try {
+      return {
+        success: true,
+        sessions: getMobileSessionsList()
+      }
+    } catch (error) {
+      console.error('[PhoneServer] Get sessions error:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 40. Telefon Erişimi - Cihaz Oturumu Kapat
+  kanalEkle('telefon-oturum-kapat', (_event, token: string) => {
+    try {
+      return revokeMobileSession(token)
+    } catch (error) {
+      console.error('[PhoneServer] Revoke session error:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 41. Telefon Erişimi - Tüm Oturumları Kapat
+  kanalEkle('telefon-tum-oturumlari-kapat', () => {
+    try {
+      return revokeAllMobileSessions()
+    } catch (error) {
+      console.error('[PhoneServer] Revoke all error:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
   // 38. Uygulama Verilerini Yenile
   kanalEkle('uygulama-verilerini-yenile', async () => {
     return await uygulamaVerileriniYenileBackend()
@@ -3235,12 +3303,26 @@ return {
       let addedCount = 0
       for (let i = 0; i < result.filePaths.length; i++) {
         const srcPath = result.filePaths[i]
-        const ext = path.extname(srcPath)
-        const baseName = path.basename(srcPath, ext).replace(/[^a-zA-Z0-9_-]/g, '_')
-        const targetFileName = `wo_${woId}_${Date.now()}_${i}_${baseName}${ext}`
+        const targetFileName = `wo_${woId}_${Date.now()}_${i}.jpg`
         const targetPath = path.join(photoDir, targetFileName)
 
-        await fs.copyFile(srcPath, targetPath)
+        try {
+          const img = nativeImage.createFromPath(srcPath)
+          const size = img.getSize()
+          let resized = img
+          const maxDim = 1280
+          if (size.width > maxDim || size.height > maxDim) {
+            if (size.width > size.height) {
+              resized = img.resize({ width: maxDim, quality: 'better' })
+            } else {
+              resized = img.resize({ height: maxDim, quality: 'better' })
+            }
+          }
+          const compressedBuffer = resized.toJPEG(75)
+          await fs.writeFile(targetPath, compressedBuffer)
+        } catch (e) {
+          await fs.copyFile(srcPath, targetPath)
+        }
 
         db.prepare(`
           INSERT INTO work_order_photos (work_order_id, file_name, file_path, category, note)
