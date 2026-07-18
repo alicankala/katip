@@ -39,8 +39,11 @@ function normalizeString(str) {
 function ozellestirilmisFonksiyonlariTanimla(targetDb) {
   try {
     targetDb.pragma('foreign_keys = ON;');
+    targetDb.pragma('journal_mode = WAL;');
+    targetDb.pragma('synchronous = NORMAL;');
+    targetDb.pragma('temp_store = MEMORY;');
   } catch (err) {
-    console.warn('[DB] PRAGMA foreign_keys set warning:', err);
+    console.warn('[DB] PRAGMA set warning:', err);
   }
   targetDb.function('normalize_text', (val) => {
     return normalizeString(val);
@@ -217,6 +220,17 @@ CREATE TABLE IF NOT EXISTS stock_movements (
   FOREIGN KEY(work_order_id) REFERENCES work_orders(id),
   FOREIGN KEY(master_id) REFERENCES masters(id)
 );
+
+CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+CREATE INDEX IF NOT EXISTS idx_customers_active ON customers(is_active);
+CREATE INDEX IF NOT EXISTS idx_vehicles_plate ON vehicles(plate);
+CREATE INDEX IF NOT EXISTS idx_vehicles_customer ON vehicles(customer_id);
+CREATE INDEX IF NOT EXISTS idx_work_orders_vehicle ON work_orders(vehicle_id);
+CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status);
+CREATE INDEX IF NOT EXISTS idx_parts_code ON parts(code);
+CREATE INDEX IF NOT EXISTS idx_work_order_items_wo ON work_order_items(work_order_id);
+CREATE INDEX IF NOT EXISTS idx_work_order_payments_wo ON work_order_payments(work_order_id);
+CREATE INDEX IF NOT EXISTS idx_stock_movements_part ON stock_movements(part_id);
   `)
   migrationCalistir(1, () => {
     kolonEkleEksikse('work_orders', 'total_price', 'REAL DEFAULT 0')
