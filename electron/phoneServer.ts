@@ -1731,38 +1731,39 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     </span>
   </div>
 
-  <div id="hist-wo-photos-list"
-       style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+  <div id="hist-wo-photos-list" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
     <div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 12px;">
       Fotoğraf bulunmuyor.
+    </div>
+  </div>
 </div>
 
-  <!-- MODAL: DIGITAL SIGNATURE -->
-  <div id="modal-signature" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
-    <div class="modal-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 380px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
-      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border);">
-        <h3 style="font-size: 16px; font-weight: 700; margin: 0; color: var(--text-primary);"><i class="pi pi-pencil" style="color: var(--accent); margin-right: 6px;"></i> Musteri Imzasi</h3>
-        <button class="modal-close-btn" id="close-signature-modal-btn" style="background: transparent; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer;">&times;</button>
+</div>
+
+<!-- MODAL: DIGITAL SIGNATURE (ROOT LEVEL) -->
+<div id="modal-signature" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
+  <div class="modal-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 380px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+    <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border);">
+      <h3 style="font-size: 16px; font-weight: 700; margin: 0; color: var(--text-primary);"><i class="pi pi-pencil" style="color: var(--accent); margin-right: 6px;"></i> Musteri Imzasi</h3>
+      <button class="modal-close-btn" id="close-signature-modal-btn" style="background: transparent; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer;">&times;</button>
+    </div>
+    <div class="modal-body" style="padding: 16px; text-align: center;">
+      <div style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px;">
+        Lutfen ekrandaki kutunun icine parmaginizla imzanizi atin:
       </div>
-      <div class="modal-body" style="padding: 16px; text-align: center;">
-        <div style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px;">
-          Lutfen ekrandaki kutunun icine parmaginizla imzanizi atin:
-        </div>
-        <div style="border: 2px dashed var(--accent); border-radius: 12px; background: #ffffff; padding: 4px; touch-action: none; margin-bottom: 14px;">
-          <canvas id="signature-canvas" width="320" height="180" style="width: 100%; height: 180px; display: block; border-radius: 8px; cursor: crosshair; touch-action: none;"></canvas>
-        </div>
-        <div style="display: flex; gap: 10px;">
-          <button id="sig-clear-btn" class="btn btn-secondary" type="button" style="flex: 1; height: 42px; font-size: 13.5px;">
-            <i class="pi pi-refresh"></i> Temizle
-          </button>
-          <button id="sig-save-btn" class="btn btn-primary" type="button" style="flex: 1.5; height: 42px; font-size: 13.5px; background: var(--success); color: #000;">
-            <i class="pi pi-check"></i> Imzayi Kaydet
-          </button>
-        </div>
+      <div style="border: 2px dashed var(--accent); border-radius: 12px; background: #ffffff; padding: 4px; touch-action: none; margin-bottom: 14px;">
+        <canvas id="signature-canvas" width="320" height="180" style="width: 100%; height: 180px; display: block; border-radius: 8px; cursor: crosshair; touch-action: none;"></canvas>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button id="sig-clear-btn" class="btn btn-secondary" type="button" style="flex: 1; height: 42px; font-size: 13.5px;">
+          <i class="pi pi-refresh"></i> Temizle
+        </button>
+        <button id="sig-save-btn" class="btn btn-primary" type="button" style="flex: 1.5; height: 42px; font-size: 13.5px; background: var(--success); color: #000;">
+          <i class="pi pi-check"></i> Imzayi Kaydet
+        </button>
       </div>
     </div>
   </div>
-
 </div>
 
 <script>
@@ -3369,6 +3370,10 @@ document
 
     if (openSigModalBtn && modalSignature) {
       openSigModalBtn.addEventListener('click', function() {
+        const backBtn = document.getElementById('detail-back-btn');
+        if (backBtn && backBtn.dataset.orderId) {
+          currentWorkOrderId = parseInt(backBtn.dataset.orderId, 10);
+        }
         clearSignatureCanvas();
         modalSignature.style.display = 'flex';
       });
@@ -3388,6 +3393,12 @@ document
 
     if (sigSaveBtn) {
       sigSaveBtn.addEventListener('click', async function() {
+        if (!currentWorkOrderId) {
+          const backBtn = document.getElementById('detail-back-btn');
+          if (backBtn && backBtn.dataset.orderId) {
+            currentWorkOrderId = parseInt(backBtn.dataset.orderId, 10);
+          }
+        }
         if (!currentWorkOrderId) {
           alert('İş emri ID seçili değil.');
           return;
