@@ -262,6 +262,9 @@ migrationCalistir(7, () => {
 migrationCalistir(8, () => {
   kolonEkleEksikse('work_orders', 'closed_at', 'DATETIME')
 })
+migrationCalistir(25, () => {
+  kolonEkleEksikse('work_orders', 'customer_signature', 'TEXT')
+})
 migrationCalistir(9, () => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS masters (

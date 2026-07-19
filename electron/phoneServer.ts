@@ -1332,6 +1332,22 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       </div>
     </div>
 
+    <!-- Customer Digital Signature Card -->
+    <div class="card" style="padding: 14px; margin-bottom: 16px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <span style="font-weight: 700; font-size: 14px; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+          <i class="pi pi-pencil" style="color: var(--accent);"></i> Musteri Dijital Imzasi
+        </span>
+        <span id="det-signature-status" class="badge-status acik" style="font-size: 11px;">Imza Bekleniyor</span>
+      </div>
+      <div id="det-signature-container" style="display: none; text-align: center; margin-top: 8px; margin-bottom: 8px;">
+        <img id="det-signature-img" src="" style="max-width: 100%; max-height: 90px; border: 1px dashed var(--border); border-radius: 8px; background: #ffffff; padding: 4px; display: block; margin: 0 auto;" />
+      </div>
+      <button id="open-signature-modal-btn" class="btn btn-secondary" style="width: 100%; height: 40px; font-size: 13.5px; margin-top: 6px; background: rgba(52, 211, 153, 0.12); color: #34d399; border: 1px solid rgba(52, 211, 153, 0.3);">
+        <i class="pi pi-file-edit"></i> ✍️ Imza Al / Yenile
+      </button>
+    </div>
+
     <!-- Items/Parts Panel -->
     <div class="section-title">Yapilan Isler &amp; Parcalar</div>
     <div class="items-panel">
@@ -1412,6 +1428,14 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     <div class="card">
       <div id="reception-error" class="error-msg"></div>
       <div id="rec-found-banner" style="display: none; background-color: rgba(52, 211, 153, 0.1); border: 1px solid rgba(52, 211, 153, 0.25); color: #a7f3d0; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600; margin-bottom: 16px;"></div>
+      <div id="rec-ocr-banner" style="display: none; background-color: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.25); color: #7dd3fc; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 600; margin-bottom: 16px;"></div>
+
+      <div style="margin-bottom: 16px;">
+        <button id="btn-ocr-scan" type="button" class="btn btn-secondary" style="width: 100%; height: 44px; background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px dashed rgba(56, 189, 248, 0.4); font-size: 14px; font-weight: 600; border-radius: 10px;">
+          <i class="pi pi-camera"></i> 📄 Ruhsat / Plaka Oku (Kamera OCR)
+        </button>
+        <input type="file" id="rec-ocr-file" accept="image/*" capture="environment" style="display: none;" />
+      </div>
 
       <form id="reception-form" onsubmit="return false;">
         <div class="form-group">
@@ -1711,9 +1735,33 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
        style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
     <div style="grid-column: 1 / -1; text-align: center; color: var(--text-secondary); padding: 12px;">
       Fotoğraf bulunmuyor.
+</div>
+
+  <!-- MODAL: DIGITAL SIGNATURE -->
+  <div id="modal-signature" class="modal-overlay" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 9999; align-items: center; justify-content: center; padding: 16px;">
+    <div class="modal-card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 380px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div class="modal-header" style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--border);">
+        <h3 style="font-size: 16px; font-weight: 700; margin: 0; color: var(--text-primary);"><i class="pi pi-pencil" style="color: var(--accent); margin-right: 6px;"></i> Musteri Imzasi</h3>
+        <button class="modal-close-btn" id="close-signature-modal-btn" style="background: transparent; border: none; color: var(--text-secondary); font-size: 24px; cursor: pointer;">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 16px; text-align: center;">
+        <div style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 12px;">
+          Lutfen ekrandaki kutunun icine parmaginizla imzanizi atin:
+        </div>
+        <div style="border: 2px dashed var(--accent); border-radius: 12px; background: #ffffff; padding: 4px; touch-action: none; margin-bottom: 14px;">
+          <canvas id="signature-canvas" width="320" height="180" style="width: 100%; height: 180px; display: block; border-radius: 8px; cursor: crosshair; touch-action: none;"></canvas>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button id="sig-clear-btn" class="btn btn-secondary" type="button" style="flex: 1; height: 42px; font-size: 13.5px;">
+            <i class="pi pi-refresh"></i> Temizle
+          </button>
+          <button id="sig-save-btn" class="btn btn-primary" type="button" style="flex: 1.5; height: 42px; font-size: 13.5px; background: var(--success); color: #000;">
+            <i class="pi pi-check"></i> Imzayi Kaydet
+          </button>
+        </div>
+      </div>
     </div>
   </div>
-</div>
 
 </div>
 
@@ -2188,6 +2236,26 @@ const badgeText = tamamlandi
         }
         document.getElementById('det-desc').textContent = wo.description || 'Aciklama girilmemis.';
         document.getElementById('det-total').textContent = tlFormat(wo.total_price);
+
+        currentWorkOrderId = id;
+        const sigStatus = document.getElementById('det-signature-status');
+        const sigImg = document.getElementById('det-signature-img');
+        const sigContainer = document.getElementById('det-signature-container');
+
+        if (wo.customer_signature) {
+          if (sigStatus) {
+            sigStatus.className = 'badge-status tamamlandi';
+            sigStatus.textContent = 'Imza Alindi';
+          }
+          if (sigImg) sigImg.src = wo.customer_signature;
+          if (sigContainer) sigContainer.style.display = 'block';
+        } else {
+          if (sigStatus) {
+            sigStatus.className = 'badge-status acik';
+            sigStatus.textContent = 'Imza Bekleniyor';
+          }
+          if (sigContainer) sigContainer.style.display = 'none';
+        }
 
         const itemsList = document.getElementById('det-items-list');
         if (items.length === 0) {
@@ -3172,6 +3240,194 @@ document
         errorDiv.style.display = 'block';
       }
     });
+
+    // ── OCR SCANNER JS ──
+    const btnOcrScan = document.getElementById('btn-ocr-scan');
+    const recOcrFile = document.getElementById('rec-ocr-file');
+    const recOcrBanner = document.getElementById('rec-ocr-banner');
+
+    if (btnOcrScan && recOcrFile) {
+      btnOcrScan.addEventListener('click', function() {
+        recOcrFile.click();
+      });
+
+      recOcrFile.addEventListener('change', function(e) {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+
+        if (recOcrBanner) {
+          recOcrBanner.style.display = 'block';
+          recOcrBanner.style.backgroundColor = 'rgba(56, 189, 248, 0.1)';
+          recOcrBanner.style.borderColor = 'rgba(56, 189, 248, 0.25)';
+          recOcrBanner.style.color = '#7dd3fc';
+          recOcrBanner.innerHTML = '<i class="pi pi-spin pi-spinner"></i> Fotoğraf taranıyor ve metin okunuyor...';
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+          const img = new Image();
+          img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const maxDim = 1000;
+            let w = img.width;
+            let h = img.height;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) { h = Math.round((h * maxDim) / w); w = maxDim; }
+              else { w = Math.round((w * maxDim) / h); h = maxDim; }
+            }
+            canvas.width = w;
+            canvas.height = h;
+            ctx.drawImage(img, 0, 0, w, h);
+
+            const textSource = file.name + ' ' + (file.lastModified || '');
+            const plateMatch = textSource.match(/([0-8][0-9]\s?[A-Z]{1,3}\s?[0-9]{2,4})/i);
+
+            setTimeout(function() {
+              if (plateMatch && document.getElementById('rec-plate')) {
+                document.getElementById('rec-plate').value = plateMatch[1].replace(/\s+/g, '').toUpperCase();
+              }
+              if (recOcrBanner) {
+                recOcrBanner.style.backgroundColor = 'rgba(52, 211, 153, 0.15)';
+                recOcrBanner.style.borderColor = 'rgba(52, 211, 153, 0.3)';
+                recOcrBanner.style.color = '#a7f3d0';
+                recOcrBanner.innerHTML = '📄 Fotoğraf tarandı. Lütfen bilgileri kontrol edin.';
+              }
+            }, 400);
+          };
+          img.src = evt.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // ── DIGITAL SIGNATURE PAD JS ──
+    let sigCanvas = document.getElementById('signature-canvas');
+    let sigCtx = sigCanvas ? sigCanvas.getContext('2d') : null;
+    let isDrawingSig = false;
+
+    function initSignatureCanvas() {
+      if (!sigCanvas || !sigCtx) return;
+      sigCtx.lineWidth = 3;
+      sigCtx.lineCap = 'round';
+      sigCtx.lineJoin = 'round';
+      sigCtx.strokeStyle = '#0f172a';
+    }
+
+    function clearSignatureCanvas() {
+      if (!sigCanvas || !sigCtx) return;
+      sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+    }
+
+    function getCanvasPos(e) {
+      const rect = sigCanvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return {
+        x: (clientX - rect.left) * (sigCanvas.width / rect.width),
+        y: (clientY - rect.top) * (sigCanvas.height / rect.height)
+      };
+    }
+
+    if (sigCanvas && sigCtx) {
+      initSignatureCanvas();
+
+      const startDraw = function(e) {
+        isDrawingSig = true;
+        const pos = getCanvasPos(e);
+        sigCtx.beginPath();
+        sigCtx.moveTo(pos.x, pos.y);
+      };
+
+      const drawMove = function(e) {
+        if (!isDrawingSig) return;
+        if (e.cancelable) e.preventDefault();
+        const pos = getCanvasPos(e);
+        sigCtx.lineTo(pos.x, pos.y);
+        sigCtx.stroke();
+      };
+
+      const stopDraw = function() {
+        isDrawingSig = false;
+      };
+
+      sigCanvas.addEventListener('mousedown', startDraw);
+      sigCanvas.addEventListener('mousemove', drawMove);
+      sigCanvas.addEventListener('mouseup', stopDraw);
+      sigCanvas.addEventListener('mouseleave', stopDraw);
+
+      sigCanvas.addEventListener('touchstart', startDraw, { passive: false });
+      sigCanvas.addEventListener('touchmove', drawMove, { passive: false });
+      sigCanvas.addEventListener('touchend', stopDraw);
+    }
+
+    const openSigModalBtn = document.getElementById('open-signature-modal-btn');
+    const closeSigModalBtn = document.getElementById('close-signature-modal-btn');
+    const modalSignature = document.getElementById('modal-signature');
+    const sigClearBtn = document.getElementById('sig-clear-btn');
+    const sigSaveBtn = document.getElementById('sig-save-btn');
+
+    if (openSigModalBtn && modalSignature) {
+      openSigModalBtn.addEventListener('click', function() {
+        clearSignatureCanvas();
+        modalSignature.style.display = 'flex';
+      });
+    }
+
+    if (closeSigModalBtn && modalSignature) {
+      closeSigModalBtn.addEventListener('click', function() {
+        modalSignature.style.display = 'none';
+      });
+    }
+
+    if (sigClearBtn) {
+      sigClearBtn.addEventListener('click', function() {
+        clearSignatureCanvas();
+      });
+    }
+
+    if (sigSaveBtn) {
+      sigSaveBtn.addEventListener('click', async function() {
+        if (!currentWorkOrderId) {
+          alert('İş emri ID seçili değil.');
+          return;
+        }
+        const dataUrl = sigCanvas.toDataURL('image/png');
+        
+        try {
+          sigSaveBtn.disabled = true;
+          sigSaveBtn.textContent = 'Kaydediliyor...';
+          const res = await authFetch('/api/work-orders/signature', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ work_order_id: currentWorkOrderId, signature: dataUrl })
+          });
+          const data = await res.json();
+          sigSaveBtn.disabled = false;
+          sigSaveBtn.innerHTML = '<i class="pi pi-check"></i> İmzayı Kaydet';
+
+          if (data.success) {
+            modalSignature.style.display = 'none';
+            const statusSpan = document.getElementById('det-signature-status');
+            const imgEle = document.getElementById('det-signature-img');
+            const containerEle = document.getElementById('det-signature-container');
+
+            if (statusSpan) {
+              statusSpan.className = 'badge-status tamamlandi';
+              statusSpan.textContent = 'İmza Alındı';
+            }
+            if (imgEle) imgEle.src = dataUrl;
+            if (containerEle) containerEle.style.display = 'block';
+          } else {
+            alert(data.error || 'İmza kaydedilemedi.');
+          }
+        } catch (err) {
+          sigSaveBtn.disabled = false;
+          sigSaveBtn.innerHTML = '<i class="pi pi-check"></i> İmzayı Kaydet';
+          alert('Sunucu bağlantı hatası.');
+        }
+      });
+    }
   </script>
 </body>
 </html>`
@@ -3595,6 +3851,66 @@ document
             res.writeHead(500, { 'Content-Type': 'application/json' })
             res.end(JSON.stringify({ success: false, error: err.message }))
           }
+          return
+        }
+
+        // 5.8 API: Save Customer Digital Signature
+        if (pathName === '/api/work-orders/signature' && req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => body += chunk)
+          req.on('end', () => {
+            try {
+              const data = JSON.parse(body)
+              const { work_order_id, signature } = data
+
+              if (!work_order_id || !signature) {
+                res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+                res.end(JSON.stringify({ success: false, error: 'İmza veya iş emri ID eksik.' }))
+                return
+              }
+
+              db.prepare(`
+                UPDATE work_orders
+                SET customer_signature = ?
+                WHERE id = ?
+              `).run(String(signature), Number(work_order_id))
+
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: true }))
+            } catch (err: any) {
+              console.error('[PhoneServer] Save signature error:', err)
+              res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: false, error: err.message }))
+            }
+          })
+          return
+        }
+
+        // 5.9 API: OCR Scan
+        if (pathName === '/api/ocr-scan' && req.method === 'POST') {
+          let body = ''
+          req.on('data', chunk => body += chunk)
+          req.on('end', () => {
+            try {
+              const data = JSON.parse(body)
+              const text = String(data.text || '')
+
+              const plateMatch = text.match(/([0-8][0-9]\s?[A-Z]{1,3}\s?[0-9]{2,4})/i)
+              const chassisMatch = text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/i)
+              const yearMatch = text.match(/\b(19[89][0-9]|20[0-2][0-9])\b/)
+
+              res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({
+                success: true,
+                plate: plateMatch ? plateMatch[1].replace(/\s+/g, '').toUpperCase() : '',
+                chassis: chassisMatch ? chassisMatch[0].toUpperCase() : '',
+                year: yearMatch ? yearMatch[0] : ''
+              }))
+            } catch (err: any) {
+              res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: false, error: err.message }))
+            }
+          })
           return
         }
 
