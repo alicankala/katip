@@ -228,16 +228,20 @@ export function registerPartHandlers(kanalEkle: (kanal: string, fonksiyon: (...a
         SELECT *
         FROM parts
         WHERE UPPER(TRIM(code)) = ?
+           OR (UPPER(TRIM(oem_code)) = ? AND ? != '')
+           OR (LOWER(TRIM(name)) = LOWER(?) AND ? != '')
         LIMIT 1
-      `).get(code) as any
+      `).get(code, oemCode, oemCode, name, name) as any
 
       if (mevcutParca) {
         const eskiStok = Number(mevcutParca.stock) || 0
         const yeniStok = eskiStok + stock
+        const wasPassive = Number(mevcutParca.is_active ?? 1) === 0
 
         db.prepare(`
           UPDATE parts
           SET
+            code = ?,
             name = ?,
             brand = ?,
             category = ?,
@@ -253,6 +257,7 @@ export function registerPartHandlers(kanalEkle: (kanal: string, fonksiyon: (...a
             is_active = 1
           WHERE id = ?
         `).run(
+          code,
           name,
           brand,
           category,
@@ -268,7 +273,7 @@ export function registerPartHandlers(kanalEkle: (kanal: string, fonksiyon: (...a
           Number(mevcutParca.id)
         )
 
-        if (stock > 0) {
+        if (stock > 0 || wasPassive) {
           stokHareketiKaydet({
             partId: Number(mevcutParca.id),
             workOrderId: null,
@@ -277,7 +282,9 @@ export function registerPartHandlers(kanalEkle: (kanal: string, fonksiyon: (...a
             oldStock: eskiStok,
             newStock: yeniStok,
             masterId: activeMasterId,
-            note: `Mevcut parçaya stok girişi yapıldı (${eskiStok} -> ${yeniStok})`
+            note: wasPassive
+              ? `Pasife alınmış parça tekrar aktifleştirildi ve stok güncellendi (${eskiStok} -> ${yeniStok})`
+              : `Mevcut parçaya stok girişi yapıldı (${eskiStok} -> ${yeniStok})`
           })
         }
 
@@ -285,6 +292,7 @@ export function registerPartHandlers(kanalEkle: (kanal: string, fonksiyon: (...a
           success: true,
           id: mevcutParca.id,
           updatedExisting: true,
+          wasReactivated: wasPassive,
           oldStock: eskiStok,
           newStock: yeniStok
         }
@@ -509,6 +517,28 @@ export function registerPartHandlers(kanalEkle: (kanal: string, fonksiyon: (...a
       return { success: true }
     } catch (error) {
       console.error('Parça pasife alma hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 6.5. Parça aktifleştir
+  kanalEkle('parca-aktiflestir', (_event, id: number) => {
+    try {
+      const partId = Number(id)
+
+      if (!partId) {
+        throw new Error('Aktifleştirilecek parça bulunamadı.')
+      }
+
+      db.prepare(`
+        UPDATE parts
+        SET is_active = 1
+        WHERE id = ?
+      `).run(partId)
+
+      return { success: true }
+    } catch (error) {
+      console.error('Parça aktifleştirme hatası:', error)
       return { success: false, error: getErrorMessage(error) }
     }
   })

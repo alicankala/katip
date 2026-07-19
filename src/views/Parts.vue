@@ -249,6 +249,30 @@ const sil = (id) => {
   })
 }
 
+const mevcuttanAktiflestir = async (id) => {
+  if (!id) return
+
+  confirmDialog.require({
+    message: 'Bu parçayı tekrar aktif hale getirmek istediğinize emin misiniz?',
+    header: 'Parça Aktifleştir',
+    icon: 'pi pi-check-circle',
+    acceptLabel: 'Aktifleştir',
+    rejectLabel: 'Vazgeç',
+    acceptClass: 'p-button-success',
+    rejectClass: 'p-button-secondary p-button-text',
+    accept: async () => {
+      const res = await window.api.parcaAktiflestir(id)
+
+      if (res?.success) {
+        basariMesaji('Parça tekrar aktif hale getirildi.')
+        await listeyiGetir()
+      } else {
+        hataMesaji(res?.error || 'Parça aktifleştirilemedi.')
+      }
+    }
+  })
+}
+
 const kaydet = async () => {
   if (!form.code || !form.name) {
     uyariMesaji('Parça kodu ve parça adı alanları boş bırakılamaz.')
@@ -267,9 +291,9 @@ const kaydet = async () => {
 
   try {
     const temizVeri = {
-  ...JSON.parse(JSON.stringify(form)),
-  active_master_id: aktifUsta.value.id
-}
+      ...JSON.parse(JSON.stringify(form)),
+      active_master_id: aktifUsta.value.id
+    }
 
     const res = form.id
       ? await window.api.parcaGuncelle(temizVeri)
@@ -277,17 +301,17 @@ const kaydet = async () => {
 
     if (res && res.success) {
       if (form.id) {
-  basariMesaji('Parça güncellendi.')
-} else if (res.updatedExisting) {
-  basariMesaji(`Bu parça zaten vardı. Stok ${res.oldStock} adetten ${res.newStock} adete çıkarıldı.`)
-} else {
-  basariMesaji('Parça kaydedildi.')
-}
+        basariMesaji('Parça güncellendi.')
+      } else if (res.wasReactivated) {
+        basariMesaji(`Pasife alınmış parça (${form.name}) tekrar aktif hale getirildi ve stok güncellendi.`)
+      } else if (res.updatedExisting) {
+        basariMesaji(`Bu parça zaten vardı. Stok ${res.oldStock} adetten ${res.newStock} adete çıkarıldı.`)
+      } else {
+        basariMesaji('Parça kaydedildi.')
+      }
 
       dialogAcik.value = false
-
-formuTemizle()
-
+      formuTemizle()
       await listeyiGetir()
     } else {
       hataMesaji(res?.error || 'Parça kaydedilemedi.')
@@ -464,25 +488,41 @@ onUnmounted(() => {
     {{ tlFormatla(slotProps.data.sell_price) }}
   </template>
 </Column>
-        <Column header="İşlem" :exportable="false" style="min-width:8rem">
+        <Column header="İşlem" :exportable="false" style="min-width:9.5rem">
           <template #body="slotProps">
             <Button 
-  icon="pi pi-history" 
-  outlined 
-  rounded 
-  severity="secondary" 
-  @click="hareketleriAc(slotProps.data)" 
-  style="margin-right: 8px;" 
-/>
+              icon="pi pi-history" 
+              outlined 
+              rounded 
+              severity="secondary" 
+              @click="hareketleriAc(slotProps.data)" 
+              style="margin-right: 6px;" 
+            />
             <Button 
-  icon="pi pi-pencil" 
-  outlined 
-  rounded 
-  severity="info" 
-  @click="duzenle(slotProps.data)" 
-  style="margin-right: 8px;" 
-/>
-            <Button icon="pi pi-trash" outlined rounded severity="danger" @click="sil(slotProps.data.id)" />
+              icon="pi pi-pencil" 
+              outlined 
+              rounded 
+              severity="info" 
+              @click="duzenle(slotProps.data)" 
+              style="margin-right: 6px;" 
+            />
+            <Button 
+              v-if="Number(slotProps.data.is_active ?? 1) === 0"
+              icon="pi pi-check-circle" 
+              outlined 
+              rounded 
+              severity="success" 
+              @click="mevcuttanAktiflestir(slotProps.data.id)" 
+              style="margin-right: 6px;" 
+            />
+            <Button 
+              v-else
+              icon="pi pi-trash" 
+              outlined 
+              rounded 
+              severity="danger" 
+              @click="sil(slotProps.data.id)" 
+            />
           </template>
         </Column>
       </DataTable>

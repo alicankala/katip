@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('api', {
   parcaEkle: (parca) => ipcRenderer.invoke('parca-ekle', parca),
   parcaGuncelle: (parca) => ipcRenderer.invoke('parca-guncelle', parca),
   parcaSil: (id) => ipcRenderer.invoke('parca-sil', id),
+  parcaAktiflestir: (id) => ipcRenderer.invoke('parca-aktiflestir', id),
   stokHareketleriGetir: (partId) => ipcRenderer.invoke('stok-hareketleri-getir', partId),
   dusukStokParcalariGetir: (limit = 5) => ipcRenderer.invoke('dusuk-stok-parcalari-getir', limit),
 

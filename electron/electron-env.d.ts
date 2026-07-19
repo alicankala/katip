@@ -42,6 +42,7 @@ interface Window {
     parcaEkle: (parca: any) => Promise<any>
     parcaGuncelle: (parca: any) => Promise<any>
     parcaSil: (id: number) => Promise<any>
+    parcaAktiflestir: (id: number) => Promise<any>
     stokHareketleriGetir: (partId: number) => Promise<any>
     dusukStokParcalariGetir: (limit?: number) => Promise<any[]>
 
