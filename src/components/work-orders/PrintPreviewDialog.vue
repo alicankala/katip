@@ -561,7 +561,8 @@ ${showPayment ? `
           <div class="footer-grid">
             <div class="signature-box">
               Müşteri İmzası
-              <div class="signature-sub">Ad Soyad / İmza</div>
+              ${isEmri.customer_signature ? `<img src="${isEmri.customer_signature}" style="max-height: 55px; max-width: 180px; display: block; margin: 6px auto 2px auto; object-fit: contain;" />` : ''}
+              <div class="signature-sub">${guvenliMetin(isEmri.customer_name || 'Ad Soyad / İmza')}</div>
             </div>
 
             <div class="signature-box">
@@ -736,7 +737,8 @@ ${showPayment ? `
         <div class="footer-grid">
           <div class="signature-box">
             Müşteri İmzası
-            <div class="signature-sub">Ad Soyad / İmza</div>
+            <img v-if="seciliIsEmri?.customer_signature" :src="seciliIsEmri.customer_signature" style="max-height: 55px; max-width: 180px; display: block; margin: 6px auto 2px auto; object-fit: contain;" />
+            <div class="signature-sub">{{ seciliIsEmri?.customer_name || 'Ad Soyad / İmza' }}</div>
           </div>
           <div class="signature-box">
             Servis Yetkilisi
