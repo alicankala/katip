@@ -79,14 +79,14 @@ const girisYap = async () => {
     }
     girisYukleniyor.value = true
     try {
-      const storedPin = localStorage.getItem('uygulamaAdminPin') || '0000'
-      if (pin.value === storedPin) {
+      const res = await window.api.adminPinDogrula(pin.value)
+      if (res?.success) {
         const adminUser = { id: 'admin', name: 'Alican Kala', role: 'admin' }
         aktifUsta.value = adminUser
         localStorage.setItem('aktifUsta', JSON.stringify(adminUser))
         pin.value = ''
       } else {
-        girisHatasi.value = 'Hatalı Admin PIN.'
+        girisHatasi.value = res?.error || 'Hatalı Admin PIN.'
       }
     } catch (e) {
       console.error('Admin giriş hatası:', e)
@@ -731,7 +731,11 @@ v-for="item in menuItems.slice(6, 8)"
     </aside>
 
     <main class="app-content">
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <Transition name="page-fade" mode="out-in">
+          <component :is="Component" />
+        </Transition>
+      </router-view>
     </main>
   </div>
 
@@ -1655,28 +1659,29 @@ v-for="item in menuItems.slice(6, 8)"
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 10px 12px 10px 9px;
   border-radius: 7px;
   color: var(--text-secondary);
   font-size: 14px;
   font-weight: 500;
   text-decoration: none;
   cursor: pointer;
-  transition: background 0.12s ease, color 0.12s ease;
+  border-left: 3px solid transparent;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, border-left-color 0.2s ease;
   margin-bottom: 2px;
 }
 
 .nav-item:hover {
   background: var(--bg-card-hover);
   color: var(--text-title);
+  transform: translateX(2px);
 }
 
 .nav-item.active {
   background: rgba(45, 125, 210, 0.1);
   color: #5ba4f5;
   font-weight: 600;
-  border-left: 3px solid var(--accent-color);
-  padding-left: 9px;
+  border-left-color: var(--accent-color);
 }
 
 .nav-icon {
@@ -1685,11 +1690,14 @@ v-for="item in menuItems.slice(6, 8)"
   text-align: center;
   flex-shrink: 0;
   color: var(--text-muted);
-  transition: color 0.12s;
+  transition: color 0.15s ease, transform 0.15s ease;
 }
 .nav-item:hover .nav-icon,
 .nav-item.active .nav-icon {
   color: var(--accent-color);
+}
+.nav-item:hover .nav-icon {
+  transform: scale(1.12);
 }
 
 /* ── Light theme sidebar overrides ──────────────── */

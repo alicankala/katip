@@ -14,6 +14,7 @@ import PrintPreviewDialog from '../components/work-orders/PrintPreviewDialog.vue
 import EditItemDialog from '../components/work-orders/EditItemDialog.vue'
 
 const isEmirleri = ref([])
+const yukleniyor = ref(true)
 const araclarListesi = ref([])
 const parcalarListesi = ref([])
 const kalemler = ref([])
@@ -222,9 +223,14 @@ const kalemDuzenleForm = reactive({
 })
 
 const listeleriGetir = async () => {
-  isEmirleri.value = await window.api.isEmirleriGetir()
-  araclarListesi.value = await window.api.araclariGetir()
-  parcalarListesi.value = await window.api.parcalariGetir()
+  yukleniyor.value = true
+  try {
+    isEmirleri.value = await window.api.isEmirleriGetir()
+    araclarListesi.value = await window.api.araclariGetir()
+    parcalarListesi.value = await window.api.parcalariGetir()
+  } finally {
+    yukleniyor.value = false
+  }
 }
 
 const filtrelenmisIsEmirleri = computed(() => {
@@ -1310,7 +1316,16 @@ onUnmounted(() => {
       </div>
 
       <!-- Satırlar Listesi -->
-      <div class="table-body-rows">
+      <div v-if="yukleniyor" class="table-body-rows skeleton-list" style="padding: 10px 16px;">
+        <div class="skeleton-row" v-for="n in 6" :key="n">
+          <span class="skeleton-block" style="width:90px"></span>
+          <span class="skeleton-block" style="flex:1"></span>
+          <span class="skeleton-block" style="width:80px"></span>
+          <span class="skeleton-block" style="width:70px"></span>
+        </div>
+      </div>
+
+      <div v-else class="table-body-rows">
         <div
           v-for="isEmri in filtrelenmisIsEmirleri"
           :key="isEmri.id"

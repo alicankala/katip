@@ -1,7 +1,12 @@
 import path from 'node:path'
+import crypto from 'node:crypto'
 import { app } from 'electron'
 import { createRequire } from 'node:module'
 import { hashPin, verifyPin } from './security'
+
+function randomPin() {
+  return String(crypto.randomInt(0, 10000)).padStart(4, '0')
+}
 
 const require = createRequire(import.meta.url)
 const Database = require('better-sqlite3')
@@ -276,29 +281,25 @@ migrationCalistir(9, () => {
     );
   `)
 
-  db.prepare(`
-    INSERT INTO masters (name, pin, is_active)
-    SELECT ?, ?, ?
-    WHERE NOT EXISTS (
-      SELECT 1 FROM masters WHERE name = ?
-    )
-  `).run('Ali Kala', hashPin('1111'), 1, 'Ali Kala')
+  const seedUstalar = [
+    { name: 'Ali Kala', pin: randomPin() },
+    { name: 'Bünyamin Kala', pin: randomPin() },
+    { name: 'Yusuf Kala', pin: randomPin() }
+  ]
 
-  db.prepare(`
-    INSERT INTO masters (name, pin, is_active)
-    SELECT ?, ?, ?
-    WHERE NOT EXISTS (
-      SELECT 1 FROM masters WHERE name = ?
-    )
-  `).run('Bünyamin Kala', hashPin('2222'), 1, 'Bünyamin Kala')
+  for (const usta of seedUstalar) {
+    const eklendi = db.prepare(`
+      INSERT INTO masters (name, pin, is_active)
+      SELECT ?, ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM masters WHERE name = ?
+      )
+    `).run(usta.name, hashPin(usta.pin), 1, usta.name)
 
-  db.prepare(`
-    INSERT INTO masters (name, pin, is_active)
-    SELECT ?, ?, ?
-    WHERE NOT EXISTS (
-      SELECT 1 FROM masters WHERE name = ?
-    )
-  `).run('Yusuf Kala', hashPin('3333'), 1, 'Yusuf Kala')
+    if (eklendi.changes > 0) {
+      console.log(`[Kâtip] "${usta.name}" için başlangıç PIN'i oluşturuldu: ${usta.pin} (Ayarlar'dan değiştirilmesi önerilir.)`)
+    }
+  }
 })
 
 migrationCalistir(22, () => {

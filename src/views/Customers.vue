@@ -9,6 +9,7 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 
 const musteriler = ref([])
+const yukleniyor = ref(true)
 const dialogAcik = ref(false)
 const aramaKelimesi = ref('')
 
@@ -50,7 +51,12 @@ const form = reactive({
 })
 
 const listeyiGetir = async () => {
-  musteriler.value = await window.api.musterileriGetir()
+  yukleniyor.value = true
+  try {
+    musteriler.value = await window.api.musterileriGetir()
+  } finally {
+    yukleniyor.value = false
+  }
 }
 
 const filtrelenmisMusteriler = computed(() => {
@@ -148,7 +154,7 @@ onUnmounted(() => {
     </div>
 
     <div class="table-panel">
-      <DataTable :value="filtrelenmisMusteriler" responsiveLayout="scroll" emptyMessage="Kayıtlı müşteri bulunamadı.">
+      <DataTable :value="filtrelenmisMusteriler" :loading="yukleniyor" responsiveLayout="scroll" emptyMessage="Kayıtlı müşteri bulunamadı.">
         <Column field="name" header="Ad Soyad"></Column>
         <Column field="phone" header="Telefon Numarası"></Column>
         <Column field="note" header="Müşteri Notu"></Column>

@@ -7,6 +7,15 @@ import { app } from 'electron'
 import db from './database.js'
 import { hashPin, verifyPin } from './security'
 
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 // Data migration for existing mobile work orders and items
 export function runPhoneServerMigrations() {
   try {
@@ -65,6 +74,8 @@ export interface PairingTokenInfo {
   expiresAt: number
   createdAt: number
 }
+
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000 // 24 saat hareketsizlik sonrası oturum sona erer
 
 let server: http.Server | null = null
 let currentPort = 4317
@@ -478,7 +489,7 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
     const masterOptionsHtml = mobileMasters.length
       ? '<option value="" disabled selected>Lutfen Seciniz</option>' +
         mobileMasters
-          .map((m) => '<option value="' + m.id + '">' + String(m.name || '').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</option>')
+          .map((m) => '<option value="' + m.id + '">' + escapeHtml(m.name || '') + '</option>')
           .join('')
       : '<option value="">Usta listesi alinamadi</option>'
     const htmlContent = `<!DOCTYPE html>
@@ -1815,10 +1826,19 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       window.scrollTo(0, 0);
     }
 
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
     function tlFormat(val) {
       return new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(val || 0);
     }
-    
+
     function dateFormat(dateStr) {
       if (!dateStr) return '-';
       try {
@@ -2165,13 +2185,13 @@ const badgeText = tamamlandi
   : (item.status || 'Acik');
         return '<div class="list-item" onclick="viewDetails(' + item.id + ')">' +
           '<div class="item-header">' +
-            '<span class="plate-badge">' + (item.plate || 'PLAKASIZ') + '</span>' +
+            '<span class="plate-badge">' + escapeHtml(item.plate || 'PLAKASIZ') + '</span>' +
             '<span class="item-price">' + tlFormat(item.total_price) + '</span>' +
           '</div>' +
-          '<div class="item-desc">' + (item.description || 'Aciklama girilmemis.') + '</div>' +
+          '<div class="item-desc">' + escapeHtml(item.description || 'Aciklama girilmemis.') + '</div>' +
           '<div class="item-info">' +
-            '<i class="pi pi-user" style="font-size: 11px;"></i> ' + (item.customer_name || 'Musteri Belirtilmemis') + '<br>' +
-            '<i class="pi pi-tag" style="font-size: 11px;"></i> ' + (item.brand || '') + ' ' + (item.model || '') +
+            '<i class="pi pi-user" style="font-size: 11px;"></i> ' + escapeHtml(item.customer_name || 'Musteri Belirtilmemis') + '<br>' +
+            '<i class="pi pi-tag" style="font-size: 11px;"></i> ' + escapeHtml(item.brand || '') + ' ' + escapeHtml(item.model || '') +
           '</div>' +
           '<div class="item-header" style="margin-top: 4px;">' +
             '<span class="badge-status ' + badgeClass + '">' + badgeText + '</span>' +
@@ -2265,7 +2285,7 @@ const badgeText = tamamlandi
         itemsList.innerHTML = items.map(item => {
           return '<div class="item-row">' +
             '<div class="item-row-header">' +
-              '<span>' + (item.description || 'Isimsiz Kalem') + '</span>' +
+              '<span>' + escapeHtml(item.description || 'Isimsiz Kalem') + '</span>' +
               '<span class="color-accent">' + tlFormat(item.total_price) + '</span>' +
             '</div>' +
             '<div class="item-row-sub">' +
@@ -2600,13 +2620,13 @@ resolve(dataUrl);
         const dateStr = item.last_visit_date ? dateFormat(item.last_visit_date) : 'Yok';
         return '<div class="order-card" onclick="viewHistoryDetail(' + idx + ')" style="cursor: pointer; margin-bottom: 10px;">' +
           '<div class="order-header">' +
-            '<span class="plate-badge">' + (item.plate || 'PLAKASIZ') + '</span>' +
+            '<span class="plate-badge">' + escapeHtml(item.plate || 'PLAKASIZ') + '</span>' +
             '<span style="font-size: 12px; color: var(--text-secondary);">Son Islem: ' + dateStr + '</span>' +
           '</div>' +
           '<div class="order-meta" style="margin-top: 6px;">' +
-            '<div><i class="pi pi-user"></i> <strong>' + (item.customer_name || '') + '</strong></div>' +
-            '<div style="font-size: 12px; margin-top: 3px;"><i class="pi pi-phone"></i> ' + (item.customer_phone || '-') + '</div>' +
-            '<div style="font-size: 12px; margin-top: 3px;"><i class="pi pi-car"></i> ' + (item.brand || '') + ' ' + (item.model || '') + '</div>' +
+            '<div><i class="pi pi-user"></i> <strong>' + escapeHtml(item.customer_name || '') + '</strong></div>' +
+            '<div style="font-size: 12px; margin-top: 3px;"><i class="pi pi-phone"></i> ' + escapeHtml(item.customer_phone || '-') + '</div>' +
+            '<div style="font-size: 12px; margin-top: 3px;"><i class="pi pi-car"></i> ' + escapeHtml(item.brand || '') + ' ' + escapeHtml(item.model || '') + '</div>' +
           '</div>' +
         '</div>';
       }).join('');
@@ -2886,7 +2906,7 @@ document
             itemsContainer.innerHTML = items.map(it => {
               const isPart = !!it.part_id;
               const icon = isPart ? 'pi pi-cog' : 'pi pi-user';
-              const label = isPart ? '[PARCA] ' + it.name : '[ISCILIK] ' + it.name;
+              const label = isPart ? '[PARCA] ' + escapeHtml(it.name) : '[ISCILIK] ' + escapeHtml(it.name);
               const qtyStr = isPart ? it.qty + ' adet' : '1 adet';
               return '<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;">' +
                 '<div style="display: flex; flex-direction: column; gap: 2px;">' +
@@ -3144,15 +3164,15 @@ document
           stockWarning = '<span style="font-size: 9px; font-weight: 700; color: #f59e0b; background: rgba(245, 158, 11, 0.1); padding: 2px 5px; border-radius: 4px; margin-left: 6px;">Kritik Stok</span>';
         }
         
-        const brandText = part.brand ? '<span style="font-size: 10px; color: var(--text-muted); margin-left: 4px;">(' + part.brand + ')</span>' : '';
+        const brandText = part.brand ? '<span style="font-size: 10px; color: var(--text-muted); margin-left: 4px;">(' + escapeHtml(part.brand) + ')</span>' : '';
 
         return '<div class="part-select-card" onclick="selectPartForAddingByIndex(' + index + ')" style="padding: 10px; cursor: pointer; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px;">' +
           '<div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 13.5px; color: var(--text-primary); text-align: left;">' +
-            '<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;">' + (part.name || 'Isimsiz Parca') + brandText + '</span>' +
+            '<span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 70%;">' + escapeHtml(part.name || 'Isimsiz Parca') + brandText + '</span>' +
             '<span style="color: var(--accent); font-weight: 700;">' + tlFormat(part.sell_price) + '</span>' +
           '</div>' +
           '<div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--text-secondary);">' +
-            '<span>Kod: ' + (part.code || '-') + '</span>' +
+            '<span>Kod: ' + escapeHtml(part.code || '-') + '</span>' +
             '<div style="display: flex; align-items: center;">' +
               '<span>Stok: <strong>' + part.stock + ' ' + (part.unit || 'Adet') + '</strong></span>' +
               stockWarning +
@@ -3619,7 +3639,8 @@ document
         const cleanToken = token ? token.replace(/^Bearer\s+/i, '').trim() : ''
 
         const currentSession = activeMobileSessions.get(cleanToken)
-        if (!cleanToken || !currentSession) {
+        if (!cleanToken || !currentSession || Date.now() - currentSession.lastActiveAt > SESSION_TTL_MS) {
+          if (cleanToken) activeMobileSessions.delete(cleanToken)
           res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' })
           res.end(JSON.stringify({ success: false, error: 'Oturum süresi doldu veya yetkisiz erişim. Lütfen yeniden giriş yapın.', requireLogin: true }))
           return

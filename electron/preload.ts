@@ -105,6 +105,8 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   veritabaniKontrolEt: () => ipcRenderer.invoke('veritabani-kontrol-et'),
   otomatikYedekAl: () => ipcRenderer.invoke('otomatik-yedek-al'),
   logKlasoruAc: () => ipcRenderer.invoke('log-klasoru-ac'),
+  adminPinDogrula: (pin: string) => ipcRenderer.invoke('admin-pin-dogrula', pin),
+  adminPinDegistir: (veri: { eski_pin: string; yeni_pin: string }) => ipcRenderer.invoke('admin-pin-degistir', veri),
 
   // Araç Fotoğrafları
   isEmriFotograflariGetir: (workOrderId) => ipcRenderer.invoke('is-emri-fotograflari-getir', workOrderId),

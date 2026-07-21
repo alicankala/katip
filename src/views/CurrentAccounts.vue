@@ -1,6 +1,5 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed, watch } from 'vue'
-import { useRoute } from 'vue-router'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
@@ -9,6 +8,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
+import { useRoute } from 'vue-router'
 
 // Sub-components
 import FinanceSummary from '../components/finance/FinanceSummary.vue'
@@ -30,6 +30,7 @@ function bugununTarihi() {
 const cariler = ref([])
 const seciliCari = ref(null)
 const aktifAnaSekme = ref('genel-ozet') // 'genel-ozet' | 'alacaklar' | 'borclar' | 'giderler' | 'tum-hareketler'
+const sayfaYukleniyor = ref(true)
 
 // İlişkili Veri Listeleri
 const araclarListesi = ref([])
@@ -413,7 +414,7 @@ const handleOpenReceivablePayment = (row) => {
     musteriOdemeDialogAcik.value = true
   } else {
     // Manuel Cari Tahsilat
-    const cari = props.manualReceivables?.find(c => c.id === row.rawItem?.id) || row.rawItem
+    const cari = row.rawItem
     if (cari) {
       seciliCari.value = cari
       odemeEkleAc()
@@ -462,7 +463,34 @@ const cariDuzenleAc = (cari) => {
     note: cari.note,
     direction: cari.direction || 'Borç'
   })
+  cariDetayDialog.value = false
   cariDialogAcik.value = true
+}
+
+const cariHesapSil = (cari) => {
+  confirmDialog.require({
+    message: `"${cari.name}" cari hesabını silmek istediğinize emin misiniz? Bu işlem, cariye ait tüm işlem ve ödeme kayıtlarını da silecektir.`,
+    header: 'Cari Hesap Silme Onayı',
+    icon: 'pi pi-exclamation-triangle',
+    rejectLabel: 'Vazgeç',
+    acceptLabel: 'Sil',
+    rejectClass: 'p-button-secondary p-button-outlined',
+    acceptClass: 'p-button-danger',
+    accept: async () => {
+      try {
+        const res = await window.api.cariHesapSil(cari.id)
+        if (res?.success) {
+          basariMesaji('Cari hesap silindi.')
+          cariDetayDialog.value = false
+          await carileriYukle()
+        } else {
+          hataMesaji(res?.error || 'Cari hesap silinemedi.')
+        }
+      } catch (error) {
+        hataMesaji('Silme sırasında hata oluştu.')
+      }
+    }
+  })
 }
 
 const cariKaydet = async () => {
@@ -1121,9 +1149,11 @@ const ekstreYazdir = () => {
 }
 
 onMounted(async () => {
+  sayfaYukleniyor.value = true
   await carileriYukle()
   await iliskiliVerileriYukle()
   await giderleriYukle()
+  sayfaYukleniyor.value = false
 
   const route = useRoute()
   if (route.query.tab === 'giderler') {
@@ -1150,19 +1180,19 @@ onUnmounted(() => {
       </div>
 
       <div style="display: flex; gap: 8px;">
-        <Button 
+        <Button
           v-if="aktifAnaSekme === 'giderler'"
-          label="Yeni Gider Kaydı" 
-          icon="pi pi-plus" 
-          severity="warning" 
-          @click="giderEkleDialogAc" 
+          label="Yeni Gider Kaydı"
+          icon="pi pi-plus"
+          severity="warning"
+          @click="giderEkleDialogAc"
         />
-        <Button 
+        <Button
           v-else
-          label="Yeni Cari Hesap" 
-          icon="pi pi-plus" 
-          severity="info" 
-          @click="Object.assign(cariForm, { id: null, name: '', type: '', phone: '', note: '', direction: 'Borç' }); cariDialogAcik = true" 
+          label="Yeni Cari Hesap"
+          icon="pi pi-plus"
+          severity="info"
+          @click="Object.assign(cariForm, { id: null, name: '', type: '', phone: '', note: '', direction: 'Borç' }); cariDialogAcik = true"
         />
       </div>
     </div>
@@ -1190,67 +1220,77 @@ onUnmounted(() => {
         severity="danger" 
         @click="aktifAnaSekme = 'borclar'" 
       />
-      <Button 
-        label="Giderler" 
-        icon="pi pi-receipt" 
+      <Button
+        label="Giderler"
+        icon="pi pi-receipt"
         :text="aktifAnaSekme !== 'giderler'"
-        severity="warning" 
-        @click="aktifAnaSekme = 'giderler'" 
+        severity="warning"
+        @click="aktifAnaSekme = 'giderler'"
       />
-      <Button 
-        label="Finans Geçmişi" 
-        icon="pi pi-list" 
+      <Button
+        label="Finans Geçmişi"
+        icon="pi pi-list"
         :text="aktifAnaSekme !== 'tum-hareketler'"
-        severity="secondary" 
-        @click="aktifAnaSekme = 'tum-hareketler'" 
+        severity="secondary"
+        @click="aktifAnaSekme = 'tum-hareketler'"
       />
     </div>
 
-    <!-- TAB 1: Genel Özet -->
-    <div v-if="aktifAnaSekme === 'genel-ozet'">
-      <FinanceSummary 
-        :summary="summaryMetrics" 
-        @navigate="tab => aktifAnaSekme = tab" 
-      />
+    <div v-if="sayfaYukleniyor" class="skeleton-list" style="padding: 8px 4px;">
+      <div class="skeleton-row" v-for="n in 5" :key="n">
+        <span class="skeleton-block" style="width:120px"></span>
+        <span class="skeleton-block" style="flex:1"></span>
+        <span class="skeleton-block" style="width:90px"></span>
+      </div>
     </div>
 
-    <!-- TAB 2: Alacaklar (Müşteri & İş Emri Alacakları Birleşik) -->
-    <div v-if="aktifAnaSekme === 'alacaklar'">
-      <ReceivablesView
-        :workOrderReceivables="musteriAlacaklari"
-        :manualReceivables="manualAlacaklar"
-        @open-payment="handleOpenReceivablePayment"
-      />
-    </div>
+    <Transition v-else name="tab-fade" mode="out-in">
+      <!-- TAB 1: Genel Özet -->
+      <div v-if="aktifAnaSekme === 'genel-ozet'" key="genel-ozet">
+        <FinanceSummary
+          :summary="summaryMetrics"
+          @navigate="tab => aktifAnaSekme = tab"
+        />
+      </div>
 
-    <!-- TAB 3: Borçlar (Tedarikçi & Taşeron Borçları) -->
-    <div v-if="aktifAnaSekme === 'borclar'">
-      <PayablesView
-        :suppliers="cariler"
-        :supplierTypes="dinamikCariTipleri"
-        @add-cari="Object.assign(cariForm, { id: null, name: '', type: '', phone: '', note: '', direction: 'Borç' }); cariDialogAcik = true"
-        @select-cari="cariDetaylariniYukle"
-        @add-transaction="islemEkleAc"
-        @add-payment="odemeEkleAc"
-      />
-    </div>
+      <!-- TAB 2: Alacaklar (Müşteri & İş Emri Alacakları Birleşik) -->
+      <div v-else-if="aktifAnaSekme === 'alacaklar'" key="alacaklar">
+        <ReceivablesView
+          :workOrderReceivables="musteriAlacaklari"
+          :manualReceivables="manualAlacaklar"
+          @open-payment="handleOpenReceivablePayment"
+        />
+      </div>
 
-    <!-- TAB 4: Giderler (İşletme Giderleri) -->
-    <div v-if="aktifAnaSekme === 'giderler'">
-      <ExpensesView
-        :expenses="giderler"
-        :expenseTypes="giderTurleri"
-        @add-expense="giderEkleDialogAc"
-        @quick-pay="hizliOde"
-        @edit-expense="giderDuzenle"
-        @delete-expense="giderSil"
-      />
-    </div>
+      <!-- TAB 3: Borçlar (Tedarikçi & Taşeron Borçları) -->
+      <div v-else-if="aktifAnaSekme === 'borclar'" key="borclar">
+        <PayablesView
+          :suppliers="cariler"
+          :supplierTypes="dinamikCariTipleri"
+          @add-cari="Object.assign(cariForm, { id: null, name: '', type: '', phone: '', note: '', direction: 'Borç' }); cariDialogAcik = true"
+          @select-cari="cariDetaylariniYukle"
+          @add-transaction="islemEkleAc"
+          @add-payment="odemeEkleAc"
+        />
+      </div>
 
-    <!-- TAB 5: Finans Geçmişi (Tüm Hareketler) -->
-    <div v-if="aktifAnaSekme === 'tum-hareketler'">
-      <MovementsView :movements="tumHareketlerListesi" />
-    </div>
+      <!-- TAB 4: Giderler (İşletme Giderleri) -->
+      <div v-else-if="aktifAnaSekme === 'giderler'" key="giderler">
+        <ExpensesView
+          :expenses="giderler"
+          :expenseTypes="giderTurleri"
+          @add-expense="giderEkleDialogAc"
+          @quick-pay="hizliOde"
+          @edit-expense="giderDuzenle"
+          @delete-expense="giderSil"
+        />
+      </div>
+
+      <!-- TAB 5: Finans Geçmişi (Tüm Hareketler) -->
+      <div v-else-if="aktifAnaSekme === 'tum-hareketler'" key="tum-hareketler">
+        <MovementsView :movements="tumHareketlerListesi" />
+      </div>
+    </Transition>
 
     <!-- MODAL 1: Müşteri İş Emri Ödemesi Al -->
     <Dialog 
@@ -1459,10 +1499,10 @@ onUnmounted(() => {
     </Dialog>
 
     <!-- MODAL 5: Gider Ekle / Düzenle -->
-    <Dialog 
-      v-model:visible="giderFormDialog" 
-      :header="isEditingGider ? 'Gider Kaydını Düzenle' : 'Yeni İşletme Gideri Kaydı'" 
-      :style="{ width: '460px' }" 
+    <Dialog
+      v-model:visible="giderFormDialog"
+      :header="isEditingGider ? 'Gider Kaydını Düzenle' : 'Yeni İşletme Gideri Kaydı'"
+      :style="{ width: '460px' }"
       modal
     >
       <div class="dialog-form" style="display: flex; flex-direction: column; gap: 14px;">
@@ -1559,6 +1599,8 @@ onUnmounted(() => {
       </div>
 
       <template #footer>
+        <Button label="Sil" icon="pi pi-trash" severity="danger" text @click="cariHesapSil(seciliCari)" />
+        <Button label="Düzenle" icon="pi pi-pencil" severity="secondary" @click="cariDuzenleAc(seciliCari)" />
         <Button label="Kapat" icon="pi pi-times" text @click="cariDetayDialog = false" />
         <Button label="Ekstre Yazdır" icon="pi pi-print" severity="info" @click="ekstreYazdir" />
       </template>

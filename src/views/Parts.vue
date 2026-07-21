@@ -11,6 +11,7 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 
 const parcalar = ref([])
+const yukleniyor = ref(true)
 const dialogAcik = ref(false)
 const aramaKelimesi = ref('') // Arama çubuğuna yazılan metni tutar
 const hareketDialogAcik = ref(false)
@@ -99,33 +100,38 @@ const formuTemizle = () => {
 }
 
 const listeyiGetir = async () => {
-  if (!window.api.parcalariFiltreliGetir) {
-    parcalar.value = await window.api.parcalariGetir()
-    return
-  }
+  yukleniyor.value = true
+  try {
+    if (!window.api.parcalariFiltreliGetir) {
+      parcalar.value = await window.api.parcalariGetir()
+      return
+    }
 
-  const res = await window.api.parcalariFiltreliGetir({
-    durum: stokFiltresi.value,
-    brand: seciliMarka.value,
-    category: seciliKategori.value
-  })
-
-  if (res?.success) {
-    parcalar.value = Array.isArray(res.parcalar) ? res.parcalar : []
-
-    Object.assign(filtreOzeti, {
-      aktif: Number(res.ozet?.aktif || 0),
-      kritik: Number(res.ozet?.kritik || 0),
-      biten: Number(res.ozet?.biten || 0),
-      pasif: Number(res.ozet?.pasif || 0),
-      hepsi: Number(res.ozet?.hepsi || 0)
+    const res = await window.api.parcalariFiltreliGetir({
+      durum: stokFiltresi.value,
+      brand: seciliMarka.value,
+      category: seciliKategori.value
     })
 
-    markalar.value = Array.isArray(res.markalar) ? res.markalar : []
-    kategoriler.value = Array.isArray(res.kategoriler) ? res.kategoriler : []
-  } else {
-    parcalar.value = []
-    hataMesaji(res?.error || 'Parçalar getirilemedi.')
+    if (res?.success) {
+      parcalar.value = Array.isArray(res.parcalar) ? res.parcalar : []
+
+      Object.assign(filtreOzeti, {
+        aktif: Number(res.ozet?.aktif || 0),
+        kritik: Number(res.ozet?.kritik || 0),
+        biten: Number(res.ozet?.biten || 0),
+        pasif: Number(res.ozet?.pasif || 0),
+        hepsi: Number(res.ozet?.hepsi || 0)
+      })
+
+      markalar.value = Array.isArray(res.markalar) ? res.markalar : []
+      kategoriler.value = Array.isArray(res.kategoriler) ? res.kategoriler : []
+    } else {
+      parcalar.value = []
+      hataMesaji(res?.error || 'Parçalar getirilemedi.')
+    }
+  } finally {
+    yukleniyor.value = false
   }
 }
 const stokFiltresiDegistir = async (durum) => {
@@ -425,6 +431,7 @@ onUnmounted(() => {
 
       <DataTable
         :value="filtrelenmisParcalar"
+        :loading="yukleniyor"
         responsiveLayout="scroll"
         emptyMessage="Aradığınız kriterlere uygun parça bulunamadı."
         :rowClass="(row) => Number(row.stock || 0) <= 0 ? 'row-critical' : (row.critical_stock_enabled !== 0 && Number(row.stock || 0) <= Number(row.critical_stock ?? 5) ? 'row-critical' : '')"

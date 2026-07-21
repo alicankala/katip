@@ -8,6 +8,25 @@ import db, {
 import { app, shell } from 'electron'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { hashPin, verifyPin } from '../security.js'
+
+const ADMIN_PIN_SETTING_KEY = 'admin_pin_hash'
+const ADMIN_PIN_DEFAULT = '0000'
+
+function getAdminPinHash(): string {
+  const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(ADMIN_PIN_SETTING_KEY) as any
+  return row?.value || hashPin(ADMIN_PIN_DEFAULT)
+}
+
+function setAdminPinHash(hash: string): void {
+  db.prepare(`
+    INSERT INTO app_settings (key, value, updated_at)
+    VALUES (?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(key) DO UPDATE SET
+      value = excluded.value,
+      updated_at = CURRENT_TIMESTAMP
+  `).run(ADMIN_PIN_SETTING_KEY, hash)
+}
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
@@ -120,6 +139,42 @@ export function registerSettingsHandlers(kanalEkle: (kanal: string, fonksiyon: (
       return { success: true }
     } catch (err) {
       return { success: false, error: getErrorMessage(err) }
+    }
+  })
+
+  // 7. Admin PIN Doğrula
+  kanalEkle('admin-pin-dogrula', (_event, pin: any) => {
+    try {
+      const girilenPin = String(pin || '').trim()
+      if (!/^\d{4}$/.test(girilenPin)) {
+        return { success: false, error: 'PIN 4 haneli olmalıdır.' }
+      }
+      if (!verifyPin(girilenPin, getAdminPinHash())) {
+        return { success: false, error: 'Hatalı Admin PIN.' }
+      }
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 8. Admin PIN Değiştir
+  kanalEkle('admin-pin-degistir', (_event, veri: any) => {
+    try {
+      const eskiPin = String(veri?.eski_pin || '').trim()
+      const yeniPin = String(veri?.yeni_pin || '').trim()
+
+      if (!verifyPin(eskiPin, getAdminPinHash())) {
+        return { success: false, error: 'Eski Admin PIN hatalı.' }
+      }
+      if (!/^\d{4}$/.test(yeniPin)) {
+        return { success: false, error: 'Yeni PIN 4 haneli olmalıdır.' }
+      }
+
+      setAdminPinHash(hashPin(yeniPin))
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
     }
   })
 }

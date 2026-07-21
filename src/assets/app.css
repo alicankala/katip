@@ -278,11 +278,20 @@ body {
   padding: 48px 24px;
   text-align: center;
   color: var(--text-muted);
+  animation: empty-state-fade-in 0.3s ease;
 }
 .empty-state i {
-  font-size: 36px;
-  margin-bottom: 14px;
-  opacity: 0.5;
+  font-size: 30px;
+  margin-bottom: 16px;
+  opacity: 0.85;
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--bg-active-box);
+  color: var(--accent-color, #38bdf8);
 }
 .empty-state h3 {
   margin: 0 0 8px;
@@ -290,6 +299,35 @@ body {
   font-size: 16px;
   font-weight: 600;
 }
+@keyframes empty-state-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Skeleton Loading (liste/veri yüklenirken) ───── */
+.skeleton-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 4px;
+}
+.skeleton-block {
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--bg-active-box) 25%, var(--bg-card-hover) 50%, var(--bg-active-box) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .empty-state p {
   margin: 0;
   font-size: 14px;
@@ -523,6 +561,10 @@ html[data-theme="light"] .p-datatable-tbody > tr:nth-child(even) {
 
 .p-button {
   font-size: 14px !important;
+  transition: transform 0.1s ease, background 0.15s ease, box-shadow 0.15s ease !important;
+}
+.p-button:active:not(:disabled) {
+  transform: scale(0.97);
 }
 
 .p-datatable-tbody > tr:last-child > td {
@@ -704,4 +746,77 @@ html[data-theme="light"] div[style*="background: #0f172a"] {
 html[data-theme="light"] div[style*="background: #0f172a"] span[style*="color: #fff"] {
   color: var(--text-primary) !important;
 }
+
+/* ── Sekme geçiş efekti (Cari Hesap vb.) ────────── */
+.tab-fade-enter-active,
+.tab-fade-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.tab-fade-enter-from {
+  opacity: 0;
+  transform: translateY(4px);
+}
+.tab-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+/* ── Sayfa geçiş efekti (router-view) ────────────── */
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.page-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.page-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+/* ── Tema geçiş animasyonu ────────────────────────── */
+html,
+body,
+.app-sidebar,
+.app-content,
+.p-button,
+.p-tag,
+.p-dialog,
+.dash-stat-card,
+.info-panel,
+.search-module,
+.low-stock-box,
+.stock-empty-box,
+[class*="-panel"],
+[class*="-box"],
+[class*="-card"] {
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.25s ease;
+}
+
+/* ── Durum rozetleri (Tag) kontrast güçlendirme ──── */
+.p-tag {
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+}
+.p-tag.p-tag-success {
+  background: rgba(16, 185, 129, 0.18) !important;
+  color: #10b981 !important;
+}
+.p-tag.p-tag-warning {
+  background: rgba(245, 158, 11, 0.18) !important;
+  color: #d97706 !important;
+}
+.p-tag.p-tag-danger {
+  background: rgba(239, 68, 68, 0.18) !important;
+  color: #ef4444 !important;
+}
+.p-tag.p-tag-info {
+  background: rgba(56, 189, 248, 0.18) !important;
+  color: #38bdf8 !important;
+}
+html[data-theme="light"] .p-tag.p-tag-success { color: #047857 !important; }
+html[data-theme="light"] .p-tag.p-tag-warning { color: #b45309 !important; }
+html[data-theme="light"] .p-tag.p-tag-danger  { color: #b91c1c !important; }
+html[data-theme="light"] .p-tag.p-tag-info    { color: #0369a1 !important; }
 

@@ -251,18 +251,13 @@ const pinDegistir = async () => {
   }
 }
 
-const adminPinDegistir = () => {
+const adminPinDegistir = async () => {
   adminPinForm.eskiPin = pinTemizle(adminPinForm.eskiPin)
   adminPinForm.yeniPin = pinTemizle(adminPinForm.yeniPin)
   adminPinForm.yeniPinTekrar = pinTemizle(adminPinForm.yeniPinTekrar)
 
-  const currentAdminPin = localStorage.getItem('uygulamaAdminPin') || '0000'
-  if (adminPinForm.eskiPin !== currentAdminPin) {
-    toast.add({ severity: 'error', summary: 'Hata', detail: 'Eski Admin PIN hatalı.', life: 3000 })
-    return
-  }
-  if (adminPinForm.yeniPin.length !== 4) {
-    toast.add({ severity: 'warn', summary: 'Uyarı', detail: 'Yeni PIN 4 haneli olmalıdır.', life: 3000 })
+  if (adminPinForm.eskiPin.length !== 4 || adminPinForm.yeniPin.length !== 4) {
+    toast.add({ severity: 'warn', summary: 'Uyarı', detail: 'PIN 4 haneli olmalıdır.', life: 3000 })
     return
   }
   if (adminPinForm.yeniPin !== adminPinForm.yeniPinTekrar) {
@@ -270,9 +265,17 @@ const adminPinDegistir = () => {
     return
   }
 
-  localStorage.setItem('uygulamaAdminPin', adminPinForm.yeniPin)
-  toast.add({ severity: 'success', summary: 'Başarılı', detail: 'Admin PIN başarıyla değiştirildi.', life: 3000 })
-  Object.assign(adminPinForm, { eskiPin: '', yeniPin: '', yeniPinTekrar: '' })
+  const res = await window.api.adminPinDegistir({
+    eski_pin: adminPinForm.eskiPin,
+    yeni_pin: adminPinForm.yeniPin
+  })
+
+  if (res?.success) {
+    toast.add({ severity: 'success', summary: 'Başarılı', detail: 'Admin PIN başarıyla değiştirildi.', life: 3000 })
+    Object.assign(adminPinForm, { eskiPin: '', yeniPin: '', yeniPinTekrar: '' })
+  } else {
+    toast.add({ severity: 'error', summary: 'Hata', detail: res?.error || 'Admin PIN değiştirilemedi.', life: 4000 })
+  }
 }
 
 const yedeklerListesi = ref([])

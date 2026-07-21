@@ -11,6 +11,7 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 
 const araclar = ref([])
+const yukleniyor = ref(true)
 const musterilerListesi = ref([]) // Açılır menü için müşterileri tutar
 const dialogAcik = ref(false)
 const aramaKelimesi = ref('')
@@ -108,8 +109,13 @@ watch(() => form.plate, (yeniPlaka) => {
 })
 
 const listeleriGetir = async () => {
-  araclar.value = await window.api.araclariGetir()
-  musterilerListesi.value = await window.api.musterileriGetir()
+  yukleniyor.value = true
+  try {
+    araclar.value = await window.api.araclariGetir()
+    musterilerListesi.value = await window.api.musterileriGetir()
+  } finally {
+    yukleniyor.value = false
+  }
 }
 const kmFormatla = (deger) => {
   if (deger === null || deger === undefined || deger === '') return '-'
@@ -239,7 +245,7 @@ onUnmounted(() => {
     </div>
 
     <div class="table-panel">
-      <DataTable :value="filtrelenmisAraclar" responsiveLayout="scroll" emptyMessage="Kayıtlı araç bulunamadı.">
+      <DataTable :value="filtrelenmisAraclar" :loading="yukleniyor" responsiveLayout="scroll" emptyMessage="Kayıtlı araç bulunamadı.">
         <Column field="plate" header="Plaka"></Column>
         <Column field="customer_name" header="Araç Sahibi"></Column>
         <Column field="brand" header="Marka"></Column>

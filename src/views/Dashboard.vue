@@ -26,6 +26,7 @@ bitenStok: 0
 
 const sonAcikIsEmirleri = ref([])
 const dusukStokParcalari = ref([])
+const yukleniyor = ref(true)
 
 const secereVerileri = ref([])
 const dashSeciliFotograf = ref(null)
@@ -34,33 +35,38 @@ const gecmisArandi = ref(false)
 const gecmisYukleniyor = ref(false)
 
 const verileriYukle = async () => {
-  const istatistikRes = await window.api.istatistikleriGetir()
+  yukleniyor.value = true
+  try {
+    const istatistikRes = await window.api.istatistikleriGetir()
 
-  if (istatistikRes?.success) {
-    istatistikler.value = {
-      ...istatistikler.value,
-      ...istatistikRes.veriler
+    if (istatistikRes?.success) {
+      istatistikler.value = {
+        ...istatistikler.value,
+        ...istatistikRes.veriler
+      }
     }
-  }
 
-  const isEmirleri = await window.api.isEmirleriGetir()
+    const isEmirleri = await window.api.isEmirleriGetir()
 
-  sonAcikIsEmirleri.value = Array.isArray(isEmirleri)
-    ? isEmirleri
-        .filter((isEmri) => isEmri.status !== 'Tamamlandı')
-        .slice(0, 5)
-    : []
-    if (window.api.dusukStokParcalariGetir) {
-    let showWarnings = true
-    if (window.api.ayarlariGetir) {
-      try {
-        const sRes = await window.api.ayarlariGetir()
-        if (sRes?.success && sRes.settings?.show_critical_stock_warnings === 'false') {
-          showWarnings = false
-        }
-      } catch (e) {}
+    sonAcikIsEmirleri.value = Array.isArray(isEmirleri)
+      ? isEmirleri
+          .filter((isEmri) => isEmri.status !== 'Tamamlandı')
+          .slice(0, 5)
+      : []
+      if (window.api.dusukStokParcalariGetir) {
+      let showWarnings = true
+      if (window.api.ayarlariGetir) {
+        try {
+          const sRes = await window.api.ayarlariGetir()
+          if (sRes?.success && sRes.settings?.show_critical_stock_warnings === 'false') {
+            showWarnings = false
+          }
+        } catch (e) {}
+      }
+      dusukStokParcalari.value = showWarnings ? await window.api.dusukStokParcalariGetir(5) : []
     }
-    dusukStokParcalari.value = showWarnings ? await window.api.dusukStokParcalariGetir(5) : []
+  } finally {
+    yukleniyor.value = false
   }
 }
 
@@ -396,7 +402,17 @@ onUnmounted(() => {
           />
         </div>
 
-        <div v-if="sonAcikIsEmirleri.length > 0" class="table-panel">
+        <div v-if="yukleniyor" class="skeleton-list">
+          <div class="skeleton-row" v-for="n in 5" :key="n">
+            <span class="skeleton-block" style="width:70px"></span>
+            <span class="skeleton-block" style="width:90px"></span>
+            <span class="skeleton-block" style="flex:1"></span>
+            <span class="skeleton-block" style="width:70px"></span>
+            <span class="skeleton-block" style="width:80px"></span>
+          </div>
+        </div>
+
+        <div v-else-if="sonAcikIsEmirleri.length > 0" class="table-panel">
           <DataTable :value="sonAcikIsEmirleri" responsiveLayout="scroll" class="p-datatable-sm">
             <Column header="Tarih" style="width:130px">
               <template #body="slotProps">
@@ -537,7 +553,15 @@ onUnmounted(() => {
         </div>
 
         <!-- Kritik Stok Paneli -->
-        <div v-if="dusukStokParcalari.length > 0" class="low-stock-box">
+        <div v-if="yukleniyor" class="low-stock-box skeleton-list" style="border-left-color: var(--border-color);">
+          <div class="skeleton-row" v-for="n in 3" :key="n">
+            <span class="skeleton-block" style="width:60px"></span>
+            <span class="skeleton-block" style="flex:1"></span>
+            <span class="skeleton-block" style="width:40px"></span>
+          </div>
+        </div>
+
+        <div v-else-if="dusukStokParcalari.length > 0" class="low-stock-box">
           <div class="low-stock-header">
             <i class="pi pi-exclamation-triangle"></i>
             <h3>Kritik Stok Uyarısı</h3>
@@ -758,13 +782,28 @@ onUnmounted(() => {
   padding: 12px 16px;
   border-left-width: 4px;
   border-left-style: solid;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.25s ease, transform 0.2s ease;
 }
-.dash-stat-card:hover { box-shadow: var(--shadow-md); }
+.dash-stat-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-3px);
+}
 .dash-stat-card.accent-blue   { border-left-color: #2d7dd2; }
 .dash-stat-card.accent-green  { border-left-color: #10b981; }
 .dash-stat-card.accent-amber  { border-left-color: #f59e0b; }
 .dash-stat-card.accent-purple { border-left-color: #8b5cf6; }
+
+.dash-stat-card .stat-card-icon {
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+.dash-stat-card:hover .stat-card-icon {
+  transform: scale(1.15) rotate(-4deg);
+  opacity: 0.85;
+}
+.dash-stat-card:hover .stat-card-value {
+  color: var(--accent-color, #38bdf8);
+  transition: color 0.2s ease;
+}
 
 .stat-card-inner {
   display: flex;
@@ -1004,9 +1043,17 @@ onUnmounted(() => {
   grid-template-columns: 80px 1fr auto;
   gap: 8px;
   align-items: center;
-  padding: 7px 0;
+  padding: 7px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
   border-top: 1px solid rgba(239, 68, 68, 0.12);
   font-size: 13.5px;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.low-stock-box li:hover {
+  background: rgba(239, 68, 68, 0.08);
+  transform: translateX(2px);
 }
 
 .low-stock-box li:first-child { border-top: none; }
@@ -1026,9 +1073,21 @@ onUnmounted(() => {
   justify-content: center;
   text-align: center;
   gap: 6px;
+  animation: empty-state-fade-in 0.3s ease;
 }
 
-.stock-empty-box i     { font-size: 24px; color: var(--status-done); margin-bottom: 4px; }
+.stock-empty-box i {
+  font-size: 20px;
+  margin-bottom: 6px;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--status-done);
+}
 .stock-empty-box strong { color: var(--text-title); font-size: 14.5px; }
 .stock-empty-box span   { color: var(--text-muted); font-size: 13px; }
 
