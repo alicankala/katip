@@ -105,12 +105,8 @@ const retentionOptions = [
   { label: 'Sınırsız (Silme Yapma)', value: '0' }
 ]
 
-const uzunSureAcikGunOptions = [
-  { label: '2 gün', value: '2' },
-  { label: '3 gün', value: '3' },
-  { label: '5 gün', value: '5' },
-  { label: '7 gün', value: '7' }
-]
+// Elle girilen eşik günü boş/geçersiz/aralık dışı olabilir; 1-90 arasına kırpar
+const esikGunTemizle = (deger) => String(Math.min(90, Math.max(1, Number(deger) || 3)))
 
 const isDirty = computed(() => {
   if (!orijinalAyarlar.value || Object.keys(orijinalAyarlar.value).length === 0) return false
@@ -120,7 +116,7 @@ const isDirty = computed(() => {
     work_orders_default_filter: ayarlarForm.work_orders_default_filter,
     show_critical_stock_warnings: String(ayarlarForm.show_critical_stock_warnings),
     show_long_open_workorder_warnings: String(ayarlarForm.show_long_open_workorder_warnings),
-    long_open_workorder_days: String(ayarlarForm.long_open_workorder_days),
+    long_open_workorder_days: esikGunTemizle(ayarlarForm.long_open_workorder_days),
     phone_server_auto_start: String(ayarlarForm.phone_server_auto_start),
     default_payment_method: ayarlarForm.default_payment_method,
     ask_payment_on_completion: String(ayarlarForm.ask_payment_on_completion),
@@ -178,7 +174,7 @@ const tercihleriKaydet = async () => {
     work_orders_default_filter: ayarlarForm.work_orders_default_filter,
     show_critical_stock_warnings: String(ayarlarForm.show_critical_stock_warnings),
     show_long_open_workorder_warnings: String(ayarlarForm.show_long_open_workorder_warnings),
-    long_open_workorder_days: String(ayarlarForm.long_open_workorder_days),
+    long_open_workorder_days: esikGunTemizle(ayarlarForm.long_open_workorder_days),
     phone_server_auto_start: String(ayarlarForm.phone_server_auto_start),
     default_payment_method: ayarlarForm.default_payment_method,
     ask_payment_on_completion: String(ayarlarForm.ask_payment_on_completion),
@@ -609,12 +605,13 @@ onMounted(async () => {
               <div class="setting-desc">İş emri kaç gündür açıksa uyarı gösterilsin</div>
             </div>
             <div class="setting-control">
-              <Dropdown
+              <InputText
+                type="number"
+                min="1"
+                max="90"
                 v-model="ayarlarForm.long_open_workorder_days"
-                :options="uzunSureAcikGunOptions"
-                optionLabel="label"
-                optionValue="value"
                 class="compact-dropdown"
+                style="width: 80px; text-align: center;"
               />
             </div>
           </div>
