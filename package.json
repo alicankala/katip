@@ -23,7 +23,7 @@
     "primevue": "^4.5.5",
     "qrcode": "^1.5.4",
     "vue": "^3.4.21",
-    "vue-router": "^5.1.0"
+    "vue-router": "^4.6.4"
   },
   "devDependencies": {
     "@types/adm-zip": "0.5.7",
