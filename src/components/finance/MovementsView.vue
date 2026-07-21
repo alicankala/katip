@@ -4,6 +4,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'
+import { useFormatters } from '../../composables/useFormatters'
 
 const props = defineProps({
   movements: {
@@ -45,25 +46,7 @@ const filtrelenmisHareketler = computed(() => {
   return list
 })
 
-const tlFormatla = (deger) => {
-  return Number(deger || 0).toLocaleString('tr-TR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }) + ' ₺'
-}
-
-const tarihFormatla = (tarih) => {
-  if (!tarih) return '-'
-  try {
-    const parts = tarih.split('-')
-    if (parts.length === 3) {
-      return `${parts[2]}.${parts[1]}.${parts[0]}`
-    }
-    return new Date(tarih).toLocaleDateString('tr-TR')
-  } catch (e) {
-    return tarih
-  }
-}
+const { tlFormatla, tarihFormatla } = useFormatters()
 
 const getYonColor = (yon) => {
   if (yon === 'Tahsilat' || yon === 'Alacak') return '#34d399'

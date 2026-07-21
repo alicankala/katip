@@ -12,6 +12,7 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import PrintPreviewDialog from '../components/work-orders/PrintPreviewDialog.vue'
 import EditItemDialog from '../components/work-orders/EditItemDialog.vue'
+import { useFormatters } from '../composables/useFormatters'
 
 const isEmirleri = ref([])
 const yukleniyor = ref(true)
@@ -1137,24 +1138,7 @@ const getSeverity = (status) => {
   }
 }
 
-const tlFormatla = (deger) => {
-  return `${Number(deger || 0).toLocaleString('tr-TR')} ₺`
-}
-const tarihFormatla = (tarih) => {
-  if (!tarih) return '-'
-
-  const utcTarih = String(tarih).includes('T')
-    ? String(tarih)
-    : String(tarih).replace(' ', 'T') + 'Z'
-
-  return new Date(utcTarih).toLocaleString('tr-TR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+const { tlFormatla, tarihSaatFormatla: tarihFormatla } = useFormatters()
 const yuzdeFormatla = (deger) => {
   return `%${Number(deger || 0).toLocaleString('tr-TR', {
     minimumFractionDigits: 1,

@@ -2,7 +2,7 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import { app } from 'electron'
 import { createRequire } from 'node:module'
-import { hashPin, verifyPin } from './security'
+import { hashPin, verifyPin, setActiveSalt } from './security'
 
 function randomPin() {
   return String(crypto.randomInt(0, 10000)).padStart(4, '0')
@@ -47,10 +47,12 @@ function ozellestirilmisFonksiyonlariTanimla(targetDb) {
     targetDb.pragma('journal_mode = WAL;');
     targetDb.pragma('synchronous = NORMAL;');
     targetDb.pragma('temp_store = MEMORY;');
+    targetDb.pragma('cache_size = -16000;'); // ~16MB sayfa önbelleği
+    targetDb.pragma('mmap_size = 268435456;'); // 256MB memory-mapped okuma
   } catch (err) {
     console.warn('[DB] PRAGMA set warning:', err);
   }
-  targetDb.function('normalize_text', (val) => {
+  targetDb.function('normalize_text', { deterministic: true }, (val) => {
     return normalizeString(val);
   });
 }
@@ -101,13 +103,50 @@ function schemaVersionAyarla(version) {
   `).run(version)
 }
 
+function ensureSecuritySalt() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS security_config (
+      key TEXT PRIMARY KEY,
+      value TEXT
+    );
+  `)
+
+  let row = db.prepare('SELECT value FROM security_config WHERE key = ?').get('pin_salt')
+
+  if (!row || !row.value) {
+    const salt = crypto.randomBytes(32).toString('hex')
+    db.prepare(`
+      INSERT INTO security_config (key, value)
+      VALUES (?, ?)
+      ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    `).run('pin_salt', salt)
+    row = { value: salt }
+  }
+
+  setActiveSalt(row.value)
+}
+
+const GECERLI_SQL_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/
+
+function sqlIdentifierDogrula(value, label) {
+  if (typeof value !== 'string' || !GECERLI_SQL_IDENTIFIER.test(value)) {
+    throw new Error(`Geçersiz SQL tanımlayıcı (${label}): ${value}`)
+  }
+  return value
+}
+
 function kolonVarMi(tableName, columnName) {
+  sqlIdentifierDogrula(tableName, 'tableName')
+
   const kolonlar = db.prepare(`PRAGMA table_info(${tableName})`).all()
 
   return kolonlar.some((kolon) => kolon.name === columnName)
 }
 
 function kolonEkleEksikse(tableName, columnName, columnDefinition) {
+  sqlIdentifierDogrula(tableName, 'tableName')
+  sqlIdentifierDogrula(columnName, 'columnName')
+
   if (kolonVarMi(tableName, columnName)) {
     return
   }
@@ -237,6 +276,9 @@ CREATE INDEX IF NOT EXISTS idx_work_order_items_wo ON work_order_items(work_orde
 CREATE INDEX IF NOT EXISTS idx_work_order_payments_wo ON work_order_payments(work_order_id);
 CREATE INDEX IF NOT EXISTS idx_stock_movements_part ON stock_movements(part_id);
   `)
+
+  ensureSecuritySalt()
+
   migrationCalistir(1, () => {
     kolonEkleEksikse('work_orders', 'total_price', 'REAL DEFAULT 0')
   })
@@ -508,6 +550,31 @@ migrationCalistir(24, () => {
   `)
 })
 
+migrationCalistir(26, () => {
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_account_transactions_account ON account_transactions(current_account_id);
+    CREATE INDEX IF NOT EXISTS idx_account_transactions_date ON account_transactions(date);
+    CREATE INDEX IF NOT EXISTS idx_account_payments_account ON account_payments(current_account_id);
+    CREATE INDEX IF NOT EXISTS idx_account_payments_transaction ON account_payments(transaction_id);
+    CREATE INDEX IF NOT EXISTS idx_general_expenses_status ON general_expenses(status);
+    CREATE INDEX IF NOT EXISTS idx_general_expenses_date ON general_expenses(expense_date);
+    CREATE INDEX IF NOT EXISTS idx_general_expenses_due_date ON general_expenses(due_date);
+    CREATE INDEX IF NOT EXISTS idx_current_accounts_active ON current_accounts(is_active);
+  `)
+})
+
+// Mobil sunucudan gizlenecek ustalar artık isim eşleşmesi yerine (name LIKE '%Admin%')
+// ayrı bir sütunla belirleniyor; mevcut davranışı bozmamak için o isimlere sahip
+// kayıtlar bu sütunla işaretlenip sorgular sütuna geçiyor.
+migrationCalistir(27, () => {
+  kolonEkleEksikse('masters', 'hidden_from_mobile', 'INTEGER DEFAULT 0')
+  db.exec(`
+    UPDATE masters
+    SET hidden_from_mobile = 1
+    WHERE name LIKE '%Admin%' OR name LIKE '%Destek%'
+  `)
+})
+
   console.log('Veritabanı hazır ve tablolar oluşturuldu! Yol:', dbPath)
 }
 
@@ -516,6 +583,8 @@ export const DEFAULT_SETTINGS = {
   list_density: 'normal',
   work_orders_default_filter: 'Açık',
   show_critical_stock_warnings: 'true',
+  show_long_open_workorder_warnings: 'true',
+  long_open_workorder_days: '3',
   phone_server_auto_start: 'false',
   default_payment_method: 'Nakit',
   ask_payment_on_completion: 'true',

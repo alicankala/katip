@@ -9,6 +9,7 @@ import Dropdown from 'primevue/dropdown'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
+import { useFormatters } from '../composables/useFormatters'
 
 const parcalar = ref([])
 const yukleniyor = ref(true)
@@ -203,33 +204,12 @@ const hareketleriAc = async (parca) => {
   }
 }
 
-const tarihFormatla = (tarih) => {
-  if (!tarih) return '-'
-
-  // SQLite CURRENT_TIMESTAMP UTC kaydettiği için sonuna Z ekleyip yerel saate çeviriyoruz
-  const utcTarih = String(tarih).includes('T')
-    ? String(tarih)
-    : String(tarih).replace(' ', 'T') + 'Z'
-
-  return new Date(utcTarih).toLocaleString('tr-TR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+const { tlFormatla, tarihSaatFormatla: tarihFormatla } = useFormatters()
 
 const hareketSeverity = (type) => {
   if (type === 'Giriş') return 'success'
   if (type === 'Çıkış') return 'danger'
   return 'info'
-}
-const tlFormatla = (deger) => {
-  return Number(deger || 0).toLocaleString('tr-TR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }) + ' ₺'
 }
 const sil = (id) => {
   if (!id) return

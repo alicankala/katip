@@ -1,4 +1,5 @@
 import db from '../database.js'
+import { resolveActiveMasterId } from '../session.js'
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
@@ -201,12 +202,7 @@ export function registerPartHandlers(kanalEkle: (kanal: string, fonksiyon: (...a
           ? (parca.critical_stock_enabled ? 1 : 0)
           : 0
 
-      const activeMasterId =
-        parca.active_master_id !== undefined &&
-        parca.active_master_id !== null &&
-        parca.active_master_id !== ''
-          ? Number(parca.active_master_id)
-          : null
+      const activeMasterId = resolveActiveMasterId()
 
       if (!code) {
         throw new Error('Parça kodu boş bırakılamaz.')
@@ -403,12 +399,7 @@ export function registerPartHandlers(kanalEkle: (kanal: string, fonksiyon: (...a
           ? (parca.critical_stock_enabled ? 1 : 0)
           : (eskiParca ? eskiParca.critical_stock_enabled : 0)
 
-      const activeMasterId =
-        parca.active_master_id !== undefined &&
-        parca.active_master_id !== null &&
-        parca.active_master_id !== ''
-          ? Number(parca.active_master_id)
-          : null
+      const activeMasterId = resolveActiveMasterId()
 
       if (!code) {
         throw new Error('Parça kodu boş bırakılamaz.')

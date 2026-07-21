@@ -6,6 +6,7 @@ import Button from 'primevue/button'
 import Dropdown from 'primevue/dropdown'
 import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
+import { useFormatters } from '../composables/useFormatters'
 
 const rapor = ref([])
 const giderler = ref([])
@@ -207,33 +208,12 @@ const cariOzeti = computed(() => {
   };
 })
 
-const tlFormatla = (deger) => {
-  return Number(deger || 0).toLocaleString('tr-TR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }) + ' ₺'
-}
+const { tlFormatla, tarihSaatFormatla: tarihFormatla } = useFormatters()
 
 const yuzdeFormatla = (deger) => {
   return '%' + Number(deger || 0).toLocaleString('tr-TR', {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1
-  })
-}
-
-const tarihFormatla = (tarih) => {
-  if (!tarih) return '-'
-
-  const utcTarih = String(tarih).includes('T')
-    ? String(tarih)
-    : String(tarih).replace(' ', 'T') + 'Z'
-
-  return new Date(utcTarih).toLocaleString('tr-TR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
   })
 }
 

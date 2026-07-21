@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('api', {
     // Ustalar / Giriş
   ustalariGetir: () => ipcRenderer.invoke('ustalari-getir'),
   ustaGirisYap: (giris) => ipcRenderer.invoke('usta-giris-yap', giris),
+  ustaCikisYap: () => ipcRenderer.invoke('usta-cikis-yap'),
   ustaPinDegistir: (veri) => ipcRenderer.invoke('usta-pin-degistir', veri),
   // Müşteriler
   musterileriGetir: () => ipcRenderer.invoke('musterileri-getir'),

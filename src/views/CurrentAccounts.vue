@@ -9,6 +9,7 @@ import Column from 'primevue/column'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useRoute } from 'vue-router'
+import { useFormatters } from '../composables/useFormatters'
 
 // Sub-components
 import FinanceSummary from '../components/finance/FinanceSummary.vue'
@@ -65,25 +66,7 @@ const uyariMesaji = (detay) => {
 }
 
 // Formatters
-const tlFormatla = (deger) => {
-  return Number(deger || 0).toLocaleString('tr-TR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }) + ' ₺'
-}
-
-const tarihFormatla = (tarih) => {
-  if (!tarih) return '-'
-  try {
-    const parts = tarih.split('-')
-    if (parts.length === 3) {
-      return `${parts[2]}.${parts[1]}.${parts[0]}`
-    }
-    return new Date(tarih).toLocaleDateString('tr-TR')
-  } catch (e) {
-    return tarih
-  }
-}
+const { tlFormatla, tarihFormatla } = useFormatters()
 
 // Cari & Gider Tipleri
 const cariTipleri = [
@@ -1529,6 +1512,11 @@ onUnmounted(() => {
         <div class="form-group">
           <label>Gider Tarihi <span class="zorunlu-alan">*</span></label>
           <InputText type="date" v-model="giderForm.expense_date" style="width: 100%;" />
+        </div>
+
+        <div class="form-group">
+          <label>Vade / Son Ödeme Tarihi</label>
+          <InputText type="date" v-model="giderForm.due_date" style="width: 100%;" />
         </div>
 
         <div class="form-group">

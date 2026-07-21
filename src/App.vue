@@ -187,6 +187,7 @@ const cikisYap = () => {
   localStorage.removeItem('aktifUsta')
   pin.value = ''
   router.push('/dashboard')
+  window.api?.ustaCikisYap?.().catch(() => {})
 }
 const disaridanCikisYap = () => {
   cikisYap()

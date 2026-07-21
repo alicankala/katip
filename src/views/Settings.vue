@@ -43,6 +43,8 @@ const ayarlarForm = reactive({
   list_density: 'normal',
   work_orders_default_filter: 'Açık',
   show_critical_stock_warnings: true,
+  show_long_open_workorder_warnings: true,
+  long_open_workorder_days: '3',
   phone_server_auto_start: false,
   default_payment_method: 'Nakit',
   ask_payment_on_completion: true,
@@ -103,6 +105,13 @@ const retentionOptions = [
   { label: 'Sınırsız (Silme Yapma)', value: '0' }
 ]
 
+const uzunSureAcikGunOptions = [
+  { label: '2 gün', value: '2' },
+  { label: '3 gün', value: '3' },
+  { label: '5 gün', value: '5' },
+  { label: '7 gün', value: '7' }
+]
+
 const isDirty = computed(() => {
   if (!orijinalAyarlar.value || Object.keys(orijinalAyarlar.value).length === 0) return false
   const snapshot = {
@@ -110,6 +119,8 @@ const isDirty = computed(() => {
     list_density: ayarlarForm.list_density,
     work_orders_default_filter: ayarlarForm.work_orders_default_filter,
     show_critical_stock_warnings: String(ayarlarForm.show_critical_stock_warnings),
+    show_long_open_workorder_warnings: String(ayarlarForm.show_long_open_workorder_warnings),
+    long_open_workorder_days: String(ayarlarForm.long_open_workorder_days),
     phone_server_auto_start: String(ayarlarForm.phone_server_auto_start),
     default_payment_method: ayarlarForm.default_payment_method,
     ask_payment_on_completion: String(ayarlarForm.ask_payment_on_completion),
@@ -133,6 +144,8 @@ const ayarlarYukle = async () => {
       ayarlarForm.list_density = s.list_density || 'normal'
       ayarlarForm.work_orders_default_filter = s.work_orders_default_filter || 'Açık'
       ayarlarForm.show_critical_stock_warnings = s.show_critical_stock_warnings !== 'false'
+      ayarlarForm.show_long_open_workorder_warnings = s.show_long_open_workorder_warnings !== 'false'
+      ayarlarForm.long_open_workorder_days = s.long_open_workorder_days || '3'
       ayarlarForm.phone_server_auto_start = s.phone_server_auto_start === 'true'
       ayarlarForm.default_payment_method = s.default_payment_method || 'Nakit'
       ayarlarForm.ask_payment_on_completion = s.ask_payment_on_completion !== 'false'
@@ -164,6 +177,8 @@ const tercihleriKaydet = async () => {
     list_density: ayarlarForm.list_density,
     work_orders_default_filter: ayarlarForm.work_orders_default_filter,
     show_critical_stock_warnings: String(ayarlarForm.show_critical_stock_warnings),
+    show_long_open_workorder_warnings: String(ayarlarForm.show_long_open_workorder_warnings),
+    long_open_workorder_days: String(ayarlarForm.long_open_workorder_days),
     phone_server_auto_start: String(ayarlarForm.phone_server_auto_start),
     default_payment_method: ayarlarForm.default_payment_method,
     ask_payment_on_completion: String(ayarlarForm.ask_payment_on_completion),
@@ -572,6 +587,35 @@ onMounted(async () => {
                 <input type="checkbox" v-model="ayarlarForm.show_critical_stock_warnings" />
                 <span class="toggle-slider"></span>
               </label>
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name">Uzun Süredir Açık İş Emri Uyarısı</div>
+              <div class="setting-desc">Belirtilen süreden uzun süredir açık kalan iş emirleri için Ana Sayfa'da uyarı göster</div>
+            </div>
+            <div class="setting-control">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="ayarlarForm.show_long_open_workorder_warnings" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setting-row" v-if="ayarlarForm.show_long_open_workorder_warnings">
+            <div class="setting-info">
+              <div class="setting-name">Uyarı Eşiği</div>
+              <div class="setting-desc">İş emri kaç gündür açıksa uyarı gösterilsin</div>
+            </div>
+            <div class="setting-control">
+              <Dropdown
+                v-model="ayarlarForm.long_open_workorder_days"
+                :options="uzunSureAcikGunOptions"
+                optionLabel="label"
+                optionValue="value"
+                class="compact-dropdown"
+              />
             </div>
           </div>
 

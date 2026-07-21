@@ -5,6 +5,7 @@ import db, { dbPath, uygulamaVerileriniYenileBackend, ayarlariGetirBackend } fro
 import { app, BrowserWindow, dialog, shell } from 'electron'
 import fsSync, { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { isRestoreInProgress, setRestoreInProgress } from '../restoreState.js'
 
 const execFileAsync = promisify(execFile)
 
@@ -118,10 +119,14 @@ async function zipArsiviOlustur(
     await fs.mkdir(path.dirname(zipPath), { recursive: true })
     await fs.rm(zipPath, { force: true })
 
+    // Windows'un yerleşik tar.exe'si (bsdtar), '-f' değerindeki ilk ':' karakterini
+    // gördüğünde bunu uzak arşiv sözdizimi ("host:dosya") sanıp sürücü harfini
+    // hostname olarak çözmeye çalışıyor ("Cannot connect to C: resolve failed").
+    // Bunu önlemek için arşiv klasörüne geçip -f değerini göreli dosya adıyla veriyoruz.
     await execFileAsync(
       'tar.exe',
-      ['-a', '-c', '-f', zipPath, '-C', packageRoot, 'database', 'fotograflar', 'manifest.json'],
-      { windowsHide: true, maxBuffer: 50 * 1024 * 1024 }
+      ['-a', '-c', '-f', path.basename(zipPath), '-C', packageRoot, 'database', 'fotograflar', 'manifest.json'],
+      { windowsHide: true, maxBuffer: 50 * 1024 * 1024, cwd: path.dirname(zipPath) }
     )
   } finally {
     await fs.rm(packageRoot, { recursive: true, force: true })
@@ -227,10 +232,12 @@ export async function sonOtomatikYedekZamaniGetir(): Promise<number> {
 }
 
 async function zipPaketiniGuvenliCikart(zipPath: string, targetDir: string): Promise<void> {
+  // bsdtar '-f' değerindeki ':' karakterini uzak arşiv sözdizimi sanabildiği için
+  // (bkz. zipArsiviOlustur), burada da arşiv klasörüne geçip göreli ad kullanıyoruz.
   const { stdout } = await execFileAsync(
     'tar.exe',
-    ['-tf', zipPath],
-    { windowsHide: true, maxBuffer: 50 * 1024 * 1024 }
+    ['-tf', path.basename(zipPath)],
+    { windowsHide: true, maxBuffer: 50 * 1024 * 1024, cwd: path.dirname(zipPath) }
   )
 
   const root = path.resolve(targetDir)
@@ -254,8 +261,8 @@ async function zipPaketiniGuvenliCikart(zipPath: string, targetDir: string): Pro
   await fs.mkdir(targetDir, { recursive: true })
   await execFileAsync(
     'tar.exe',
-    ['-xf', zipPath, '-C', targetDir],
-    { windowsHide: true, maxBuffer: 50 * 1024 * 1024 }
+    ['-xf', path.basename(zipPath), '-C', targetDir],
+    { windowsHide: true, maxBuffer: 50 * 1024 * 1024, cwd: path.dirname(zipPath) }
   )
 }
 
@@ -336,6 +343,9 @@ export function registerBackupHandlers(
 
   // 3. Yedekten geri yükle
   kanalEkle('yedekten-geri-yukle', async (_event, secilenDosyaYolu?: string) => {
+    if (isRestoreInProgress()) {
+      return { success: false, error: 'Zaten devam eden bir geri yükleme işlemi var.' }
+    }
     try {
       const win = getWin()
       if (!win) {
@@ -534,6 +544,8 @@ export function registerBackupHandlers(
 
       yedekDbKontrolEt(yedekDbPath)
 
+      setRestoreInProgress(true)
+
       console.log('[Restore] Mevcut veriler güvenliğe alınıyor...')
 
       if (fsSync.existsSync(dbPath)) {
@@ -584,6 +596,8 @@ export function registerBackupHandlers(
     } catch (error) {
       console.error('Yedekten geri yükleme hatası:', error)
       return { success: false, error: getErrorMessage(error) }
+    } finally {
+      setRestoreInProgress(false)
     }
   })
 

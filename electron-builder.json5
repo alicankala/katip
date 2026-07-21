@@ -11,9 +11,20 @@
   },
 
   "files": [
-    "dist",
-    "dist-electron"
+    "dist/**/*",
+    "dist-electron/**/*",
+    "package.json"
   ],
+
+  "asarUnpack": [
+    "node_modules/better-sqlite3/**/*"
+  ],
+
+  "publish": {
+    "provider": "github",
+    "owner": "alicankala",
+    "repo": "katip"
+  },
 
 "win": {
   "icon": "public/icon.ico",
@@ -32,6 +43,11 @@
     "oneClick": false,
     "perMachine": false,
     "allowToChangeInstallationDirectory": true,
-    "deleteAppDataOnUninstall": false
+    "deleteAppDataOnUninstall": false,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Kâtip",
+    "installerIcon": "public/icon.ico",
+    "uninstallerIcon": "public/icon.ico"
   }
 }

@@ -6,6 +6,7 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'
 import Checkbox from 'primevue/checkbox'
+import { useFormatters } from '../../composables/useFormatters'
 
 const props = defineProps({
   suppliers: {
@@ -58,12 +59,7 @@ const filtrelenmisTedarikciler = computed(() => {
   return list
 })
 
-const tlFormatla = (deger) => {
-  return Number(deger || 0).toLocaleString('tr-TR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }) + ' ₺'
-}
+const { tlFormatla } = useFormatters()
 
 const getCariTipClass = (type) => {
   if (!type) return 'diğer'

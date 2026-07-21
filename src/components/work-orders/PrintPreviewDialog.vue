@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
+import { useFormatters } from '../../composables/useFormatters'
 
 const props = defineProps({
   visible: {
@@ -37,26 +38,7 @@ const show = computed({
   set: (val) => emit('update:visible', val)
 })
 
-// Helper Formatters
-const tlFormatla = (deger) => {
-  return `${Number(deger || 0).toLocaleString('tr-TR')} ₺`
-}
-
-const tarihFormatla = (tarih) => {
-  if (!tarih) return '-'
-
-  const utcTarih = String(tarih).includes('T')
-    ? String(tarih)
-    : String(tarih).replace(' ', 'T') + 'Z'
-
-  return new Date(utcTarih).toLocaleString('tr-TR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+const { tlFormatla, tarihSaatFormatla: tarihFormatla } = useFormatters()
 
 const guvenliMetin = (deger) => {
   return String(deger ?? '')

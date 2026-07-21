@@ -1,5 +1,6 @@
 import db, { dbPath } from '../database.js'
 import { hashPin, verifyPin } from '../security.js'
+import { setActiveMasterSession, clearActiveMasterSession } from '../session.js'
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
@@ -50,11 +51,15 @@ export function registerMasterHandlers(kanalEkle: (kanal: string, fonksiyon: (..
         throw new Error('Usta veya PIN hatalı.')
       }
 
-      if (usta.pin === pin) {
+      // Eski format (düz metin veya eski salt) hash'leri, başarılı girişte güncel salt ile sessizce yenilenir
+      const guncelHash = hashPin(pin)
+      if (usta.pin !== guncelHash) {
         try {
-          db.prepare("UPDATE masters SET pin = ? WHERE id = ?").run(hashPin(pin), usta.id)
+          db.prepare("UPDATE masters SET pin = ? WHERE id = ?").run(guncelHash, usta.id)
         } catch (e) {}
       }
+
+      setActiveMasterSession(Number(usta.id))
 
       return {
         success: true,
@@ -69,7 +74,13 @@ export function registerMasterHandlers(kanalEkle: (kanal: string, fonksiyon: (..
     }
   })
 
-  // 3. Usta PIN değiştir
+  // 3. Usta çıkış yap (oturumu temizle)
+  kanalEkle('usta-cikis-yap', () => {
+    clearActiveMasterSession()
+    return { success: true }
+  })
+
+  // 4. Usta PIN değiştir
   kanalEkle('usta-pin-degistir', (_event, veri: any) => {
     try {
       const masterId = Number(veri.master_id)

@@ -3,6 +3,7 @@ import { stokHareketiKaydet } from './partController.js'
 import { app, dialog, nativeImage } from 'electron'
 import fsSync, { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { resolveActiveMasterId } from '../session.js'
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
@@ -62,6 +63,8 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
       JOIN customers ON vehicles.customer_id = customers.id
       LEFT JOIN masters opened_master ON work_orders.opened_by_master_id = opened_master.id
       LEFT JOIN masters closed_master ON work_orders.closed_by_master_id = closed_master.id
+      WHERE IFNULL(vehicles.is_active, 1) = 1
+        AND IFNULL(customers.is_active, 1) = 1
       ORDER BY work_orders.id DESC
     `).all()
   })
@@ -102,12 +105,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
       const vehicleId = Number(isEmri.vehicle_id)
       const status = String(isEmri.status || 'Açık').trim() || 'Açık'
 
-      const activeMasterId =
-        isEmri.active_master_id !== undefined &&
-        isEmri.active_master_id !== null &&
-        isEmri.active_master_id !== ''
-          ? Number(isEmri.active_master_id)
-          : null
+      const activeMasterId = resolveActiveMasterId()
 
       const closedByMasterId = status === 'Tamamlandı'
         ? activeMasterId
@@ -147,15 +145,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
           ? Number(id.id)
           : Number(id)
 
-      const activeMasterId =
-        typeof id === 'object' &&
-        id !== null &&
-        id.active_master_id !== undefined &&
-        id.active_master_id !== null &&
-        id.active_master_id !== '' &&
-        id.active_master_id !== 'admin'
-          ? Number(id.active_master_id)
-          : null
+      const activeMasterId = resolveActiveMasterId()
 
       if (!workOrderId) {
         throw new Error('Silinecek iş emri bulunamadı.')
@@ -292,7 +282,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
 
   // 4. İş emri güncelle / kapat
   kanalEkle('is-emri-guncelle', (_event, isEmri: any) => {
-    try {
+    const transaction = db.transaction(() => {
       const workOrderId = Number(isEmri.id)
 
       if (!workOrderId) {
@@ -308,12 +298,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
 
       const status = String(isEmri.status || 'Açık').trim() || 'Açık'
 
-      const activeMasterId =
-        isEmri.active_master_id !== undefined &&
-        isEmri.active_master_id !== null &&
-        isEmri.active_master_id !== ''
-          ? Number(isEmri.active_master_id)
-          : null
+      const activeMasterId = resolveActiveMasterId()
 
       db.prepare(`
         UPDATE work_orders
@@ -357,7 +342,10 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
       }
 
       isEmriToplaminiGuncelle(workOrderId)
+    })
 
+    try {
+      transaction()
       return { success: true }
     } catch (error) {
       console.error('İş emri güncelleme hatası:', error)
@@ -389,7 +377,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
   kanalEkle('is-emri-tekrar-ac', (_event, veri: any) => {
     const transaction = db.transaction(() => {
       const workOrderId = Number(veri.id)
-      const activeMasterId = Number(veri.active_master_id)
+      const activeMasterId = resolveActiveMasterId()
       const reason = String(veri.reason || '').trim()
 
       if (!workOrderId) {
@@ -500,9 +488,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
       const paymentMethod = String(odeme.payment_method || 'Nakit').trim()
       const paymentDate = String(odeme.payment_date || new Date().toISOString().slice(0, 10)).trim()
       const note = String(odeme.note || '').trim()
-      const activeMasterId = odeme.active_master_id !== undefined && odeme.active_master_id !== null && odeme.active_master_id !== '' && odeme.active_master_id !== 'admin'
-        ? Number(odeme.active_master_id)
-        : null
+      const activeMasterId = resolveActiveMasterId()
 
       if (!workOrderId) {
         throw new Error('İş emri seçilmelidir.')
@@ -564,9 +550,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
     const transaction = db.transaction(() => {
       const paymentId = Number(veri.payment_id)
       const cancelReason = String(veri.cancel_reason || '').trim()
-      const activeMasterId = veri.active_master_id !== undefined && veri.active_master_id !== null && veri.active_master_id !== '' && veri.active_master_id !== 'admin'
-        ? Number(veri.active_master_id)
-        : null
+      const activeMasterId = resolveActiveMasterId()
 
       if (!paymentId) {
         throw new Error('İptal edilecek ödeme kaydı bulunamadı.')
@@ -733,9 +717,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
   kanalEkle('is-emri-tamamla-ve-odeme-kaydet', (_event, veri: any) => {
     const transaction = db.transaction(() => {
       const workOrderId = Number(veri.id)
-      const activeMasterId = veri.active_master_id !== undefined && veri.active_master_id !== null && veri.active_master_id !== '' && veri.active_master_id !== 'admin'
-        ? Number(veri.active_master_id)
-        : null
+      const activeMasterId = resolveActiveMasterId()
       const paymentOption = String(veri.payment_option || 'none')
       const amount = Number(veri.amount) || 0
       const paymentMethod = String(veri.payment_method || 'Nakit').trim()
@@ -843,12 +825,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
       const unitPrice = Number(kalem.unit_price) || 0
       const totalPrice = quantity * unitPrice
       const partId = kalem.part_id ? Number(kalem.part_id) : null
-      const activeMasterId =
-        kalem.active_master_id !== undefined &&
-        kalem.active_master_id !== null &&
-        kalem.active_master_id !== ''
-          ? Number(kalem.active_master_id)
-          : null
+      const activeMasterId = resolveActiveMasterId()
       let buyPrice = 0
 
       if (!workOrderId) {
@@ -937,12 +914,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
       const yeniBirimFiyat = Number(veri.unit_price) || 0
       const yeniToplam = yeniMiktar * yeniBirimFiyat
 
-      const activeMasterId =
-        veri.active_master_id !== undefined &&
-        veri.active_master_id !== null &&
-        veri.active_master_id !== ''
-          ? Number(veri.active_master_id)
-          : null
+      const activeMasterId = resolveActiveMasterId()
 
       if (!kalemId) {
         throw new Error('Güncellenecek kalem bulunamadı.')
@@ -1156,14 +1128,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
           ? Number(itemId.id)
           : Number(itemId)
 
-      const activeMasterId =
-        typeof itemId === 'object' &&
-        itemId !== null &&
-        itemId.active_master_id !== undefined &&
-        itemId.active_master_id !== null &&
-        itemId.active_master_id !== ''
-          ? Number(itemId.active_master_id)
-          : null
+      const activeMasterId = resolveActiveMasterId()
 
       const kalem = db.prepare(`
         SELECT *

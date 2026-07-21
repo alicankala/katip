@@ -1,4 +1,6 @@
 <script setup>
+import { useFormatters } from '../../composables/useFormatters'
+
 defineProps({
   summary: {
     type: Object,
@@ -8,12 +10,7 @@ defineProps({
 
 const emit = defineEmits(['navigate'])
 
-const tlFormatla = (deger) => {
-  return Number(deger || 0).toLocaleString('tr-TR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }) + ' ₺'
-}
+const { tlFormatla } = useFormatters()
 </script>
 
 <template>

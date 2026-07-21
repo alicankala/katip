@@ -4,6 +4,7 @@ import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
+import { useFormatters } from '../../composables/useFormatters'
 
 const props = defineProps({
   workOrderReceivables: {
@@ -98,12 +99,7 @@ const filtrelenmisAlacaklar = computed(() => {
   return list
 })
 
-const tlFormatla = (deger) => {
-  return Number(deger || 0).toLocaleString('tr-TR', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }) + ' ₺'
-}
+const { tlFormatla } = useFormatters()
 
 const getStatusClass = (durum) => {
   switch (durum) {

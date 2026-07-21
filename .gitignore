@@ -10,3 +10,5 @@ build/
 *.db
 *.sqlite
 *.sqlite3
+recovery-scripts/
+tsconfig.node.tsbuildinfo

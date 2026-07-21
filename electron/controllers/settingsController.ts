@@ -9,6 +9,7 @@ import { app, shell } from 'electron'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { hashPin, verifyPin } from '../security.js'
+import { setActiveMasterSession } from '../session.js'
 
 const ADMIN_PIN_SETTING_KEY = 'admin_pin_hash'
 const ADMIN_PIN_DEFAULT = '0000'
@@ -149,9 +150,15 @@ export function registerSettingsHandlers(kanalEkle: (kanal: string, fonksiyon: (
       if (!/^\d{4}$/.test(girilenPin)) {
         return { success: false, error: 'PIN 4 haneli olmalıdır.' }
       }
-      if (!verifyPin(girilenPin, getAdminPinHash())) {
+      const mevcutHash = getAdminPinHash()
+      if (!verifyPin(girilenPin, mevcutHash)) {
         return { success: false, error: 'Hatalı Admin PIN.' }
       }
+      const guncelHash = hashPin(girilenPin)
+      if (guncelHash !== mevcutHash) {
+        setAdminPinHash(guncelHash)
+      }
+      setActiveMasterSession('admin')
       return { success: true }
     } catch (error) {
       return { success: false, error: getErrorMessage(error) }

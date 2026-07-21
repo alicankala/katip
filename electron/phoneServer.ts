@@ -6,6 +6,33 @@ import path from 'node:path'
 import { app } from 'electron'
 import db from './database.js'
 import { hashPin, verifyPin } from './security'
+import { isRestoreInProgress } from './restoreState.js'
+
+// PrimeIcons artık harici bir CDN'den (unpkg) değil, uygulamayla birlikte gelen
+// node_modules/primeicons paketinden yerel olarak servis ediliyor (internet bağımlılığını kaldırır).
+const primeiconsAssetCache = new Map<string, Buffer>()
+
+async function primeiconsAssetOku(relativePath: string): Promise<Buffer | null> {
+  if (primeiconsAssetCache.has(relativePath)) {
+    return primeiconsAssetCache.get(relativePath) || null
+  }
+  try {
+    const fullPath = path.join(app.getAppPath(), 'node_modules', 'primeicons', relativePath)
+    const data = await fs.readFile(fullPath)
+    primeiconsAssetCache.set(relativePath, data)
+    return data
+  } catch (e) {
+    return null
+  }
+}
+
+const PRIMEICONS_FONT_CONTENT_TYPES: Record<string, string> = {
+  '.eot': 'application/vnd.ms-fontobject',
+  '.woff2': 'font/woff2',
+  '.woff': 'font/woff',
+  '.ttf': 'font/ttf',
+  '.svg': 'image/svg+xml'
+}
 
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
@@ -481,8 +508,7 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       SELECT id, name
       FROM masters
       WHERE IFNULL(is_active, 1) = 1
-        AND name NOT LIKE '%Admin%'
-        AND name NOT LIKE '%Destek%'
+        AND IFNULL(hidden_from_mobile, 0) = 0
       ORDER BY id ASC
     `).all() as Array<{ id: number; name: string }>
 
@@ -498,12 +524,8 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Katip Mobil</title>
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-  <!-- PrimeIcons -->
-  <link href="https://unpkg.com/primeicons/primeicons.css" rel="stylesheet">
+  <!-- PrimeIcons: yerel sunucudan servis edilir (harici CDN yok) -->
+  <link href="/vendor/primeicons/primeicons.css" rel="stylesheet">
   <style>
     :root {
       --bg-primary: #0f172a;
@@ -523,7 +545,7 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       box-sizing: border-box;
       margin: 0;
       padding: 0;
-      font-family: 'Outfit', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       -webkit-tap-highlight-color: transparent;
     }
 
@@ -3470,6 +3492,12 @@ document
         const parsedUrl = new URL(url, 'http://localhost')
         const pathName = parsedUrl.pathname
 
+        if (isRestoreInProgress() && !pathName.startsWith('/vendor/')) {
+          res.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' })
+          res.end(JSON.stringify({ success: false, error: 'Veritabanı yedekten geri yükleniyor, lütfen birkaç saniye sonra tekrar deneyin.' }))
+          return
+        }
+
         // 1. Mobile HTML / Client Layout
         if (pathName === '/' || pathName === '/index.html') {
           res.writeHead(200, { 
@@ -3483,10 +3511,44 @@ document
           return
         }
 
+        // 1b. Static: Yerel PrimeIcons (CSS + font dosyaları)
+        if (pathName === '/vendor/primeicons/primeicons.css') {
+          const css = await primeiconsAssetOku('primeicons.css')
+          if (!css) {
+            res.writeHead(404)
+            res.end()
+            return
+          }
+          res.writeHead(200, { 'Content-Type': 'text/css; charset=utf-8', 'Cache-Control': 'public, max-age=86400' })
+          res.end(css)
+          return
+        }
+        if (pathName.startsWith('/vendor/primeicons/fonts/')) {
+          const fileName = pathName.replace('/vendor/primeicons/fonts/', '')
+          if (!/^primeicons\.(eot|woff2?|ttf|svg)$/.test(fileName)) {
+            res.writeHead(400)
+            res.end()
+            return
+          }
+          const fontData = await primeiconsAssetOku(path.join('fonts', fileName))
+          if (!fontData) {
+            res.writeHead(404)
+            res.end()
+            return
+          }
+          const ext = path.extname(fileName)
+          res.writeHead(200, {
+            'Content-Type': PRIMEICONS_FONT_CONTENT_TYPES[ext] || 'application/octet-stream',
+            'Cache-Control': 'public, max-age=86400'
+          })
+          res.end(fontData)
+          return
+        }
+
         // 2. API: Get Masters List
         if (pathName === '/api/masters') {
           try {
-            const rows = db.prepare("SELECT id, name FROM masters WHERE IFNULL(is_active, 1) = 1 AND name NOT LIKE '%Admin%' AND name NOT LIKE '%Destek%' ORDER BY id ASC").all()
+            const rows = db.prepare("SELECT id, name FROM masters WHERE IFNULL(is_active, 1) = 1 AND IFNULL(hidden_from_mobile, 0) = 0 ORDER BY id ASC").all()
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
             res.end(JSON.stringify({ success: true, masters: rows }))
           } catch (err: any) {
@@ -3589,7 +3651,12 @@ document
                 return
               }
 
-              const usta = db.prepare("SELECT id, name, pin FROM masters WHERE id = ? AND IFNULL(is_active, 1) = 1").get(mId) as any
+              const usta = db.prepare(`
+                SELECT id, name, pin FROM masters
+                WHERE id = ?
+                  AND IFNULL(is_active, 1) = 1
+                  AND IFNULL(hidden_from_mobile, 0) = 0
+              `).get(mId) as any
               if (!usta) {
                 res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
                 res.end(JSON.stringify({ success: false, error: 'Seçilen usta sistemde bulunamadı.' }))
@@ -3598,8 +3665,9 @@ document
 
               if (verifyPin(cleanPin, usta.pin)) {
                 recordLoginSuccess(ip)
-                if (String(usta.pin || '').trim() === cleanPin) {
-                  try { db.prepare("UPDATE masters SET pin = ? WHERE id = ?").run(hashPin(cleanPin), usta.id) } catch (e) {}
+                const guncelHash = hashPin(cleanPin)
+                if (String(usta.pin || '').trim() !== guncelHash) {
+                  try { db.prepare("UPDATE masters SET pin = ? WHERE id = ?").run(guncelHash, usta.id) } catch (e) {}
                 }
                 const token = crypto.randomBytes(24).toString('hex')
                 const userAgent = String(req.headers['user-agent'] || 'Bilinmeyen Cihaz')
@@ -4110,6 +4178,7 @@ closed_master.name AS closed_by_master_name,
           req.on('end', () => {
             try {
               const data = JSON.parse(body)
+              data.master_id = currentSession.master_id
               const newWorkOrderId = createServiceReceptionTransaction(data)
               res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
               res.end(JSON.stringify({ success: true, id: newWorkOrderId }))
@@ -4156,6 +4225,7 @@ closed_master.name AS closed_by_master_name,
           req.on('end', () => {
             try {
               const data = JSON.parse(body)
+              data.master_id = currentSession.master_id
               addLaborTransaction(data)
               res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
               res.end(JSON.stringify({ success: true }))
@@ -4175,6 +4245,7 @@ closed_master.name AS closed_by_master_name,
           req.on('end', () => {
             try {
               const data = JSON.parse(body)
+              data.master_id = currentSession.master_id
               addPartTransaction(data)
               res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
               res.end(JSON.stringify({ success: true }))
@@ -4194,6 +4265,7 @@ closed_master.name AS closed_by_master_name,
           req.on('end', () => {
             try {
               const data = JSON.parse(body)
+              data.master_id = currentSession.master_id
               deleteItemTransaction(data)
               res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
               res.end(JSON.stringify({ success: true }))
@@ -4213,8 +4285,9 @@ closed_master.name AS closed_by_master_name,
           req.on('end', () => {
             try {
               const data = JSON.parse(body)
-              const { work_order_id, master_id } = data
-              
+              const { work_order_id } = data
+              const master_id = currentSession.master_id
+
               console.log('[PhoneServer] Complete request received - WorkOrderId:', work_order_id, 'MasterId:', master_id)
 
               if (!work_order_id) {

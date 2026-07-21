@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useFormatters } from '../composables/useFormatters'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
@@ -25,8 +26,24 @@ bitenStok: 0
 })
 
 const sonAcikIsEmirleri = ref([])
+const tumAcikIsEmirleri = ref([])
 const dusukStokParcalari = ref([])
 const yukleniyor = ref(true)
+const uzunSureAcikAyarlari = ref({ enabled: true, gun: 3 })
+
+const uzunSureAcikIsEmirleri = computed(() => {
+  if (!uzunSureAcikAyarlari.value.enabled) return []
+  const simdi = Date.now()
+
+  return tumAcikIsEmirleri.value
+    .filter((wo) => wo.status !== 'Tamamlandı' && wo.created_at)
+    .map((wo) => {
+      const acilisZamani = new Date(String(wo.created_at).includes('T') ? wo.created_at : String(wo.created_at).replace(' ', 'T') + 'Z').getTime()
+      return { ...wo, gecenGun: Math.floor((simdi - acilisZamani) / (24 * 60 * 60 * 1000)) }
+    })
+    .filter((wo) => wo.gecenGun >= uzunSureAcikAyarlari.value.gun)
+    .sort((a, b) => b.gecenGun - a.gecenGun)
+})
 
 const secereVerileri = ref([])
 const dashSeciliFotograf = ref(null)
@@ -47,22 +64,28 @@ const verileriYukle = async () => {
     }
 
     const isEmirleri = await window.api.isEmirleriGetir()
+    const isEmirleriListesi = Array.isArray(isEmirleri) ? isEmirleri : []
 
-    sonAcikIsEmirleri.value = Array.isArray(isEmirleri)
-      ? isEmirleri
-          .filter((isEmri) => isEmri.status !== 'Tamamlandı')
-          .slice(0, 5)
-      : []
-      if (window.api.dusukStokParcalariGetir) {
-      let showWarnings = true
-      if (window.api.ayarlariGetir) {
-        try {
-          const sRes = await window.api.ayarlariGetir()
-          if (sRes?.success && sRes.settings?.show_critical_stock_warnings === 'false') {
-            showWarnings = false
-          }
-        } catch (e) {}
-      }
+    tumAcikIsEmirleri.value = isEmirleriListesi
+    sonAcikIsEmirleri.value = isEmirleriListesi
+      .filter((isEmri) => isEmri.status !== 'Tamamlandı')
+      .slice(0, 5)
+
+    let ayarlar = null
+    if (window.api.ayarlariGetir) {
+      try {
+        const sRes = await window.api.ayarlariGetir()
+        if (sRes?.success) ayarlar = sRes.settings
+      } catch (e) {}
+    }
+
+    uzunSureAcikAyarlari.value = {
+      enabled: ayarlar?.show_long_open_workorder_warnings !== 'false',
+      gun: Number(ayarlar?.long_open_workorder_days) || 3
+    }
+
+    if (window.api.dusukStokParcalariGetir) {
+      const showWarnings = ayarlar?.show_critical_stock_warnings !== 'false'
       dusukStokParcalari.value = showWarnings ? await window.api.dusukStokParcalariGetir(5) : []
     }
   } finally {
@@ -265,28 +288,7 @@ const kalemBasligiGetir = (kalem) => {
   return parcaAdi || aciklama || 'Kalem'
 }
 
-const tarihFormatla = (tarih) => {
-  if (!tarih) return '-'
-
-  const utcTarih = String(tarih).includes('T')
-    ? String(tarih)
-    : String(tarih).replace(' ', 'T') + 'Z'
-
-  return new Date(utcTarih).toLocaleString('tr-TR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-const tlFormatla = (deger) => {
-  return new Intl.NumberFormat('tr-TR', {
-    style: 'currency',
-    currency: 'TRY'
-  }).format(Number(deger) || 0)
-}
+const { tlFormatla, tarihSaatFormatla: tarihFormatla } = useFormatters()
 
 const getSeverity = (status) => {
   if (status === 'Tamamlandı') return 'success'
@@ -337,7 +339,14 @@ onUnmounted(() => {
 
     <!-- ── Stat Cards ──────────────────────────────── -->
     <div class="dash-stat-grid">
-      <div class="dash-stat-card accent-blue">
+      <div
+        class="dash-stat-card accent-blue"
+        role="button"
+        tabindex="0"
+        title="İş emirlerine git"
+        @click="isEmirlerineGit"
+        @keyup.enter="isEmirlerineGit"
+      >
         <div class="stat-card-inner">
           <div class="stat-card-body">
             <div class="stat-card-label">Açık İş Emri</div>
@@ -348,7 +357,14 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="dash-stat-card accent-green">
+      <div
+        class="dash-stat-card accent-green"
+        role="button"
+        tabindex="0"
+        title="Müşterilere git"
+        @click="router.push('/customers')"
+        @keyup.enter="router.push('/customers')"
+      >
         <div class="stat-card-inner">
           <div class="stat-card-body">
             <div class="stat-card-label">Kayıtlı Müşteri</div>
@@ -359,7 +375,14 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="dash-stat-card accent-amber">
+      <div
+        class="dash-stat-card accent-amber"
+        role="button"
+        tabindex="0"
+        title="Araçlara git"
+        @click="router.push('/vehicles')"
+        @keyup.enter="router.push('/vehicles')"
+      >
         <div class="stat-card-inner">
           <div class="stat-card-body">
             <div class="stat-card-label">Servisteki Araç</div>
@@ -370,7 +393,14 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div class="dash-stat-card accent-purple">
+      <div
+        class="dash-stat-card accent-purple"
+        role="button"
+        tabindex="0"
+        title="Parça / Stok'a git"
+        @click="router.push('/parts')"
+        @keyup.enter="router.push('/parts')"
+      >
         <div class="stat-card-inner">
           <div class="stat-card-body">
             <div class="stat-card-label">Aktif Parça Kartı</div>
@@ -550,6 +580,21 @@ onUnmounted(() => {
           <div v-else class="search-hint">
             Plaka, müşteri adı, telefon veya yapılan işlem ile geçmiş servisleri bulun.
           </div>
+        </div>
+
+        <!-- Uzun Süredir Açık İş Emri Uyarısı -->
+        <div v-if="!yukleniyor && uzunSureAcikIsEmirleri.length > 0" class="long-open-box" @click="isEmirlerineGit">
+          <div class="low-stock-header">
+            <i class="pi pi-clock"></i>
+            <h3>Uzun Süredir Açık İş Emri</h3>
+          </div>
+          <ul>
+            <li v-for="wo in uzunSureAcikIsEmirleri.slice(0, 5)" :key="wo.id">
+              <strong>{{ wo.plate || 'PLAKASIZ' }}</strong>
+              <span>{{ wo.customer_name || '-' }}</span>
+              <em>{{ wo.gecenGun }} gün</em>
+            </li>
+          </ul>
         </div>
 
         <!-- Kritik Stok Paneli -->
@@ -782,7 +827,12 @@ onUnmounted(() => {
   padding: 12px 16px;
   border-left-width: 4px;
   border-left-style: solid;
+  cursor: pointer;
   transition: border-color 0.2s ease, box-shadow 0.25s ease, transform 0.2s ease;
+}
+.dash-stat-card:focus-visible {
+  outline: 2px solid var(--accent-color, #38bdf8);
+  outline-offset: 2px;
 }
 .dash-stat-card:hover {
   box-shadow: var(--shadow-md);
@@ -996,6 +1046,39 @@ onUnmounted(() => {
   display: inline-block;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
 }
+
+/* ── Uzun Süredir Açık İş Emri ─────────────────── */
+.long-open-box {
+  background: var(--bg-panel);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  border-left: 4px solid #f59e0b;
+  color: var(--text-primary);
+  padding: 14px 16px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.long-open-box:hover {
+  transform: translateY(-2px);
+}
+.long-open-box .low-stock-header i { color: #f59e0b; }
+.long-open-box h3 { margin: 0; color: #f59e0b; font-size: 15px; font-weight: 700; }
+.long-open-box ul { margin: 0; padding: 0; list-style: none; }
+.long-open-box li {
+  display: grid;
+  grid-template-columns: 80px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 6px;
+  margin: 0 -6px;
+  border-radius: 6px;
+  border-top: 1px solid rgba(245, 158, 11, 0.12);
+  font-size: 13.5px;
+}
+.long-open-box li:first-child { border-top: none; }
+.long-open-box strong { color: var(--text-title); font-weight: 600; }
+.long-open-box span { color: var(--text-secondary); }
+.long-open-box em { font-style: normal; font-weight: 700; color: #f59e0b; }
 
 /* ── Low Stock ────────────────────────────────── */
 .low-stock-box {

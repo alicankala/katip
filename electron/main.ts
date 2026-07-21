@@ -2,7 +2,15 @@ import { initDB, ayarlariGetirBackend } from './database.js'
 import { app, BrowserWindow, ipcMain, Menu, type IpcMainInvokeEvent } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import log from 'electron-log/main'
+import { autoUpdater } from 'electron-updater'
 import { runPhoneServerMigrations } from './phoneServer.js'
+import { isRestoreInProgress } from './restoreState.js'
+
+// Tüm console.log/warn/error çağrılarını kalıcı log dosyasına da yazar
+// (app.getPath('logs') altında dönen dosya; Ayarlar > Log Klasörünü Aç ile açılan klasörle aynı)
+log.initialize()
+log.transports.file.level = 'info'
 
 import { registerCustomerHandlers } from './controllers/customerController.js'
 import { registerPartHandlers } from './controllers/partController.js'
@@ -80,7 +88,12 @@ function createWindow() {
 
 function kanalEkle(kanal: string, fonksiyon: (event: IpcMainInvokeEvent, ...args: any[]) => any): void {
   ipcMain.removeHandler(kanal)
-  ipcMain.handle(kanal, fonksiyon)
+  ipcMain.handle(kanal, (event, ...args) => {
+    if (isRestoreInProgress() && kanal !== 'yedekten-geri-yukle') {
+      return { success: false, error: 'Veritabanı yedekten geri yükleniyor, lütfen bekleyin.' }
+    }
+    return fonksiyon(event, ...args)
+  })
 }
 
 function ipcKopruleriniKur() {
@@ -175,4 +188,11 @@ app.whenReady().then(async () => {
   otomatikYedekZamanlayicisiniBaslat()
 
   createWindow()
+
+  if (app.isPackaged) {
+    autoUpdater.logger = log
+    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+      console.error('Otomatik güncelleme kontrolü hatası:', err)
+    })
+  }
 })
