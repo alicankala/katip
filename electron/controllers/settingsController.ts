@@ -12,7 +12,7 @@ import { hashPin, verifyPin } from '../security.js'
 import { setActiveMasterSession } from '../session.js'
 
 const ADMIN_PIN_SETTING_KEY = 'admin_pin_hash'
-const ADMIN_PIN_DEFAULT = '0000'
+const ADMIN_PIN_DEFAULT = '4444'
 
 function getAdminPinHash(): string {
   const row = db.prepare('SELECT value FROM app_settings WHERE key = ?').get(ADMIN_PIN_SETTING_KEY) as any

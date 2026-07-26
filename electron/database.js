@@ -4,10 +4,6 @@ import { app } from 'electron'
 import { createRequire } from 'node:module'
 import { hashPin, verifyPin, setActiveSalt } from './security'
 
-function randomPin() {
-  return String(crypto.randomInt(0, 10000)).padStart(4, '0')
-}
-
 const require = createRequire(import.meta.url)
 const Database = require('better-sqlite3')
 
@@ -178,7 +174,8 @@ export function initDB() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT,
       phone TEXT,
-      note TEXT
+      note TEXT,
+      is_active INTEGER DEFAULT 1
     );
 
 CREATE TABLE IF NOT EXISTS parts (
@@ -265,19 +262,21 @@ CREATE TABLE IF NOT EXISTS stock_movements (
   FOREIGN KEY(master_id) REFERENCES masters(id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
-CREATE INDEX IF NOT EXISTS idx_customers_active ON customers(is_active);
-CREATE INDEX IF NOT EXISTS idx_vehicles_plate ON vehicles(plate);
-CREATE INDEX IF NOT EXISTS idx_vehicles_customer ON vehicles(customer_id);
-CREATE INDEX IF NOT EXISTS idx_work_orders_vehicle ON work_orders(vehicle_id);
-CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status);
-CREATE INDEX IF NOT EXISTS idx_parts_code ON parts(code);
-CREATE INDEX IF NOT EXISTS idx_work_order_items_wo ON work_order_items(work_order_id);
-CREATE INDEX IF NOT EXISTS idx_work_order_payments_wo ON work_order_payments(work_order_id);
-CREATE INDEX IF NOT EXISTS idx_stock_movements_part ON stock_movements(part_id);
   `)
 
   ensureSecuritySalt()
+
+  // Onarım: migration 22 ve 25 bir dönem kaynak kodda numara sırasının dışında
+  // çağrıldığı için şema sürümü erken yükseliyor ve aradaki migration'lar hiç
+  // çalışmadan atlanıyordu. Bu duruma düşmüş bir veritabanında sürüm geri
+  // çekilir; migration'lar idempotent olduğundan yeniden çalışmaları güvenlidir.
+  const tabloVarMi = (name) => !!db.prepare(
+    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?"
+  ).get(name)
+
+  if (schemaVersionGetir() >= 15 && !tabloVarMi('current_accounts')) {
+    schemaVersionAyarla(8)
+  }
 
   migrationCalistir(1, () => {
     kolonEkleEksikse('work_orders', 'total_price', 'REAL DEFAULT 0')
@@ -309,9 +308,6 @@ migrationCalistir(7, () => {
 migrationCalistir(8, () => {
   kolonEkleEksikse('work_orders', 'closed_at', 'DATETIME')
 })
-migrationCalistir(25, () => {
-  kolonEkleEksikse('work_orders', 'customer_signature', 'TEXT')
-})
 migrationCalistir(9, () => {
   db.exec(`
     CREATE TABLE IF NOT EXISTS masters (
@@ -324,9 +320,9 @@ migrationCalistir(9, () => {
   `)
 
   const seedUstalar = [
-    { name: 'Ali Kala', pin: randomPin() },
-    { name: 'Bünyamin Kala', pin: randomPin() },
-    { name: 'Yusuf Kala', pin: randomPin() }
+    { name: 'Ali Kala', pin: '1111' },
+    { name: 'Bünyamin Kala', pin: '2222' },
+    { name: 'Yusuf Kala', pin: '3333' }
   ]
 
   for (const usta of seedUstalar) {
@@ -339,17 +335,7 @@ migrationCalistir(9, () => {
     `).run(usta.name, hashPin(usta.pin), 1, usta.name)
 
     if (eklendi.changes > 0) {
-      console.log(`[Kâtip] "${usta.name}" için başlangıç PIN'i oluşturuldu: ${usta.pin} (Ayarlar'dan değiştirilmesi önerilir.)`)
-    }
-  }
-})
-
-migrationCalistir(22, () => {
-  const masters = db.prepare("SELECT id, pin FROM masters").all()
-  const updateStmt = db.prepare("UPDATE masters SET pin = ? WHERE id = ?")
-  for (const m of masters) {
-    if (m.pin && m.pin.length <= 6) {
-      updateStmt.run(hashPin(m.pin), m.id)
+      console.log(`[Kâtip] "${usta.name}" için başlangıç PIN'i ayarlandı: ${usta.pin} (Ayarlar'dan değiştirilmesi önerilir.)`)
     }
   }
 })
@@ -514,6 +500,16 @@ migrationCalistir(21, () => {
   `)
 })
 
+migrationCalistir(22, () => {
+  const masters = db.prepare("SELECT id, pin FROM masters").all()
+  const updateStmt = db.prepare("UPDATE masters SET pin = ? WHERE id = ?")
+  for (const m of masters) {
+    if (m.pin && m.pin.length <= 6) {
+      updateStmt.run(hashPin(m.pin), m.id)
+    }
+  }
+})
+
 migrationCalistir(23, () => {
   db.exec(`
     -- Foreign Key and Fast Search Performance Indexes
@@ -550,6 +546,10 @@ migrationCalistir(24, () => {
   `)
 })
 
+migrationCalistir(25, () => {
+  kolonEkleEksikse('work_orders', 'customer_signature', 'TEXT')
+})
+
 migrationCalistir(26, () => {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_account_transactions_account ON account_transactions(current_account_id);
@@ -575,6 +575,21 @@ migrationCalistir(27, () => {
   `)
 })
 
+  // Index'ler migration'lardan SONRA oluşturulmalı: bazı sütun ve tablolar
+  // (ör. customers.is_active, work_order_payments) ancak migration'larla ekleniyor.
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone);
+    CREATE INDEX IF NOT EXISTS idx_customers_active ON customers(is_active);
+    CREATE INDEX IF NOT EXISTS idx_vehicles_plate ON vehicles(plate);
+    CREATE INDEX IF NOT EXISTS idx_vehicles_customer ON vehicles(customer_id);
+    CREATE INDEX IF NOT EXISTS idx_work_orders_vehicle ON work_orders(vehicle_id);
+    CREATE INDEX IF NOT EXISTS idx_work_orders_status ON work_orders(status);
+    CREATE INDEX IF NOT EXISTS idx_parts_code ON parts(code);
+    CREATE INDEX IF NOT EXISTS idx_work_order_items_wo ON work_order_items(work_order_id);
+    CREATE INDEX IF NOT EXISTS idx_work_order_payments_wo ON work_order_payments(work_order_id);
+    CREATE INDEX IF NOT EXISTS idx_stock_movements_part ON stock_movements(part_id);
+  `)
+
   console.log('Veritabanı hazır ve tablolar oluşturuldu! Yol:', dbPath)
 }
 
@@ -591,7 +606,7 @@ export const DEFAULT_SETTINGS = {
   warn_unpaid_completion: 'true',
   show_payment_summary_on_receipt: 'true',
   automatic_backup_enabled: 'false',
-  backup_on_exit: 'false',
+  backup_on_exit: 'true',
   backup_retention_count: '20'
 }
 
