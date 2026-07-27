@@ -4,6 +4,7 @@ import { app, dialog, nativeImage } from 'electron'
 import fsSync, { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { resolveActiveMasterId } from '../session.js'
+import { kapaliGunKontrol, bugununTarihi } from './closingController.js'
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
@@ -486,7 +487,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
       const workOrderId = Number(odeme.work_order_id)
       const amount = Number(odeme.amount) || 0
       const paymentMethod = String(odeme.payment_method || 'Nakit').trim()
-      const paymentDate = String(odeme.payment_date || new Date().toISOString().slice(0, 10)).trim()
+      const paymentDate = String(odeme.payment_date || bugununTarihi()).trim()
       const note = String(odeme.note || '').trim()
       const activeMasterId = resolveActiveMasterId()
 
@@ -509,6 +510,8 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
       if (!paymentMethod) {
         throw new Error('Ödeme yöntemi seçilmelidir.')
       }
+
+      kapaliGunKontrol(paymentDate)
 
       const tahsilat = db.prepare(`
         SELECT COALESCE(SUM(amount), 0) AS toplam
@@ -571,6 +574,8 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
       if (odeme.is_cancelled === 1) {
         throw new Error('Bu ödeme kaydı zaten iptal edilmiş.')
       }
+
+      kapaliGunKontrol(odeme.payment_date)
 
       const cancelledAt = new Date().toISOString()
 
@@ -721,7 +726,7 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
       const paymentOption = String(veri.payment_option || 'none')
       const amount = Number(veri.amount) || 0
       const paymentMethod = String(veri.payment_method || 'Nakit').trim()
-      const paymentDate = String(veri.payment_date || new Date().toISOString().slice(0, 10)).trim()
+      const paymentDate = String(veri.payment_date || bugununTarihi()).trim()
       const note = String(veri.note || '').trim()
 
       if (!workOrderId) {
@@ -743,6 +748,8 @@ export function registerWorkOrderHandlers(kanalEkle: (kanal: string, fonksiyon: 
       `).run(activeMasterId, workOrderId)
 
       if (paymentOption === 'full' || paymentOption === 'partial') {
+        kapaliGunKontrol(paymentDate)
+
         const tahsilat = db.prepare(`
           SELECT COALESCE(SUM(amount), 0) AS toplam
           FROM work_order_payments

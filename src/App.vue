@@ -1,9 +1,10 @@
 <script setup>
 import Menu from 'primevue/menu'
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import Toast from 'primevue/toast'
 import ConfirmDialog from 'primevue/confirmdialog'
+import Dialog from 'primevue/dialog'
 import Dropdown from 'primevue/dropdown'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
@@ -44,6 +45,7 @@ const menuItems = ref([
   { label: 'Parça / Stok', icon: 'pi pi-box', path: '/parts', command: () => router.push('/parts') },
   { label: 'Cari Hesap', icon: 'pi pi-wallet', path: '/current-accounts', command: () => router.push('/current-accounts') },
   { label: 'İç Kâr Raporu', icon: 'pi pi-chart-line', path: '/profit-report', command: () => router.push('/profit-report') },
+  { label: 'Gün Sonu', icon: 'pi pi-lock', path: '/daily-closing', command: () => router.push('/daily-closing') },
   { label: 'Ayarlar', icon: 'pi pi-cog', path: '/settings', command: () => router.push('/settings') }
 ])
 
@@ -371,6 +373,83 @@ const telefonErisimiDurdur = async () => {
   }
 }
 
+// ── Bilgi Şeridi: saat / tarih / döviz (NTV alt bandı tarzı döngü) ──
+const simdikiZaman = ref(new Date())
+const dovizKurlari = ref(null)
+const tickerIndex = ref(0)
+let saatTimer = null
+let tickerTimer = null
+let kurTimer = null
+
+const kurFormatla = (kur) => {
+  const f = (v) => Number(v).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  if (kur.alis && kur.satis) return `${f(kur.alis)} / ${f(kur.satis)} ₺`
+  return `${f(kur.satis || kur.alis)} ₺`
+}
+
+const tickerItems = computed(() => {
+  const items = [
+    {
+      icon: 'pi pi-clock',
+      label: 'Saat',
+      value: simdikiZaman.value.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    },
+    {
+      icon: 'pi pi-calendar',
+      label: 'Tarih',
+      value: simdikiZaman.value.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', weekday: 'long' })
+    }
+  ]
+  const k = dovizKurlari.value
+  if (k?.USD && (k.USD.alis || k.USD.satis)) {
+    items.push({ icon: 'pi pi-dollar', label: 'Dolar (Alış / Satış)', value: kurFormatla(k.USD) })
+  }
+  if (k?.EUR && (k.EUR.alis || k.EUR.satis)) {
+    items.push({ icon: 'pi pi-euro', label: 'Euro (Alış / Satış)', value: kurFormatla(k.EUR) })
+  }
+  return items
+})
+
+const aktifTickerItem = computed(() => {
+  const items = tickerItems.value
+  if (items.length === 0) return null
+  return items[tickerIndex.value % items.length]
+})
+
+const dovizYukle = async () => {
+  if (!window.api?.dovizKurlariGetir) return
+  try {
+    const res = await window.api.dovizKurlariGetir()
+    if (res?.success && res.kurlar) {
+      dovizKurlari.value = res.kurlar
+    }
+  } catch (e) {
+    console.error('Döviz kuru yüklenemedi:', e)
+  }
+}
+
+// ── Çıkışta Gün Sonu Hatırlatması ────────────────
+const gunSonuHatirlatmaAcik = ref(false)
+
+const gunSonuHatirlatmasiGeldi = () => {
+  // Giriş ekranındaysa günü kapatacak kimse yok; hatırlatmadan kapat
+  if (!aktifUsta.value) {
+    window.api?.pencereKapatZorla?.()
+    return
+  }
+  gunSonuHatirlatmaAcik.value = true
+}
+
+const gunSonunaGitVeKapat = () => {
+  gunSonuHatirlatmaAcik.value = false
+  router.push('/daily-closing')
+}
+
+const kapatmadanCik = () => {
+  gunSonuHatirlatmaAcik.value = false
+  window.api?.pencereKapatZorla?.()
+}
+
 const verilerYenileniyor = ref(false)
 
 const verileriYenile = async () => {
@@ -421,6 +500,15 @@ onMounted(async () => {
   ustalariYukle()
   window.addEventListener('usta-cikis-yapildi', disaridanCikisYap)
 
+  // Bilgi şeridi zamanlayıcıları
+  saatTimer = setInterval(() => { simdikiZaman.value = new Date() }, 1000)
+  tickerTimer = setInterval(() => {
+    const adet = tickerItems.value.length
+    if (adet > 0) tickerIndex.value = (tickerIndex.value + 1) % adet
+  }, 5000)
+  dovizYukle()
+  kurTimer = setInterval(dovizYukle, 30 * 60 * 1000)
+
   let autoStartPhone = false
   if (window.api?.ayarlariGetir) {
     try {
@@ -464,6 +552,11 @@ onMounted(async () => {
     onUnmounted(unbind)
   }
 
+  if (window.api?.onGunSonuHatirlatma) {
+    const unbindGunSonu = window.api.onGunSonuHatirlatma(gunSonuHatirlatmasiGeldi)
+    onUnmounted(unbindGunSonu)
+  }
+
   if (window.api?.telefonErisimiDurumGetir) {
     try {
       const res = await window.api.telefonErisimiDurumGetir()
@@ -491,12 +584,48 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('usta-cikis-yapildi', disaridanCikisYap)
+  if (saatTimer) clearInterval(saatTimer)
+  if (tickerTimer) clearInterval(tickerTimer)
+  if (kurTimer) clearInterval(kurTimer)
 })
 </script>
 
 <template>
   <Toast />
   <ConfirmDialog />
+
+  <!-- Çıkışta Gün Sonu Hatırlatması -->
+  <Dialog
+    v-model:visible="gunSonuHatirlatmaAcik"
+    header="Gün Sonu Yapılmadı"
+    modal
+    :closable="true"
+    :style="{ width: '400px' }"
+  >
+    <div class="gunsonu-reminder-body">
+      <i class="pi pi-lock-open gunsonu-reminder-icon"></i>
+      <p>
+        Bugün için <strong>gün sonu kapanışı yapılmadı</strong> ve gün içinde
+        kayıtlı hareketler var. Kasayı sayıp günü kapatmadan çıkmak üzeresiniz.
+      </p>
+    </div>
+
+    <template #footer>
+      <Button
+        label="Kapatmadan Çık"
+        icon="pi pi-sign-out"
+        severity="secondary"
+        text
+        @click="kapatmadanCik"
+      />
+      <Button
+        label="Gün Sonu'na Git"
+        icon="pi pi-lock"
+        severity="warn"
+        @click="gunSonunaGitVeKapat"
+      />
+    </template>
+  </Dialog>
 
   <div class="custom-titlebar" @dblclick="pencereBuyutKucult">
     <div class="custom-titlebar-left">
@@ -691,7 +820,7 @@ onUnmounted(() => {
         <div class="nav-group">
           <div class="nav-group-label">Finans &amp; Raporlar</div>
           <a
-v-for="item in menuItems.slice(6, 8)"
+v-for="item in menuItems.slice(6, 9)"
             :key="item.label"
             class="nav-item"
             :class="{ active: $route.path === item.path }"
@@ -704,6 +833,19 @@ v-for="item in menuItems.slice(6, 8)"
         </div>
 
 <div class="nav-group nav-group-bottom">
+  <!-- Bilgi Şeridi: saat / tarih / döviz döngüsü -->
+  <div v-if="aktifTickerItem" class="ticker-box" title="Kurlar TCMB'den alınır, 30 dakikada bir yenilenir">
+    <Transition name="ticker-slide" mode="out-in">
+      <div :key="aktifTickerItem.label" class="ticker-item">
+        <i :class="aktifTickerItem.icon" class="ticker-icon"></i>
+        <div class="ticker-texts">
+          <span class="ticker-label">{{ aktifTickerItem.label }}</span>
+          <strong class="ticker-value">{{ aktifTickerItem.value }}</strong>
+        </div>
+      </div>
+    </Transition>
+  </div>
+
   <!-- Active Master -->
   <div class="active-master-box" :class="{ 'admin-mode-box': aktifUsta?.role === 'admin' }">
     <div class="master-avatar" :class="{ 'admin-avatar': aktifUsta?.role === 'admin' }">
@@ -720,12 +862,12 @@ v-for="item in menuItems.slice(6, 8)"
 
   <a
     class="nav-item"
-    :class="{ active: $route.path === menuItems[8].path }"
-    @click.prevent="menuItems[8].command()"
+    :class="{ active: $route.path === menuItems[9].path }"
+    @click.prevent="menuItems[9].command()"
     href="#"
   >
-    <i :class="menuItems[8].icon" class="nav-icon"></i>
-    <span>{{ menuItems[8].label }}</span>
+    <i :class="menuItems[9].icon" class="nav-icon"></i>
+    <span>{{ menuItems[9].label }}</span>
   </a>
 </div>
       </nav>
@@ -1810,5 +1952,103 @@ v-for="item in menuItems.slice(6, 8)"
 .refresh-btn-titlebar:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.gunsonu-reminder-body {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.gunsonu-reminder-body p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+
+.gunsonu-reminder-icon {
+  font-size: 22px;
+  color: #f59e0b;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Bilgi Şeridi (saat / tarih / döviz) ─────────── */
+.ticker-box {
+  border: 1px solid var(--border-color);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 7px 12px;
+  margin-bottom: 6px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  user-select: none;
+}
+
+.ticker-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
+.ticker-icon {
+  font-size: 14px;
+  color: var(--accent-color, #38bdf8);
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+}
+
+.ticker-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.ticker-label {
+  font-size: 9.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ticker-value {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-title);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ticker-slide-enter-active,
+.ticker-slide-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.ticker-slide-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.ticker-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+:global(html[data-theme="light"]) .ticker-box {
+  background: #f8fafc;
 }
 </style>

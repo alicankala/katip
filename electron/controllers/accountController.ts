@@ -1,8 +1,32 @@
 import db from '../database.js'
+import { kapaliGunKontrol } from './closingController.js'
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
   return String(err)
+}
+
+const TARIH_FORMATI = /^\d{4}-\d{2}-\d{2}$/
+
+// Gider "Ödendi" ise ödeme tarihi ve yöntemi zorunludur; aksi halde gider hiçbir
+// günün gün sonu çıkışında görünmez. "Ödenmedi" durumunda bu alanlar temizlenir.
+function giderOdemeAlanlariniDogrula(gider: any): { payment_date: string | null; payment_method: string | null } {
+  const status = String(gider.status || 'Ödenmedi').trim()
+  const paymentDate = gider.payment_date ? String(gider.payment_date).trim() : ''
+  const paymentMethod = gider.payment_method ? String(gider.payment_method).trim() : ''
+
+  if (status !== 'Ödendi') {
+    return { payment_date: null, payment_method: null }
+  }
+
+  if (!paymentDate || !TARIH_FORMATI.test(paymentDate)) {
+    throw new Error('"Ödendi" durumundaki gider için geçerli bir ödeme tarihi girilmelidir.')
+  }
+  if (!paymentMethod) {
+    throw new Error('"Ödendi" durumundaki gider için ödeme yöntemi seçilmelidir.')
+  }
+
+  return { payment_date: paymentDate, payment_method: paymentMethod }
 }
 
 export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (...args: any[]) => any) => void) {
@@ -239,6 +263,8 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
         throw new Error('Ödeme yöntemi seçilmelidir.')
       }
 
+      kapaliGunKontrol(date)
+
       const stmt = db.prepare(`
         INSERT INTO account_payments (
           current_account_id, transaction_id, date, amount, payment_method, description
@@ -259,6 +285,11 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
       const paymentId = Number(id)
       if (!paymentId) {
         throw new Error('Silinecek ödeme kaydı bulunamadı.')
+      }
+
+      const mevcutOdeme = db.prepare('SELECT date FROM account_payments WHERE id = ?').get(paymentId) as any
+      if (mevcutOdeme) {
+        kapaliGunKontrol(mevcutOdeme.date)
       }
 
       db.prepare(`
@@ -298,6 +329,9 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
         throw new Error('Gider tarihi boş bırakılamaz.')
       }
 
+      const odemeAlanlari = giderOdemeAlanlariniDogrula(gider)
+      kapaliGunKontrol(odemeAlanlari.payment_date)
+
       db.prepare(`
         INSERT INTO general_expenses (
           expense_type, company_name, period, expense_date, due_date, amount, status, payment_date, payment_method, note
@@ -310,8 +344,8 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
         due_date ? String(due_date).trim() : null,
         Number(amount) || 0,
         status || 'Ödenmedi',
-        payment_date ? String(payment_date).trim() : null,
-        payment_method ? String(payment_method).trim() : null,
+        odemeAlanlari.payment_date,
+        odemeAlanlari.payment_method,
         note ? String(note).trim() : null
       )
       return { success: true }
@@ -336,6 +370,16 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
         throw new Error('Gider tarihi boş bırakılamaz.')
       }
 
+      const odemeAlanlari = giderOdemeAlanlariniDogrula(gider)
+
+      // Hem eski hem yeni ödeme tarihi kapatılmış bir güne denk gelmemeli
+      // (kapalı günden ödeme çıkarmak da eklemek kadar tutarsızlık yaratır)
+      const mevcutGider = db.prepare('SELECT status, payment_date FROM general_expenses WHERE id = ?').get(Number(id)) as any
+      if (mevcutGider?.status === 'Ödendi') {
+        kapaliGunKontrol(mevcutGider.payment_date)
+      }
+      kapaliGunKontrol(odemeAlanlari.payment_date)
+
       db.prepare(`
         UPDATE general_expenses
         SET expense_type = ?,
@@ -357,8 +401,8 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
         due_date ? String(due_date).trim() : null,
         Number(amount) || 0,
         status || 'Ödenmedi',
-        payment_date ? String(payment_date).trim() : null,
-        payment_method ? String(payment_method).trim() : null,
+        odemeAlanlari.payment_date,
+        odemeAlanlari.payment_method,
         note ? String(note).trim() : null,
         Number(id)
       )
@@ -375,6 +419,11 @@ export function registerAccountHandlers(kanalEkle: (kanal: string, fonksiyon: (.
       const expenseId = Number(id)
       if (!expenseId) {
         throw new Error('Silinecek gider kaydı bulunamadı.')
+      }
+
+      const mevcutGider = db.prepare('SELECT status, payment_date FROM general_expenses WHERE id = ?').get(expenseId) as any
+      if (mevcutGider?.status === 'Ödendi') {
+        kapaliGunKontrol(mevcutGider.payment_date)
       }
 
       db.prepare(`

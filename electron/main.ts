@@ -20,6 +20,8 @@ import { registerAccountHandlers } from './controllers/accountController.js'
 import { registerWorkOrderHandlers } from './controllers/workOrderController.js'
 import { registerPhoneHandlers } from './controllers/phoneController.js'
 import { registerSettingsHandlers } from './controllers/settingsController.js'
+import { registerClosingHandlers, gunSonuHatirlatmaGerekliMi } from './controllers/closingController.js'
+import { registerMarketHandlers } from './controllers/marketController.js'
 import {
   registerBackupHandlers,
   otomatikYedekZamanlayicisiniBaslat,
@@ -40,6 +42,9 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   : RENDERER_DIST
 
 let win: BrowserWindow | null = null
+
+// Kullanıcı hatırlatmaya rağmen "Kapatmadan Çık" derse bir daha sorulmaz
+let gunSonuHatirlatmasiAtlandi = false
 
 function createWindow() {
   win = new BrowserWindow({
@@ -77,6 +82,20 @@ function createWindow() {
   win.once('ready-to-show', () => {
     win?.show()
     win?.maximize()
+  })
+
+  // Pencere kapatılırken gün sonu yapılmamışsa (ve gün boş değilse) önce hatırlat;
+  // renderer diyalogdan "Kapatmadan Çık" derse pencere-kapat-zorla ile devam edilir.
+  win.on('close', (event) => {
+    if (gunSonuHatirlatmasiAtlandi || isQuitting) return
+    try {
+      if (gunSonuHatirlatmaGerekliMi()) {
+        event.preventDefault()
+        win?.webContents.send('gun-sonu-hatirlatma')
+      }
+    } catch (error) {
+      console.error('[GünSonu] Çıkış hatırlatması kontrolü hatası:', error)
+    }
   })
 
   if (VITE_DEV_SERVER_URL) {
@@ -124,6 +143,12 @@ function ipcKopruleriniKur() {
     return { success: true, isMaximized: win?.isMaximized() ?? false }
   })
 
+  kanalEkle('pencere-kapat-zorla', () => {
+    gunSonuHatirlatmasiAtlandi = true
+    win?.close()
+    return { success: true }
+  })
+
   // Tüm IPC controller kaydı
   registerMasterHandlers(kanalEkle)
   registerCustomerHandlers(kanalEkle)
@@ -133,6 +158,8 @@ function ipcKopruleriniKur() {
   registerAccountHandlers(kanalEkle)
   registerPhoneHandlers(kanalEkle)
   registerSettingsHandlers(kanalEkle)
+  registerClosingHandlers(kanalEkle)
+  registerMarketHandlers(kanalEkle)
   registerBackupHandlers(kanalEkle, () => win)
 }
 

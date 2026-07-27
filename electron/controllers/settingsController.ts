@@ -29,6 +29,14 @@ function setAdminPinHash(hash: string): void {
   `).run(ADMIN_PIN_SETTING_KEY, hash)
 }
 
+// Diğer controller'ların (örn. gün sonu yeniden açma) admin PIN doğrulaması
+// için tek nokta; hash okuma mantığı bu dosyada kalır.
+export function verifyAdminPin(pin: string): boolean {
+  const girilenPin = String(pin || '').trim()
+  if (!/^\d{4}$/.test(girilenPin)) return false
+  return verifyPin(girilenPin, getAdminPinHash())
+}
+
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message
   return String(err)

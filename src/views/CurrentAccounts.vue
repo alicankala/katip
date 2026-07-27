@@ -599,6 +599,18 @@ const resetGiderForm = () => {
   }
 }
 
+// "Ödendi" seçilince ödeme tarihi/yöntemi alanları zorunlu olur; boşsa makul
+// varsayılanlarla doldurulur. "Ödenmedi"ye dönülürse alanlar temizlenir.
+watch(() => giderForm.value.status, (yeniDurum) => {
+  if (yeniDurum === 'Ödendi') {
+    if (!giderForm.value.payment_date) giderForm.value.payment_date = bugununTarihi()
+    if (!giderForm.value.payment_method) giderForm.value.payment_method = 'Nakit'
+  } else {
+    giderForm.value.payment_date = ''
+    giderForm.value.payment_method = ''
+  }
+})
+
 const giderEkleDialogAc = () => {
   isEditingGider.value = false
   resetGiderForm()
@@ -615,6 +627,17 @@ const giderKaydet = async () => {
   if (!giderForm.value.expense_type || !giderForm.value.amount || Number(giderForm.value.amount) <= 0) {
     uyariMesaji('Gider türü ve geçerli bir tutar girilmelidir.')
     return
+  }
+
+  if (giderForm.value.status === 'Ödendi') {
+    if (!giderForm.value.payment_date) {
+      uyariMesaji('"Ödendi" durumundaki gider için ödeme tarihi girilmelidir.')
+      return
+    }
+    if (!giderForm.value.payment_method) {
+      uyariMesaji('"Ödendi" durumundaki gider için ödeme yöntemi seçilmelidir.')
+      return
+    }
   }
 
   try {
@@ -1522,6 +1545,16 @@ onUnmounted(() => {
         <div class="form-group">
           <label>Ödeme Durumu</label>
           <Dropdown v-model="giderForm.status" :options="['Ödenmedi', 'Ödendi']" style="width: 100%;" />
+        </div>
+
+        <div v-if="giderForm.status === 'Ödendi'" class="form-group">
+          <label>Ödeme Tarihi <span class="zorunlu-alan">*</span></label>
+          <InputText type="date" v-model="giderForm.payment_date" style="width: 100%;" />
+        </div>
+
+        <div v-if="giderForm.status === 'Ödendi'" class="form-group">
+          <label>Ödeme Yöntemi <span class="zorunlu-alan">*</span></label>
+          <Dropdown v-model="giderForm.payment_method" :options="['Nakit', 'Kart', 'Havale / EFT', 'Diğer']" style="width: 100%;" />
         </div>
 
         <div class="form-group">

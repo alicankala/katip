@@ -106,5 +106,14 @@ veritabaniBilgileriGetir: () => Promise<any>
     telefonOturumlariGetir: () => Promise<{ success: boolean; sessions?: any[]; error?: string }>
     telefonOturumKapat: (token: string) => Promise<{ success: boolean; error?: string }>
     telefonTumOturumlariKapat: () => Promise<{ success: boolean; error?: string }>
+
+    // Gün Sonu (Günlük Kapanış)
+    gunSonuOzetiGetir: (tarih?: string) => Promise<{ success: boolean; ozet?: any; kapanis?: any; error?: string }>
+    gunSonuKapat: (veri: { closing_date: string; counted_cash?: number | null; note?: string }) => Promise<{ success: boolean; id?: number; kapanis?: any; error?: string }>
+    gunSonuKapanislariGetir: (limit?: number) => Promise<{ success: boolean; kapanislar?: any[]; error?: string }>
+    gunSonuKapanisAc: (veri: { closing_date: string; admin_pin: string }) => Promise<{ success: boolean; error?: string }>
+    pencereKapatZorla: () => Promise<{ success: boolean }>
+    dovizKurlariGetir: () => Promise<{ success: boolean; kurlar?: Record<string, { alis: number | null; satis: number | null }>; kaynakTarihi?: string | null; guncellendi?: string; cached?: boolean; stale?: boolean; error?: string }>
+    onGunSonuHatirlatma: (callback: () => void) => () => void
   }
 }

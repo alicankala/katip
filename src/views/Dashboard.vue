@@ -45,6 +45,9 @@ const uzunSureAcikIsEmirleri = computed(() => {
     .sort((a, b) => b.gecenGun - a.gecenGun)
 })
 
+const gunSonuOzet = ref(null)
+const gunSonuKapanis = ref(null)
+
 const secereVerileri = ref([])
 const dashSeciliFotograf = ref(null)
 const gecmisAramaMetni = ref('')
@@ -60,6 +63,18 @@ const verileriYukle = async () => {
       istatistikler.value = {
         ...istatistikler.value,
         ...istatistikRes.veriler
+      }
+    }
+
+    if (window.api.gunSonuOzetiGetir) {
+      try {
+        const gunSonuRes = await window.api.gunSonuOzetiGetir()
+        if (gunSonuRes?.success) {
+          gunSonuOzet.value = gunSonuRes.ozet || null
+          gunSonuKapanis.value = gunSonuRes.kapanis || null
+        }
+      } catch (e) {
+        console.error('Gün sonu durumu yüklenemedi:', e)
       }
     }
 
@@ -305,6 +320,10 @@ const isEmirlerineGit = () => {
   router.push('/work-orders')
 }
 
+const gunSonunaGit = () => {
+  router.push('/daily-closing')
+}
+
 onMounted(() => {
   verileriYukle()
   window.addEventListener('click', closeSuggestionsOnOutsideClick)
@@ -410,6 +429,50 @@ onUnmounted(() => {
           <i class="pi pi-box stat-card-icon"></i>
         </div>
       </div>
+    </div>
+
+    <!-- ── Gün Sonu Durum Bandı ────────────────────── -->
+    <div
+      v-if="gunSonuOzet"
+      class="daily-closing-strip"
+      :class="gunSonuKapanis ? 'is-closed' : 'is-open'"
+      role="button"
+      tabindex="0"
+      title="Gün Sonu ekranına git"
+      @click="gunSonunaGit"
+      @keyup.enter="gunSonunaGit"
+    >
+      <i :class="['pi', gunSonuKapanis ? 'pi-lock' : 'pi-lock-open', 'strip-icon']"></i>
+
+      <div class="strip-body">
+        <template v-if="gunSonuKapanis">
+          <strong>Bugün kapatıldı</strong>
+          <span class="strip-detail">
+            Kapatan: {{ gunSonuKapanis.master_name || gunSonuKapanis.closed_by_name || '-' }}
+            <template v-if="gunSonuKapanis.cash_difference !== null">
+              · Kasa Farkı: {{ tlFormatla(gunSonuKapanis.cash_difference) }}
+            </template>
+          </span>
+        </template>
+        <template v-else>
+          <strong>Bugün henüz kapatılmadı</strong>
+          <span class="strip-detail">
+            Tahsilat: {{ tlFormatla(gunSonuOzet.toplamTahsilat) }}
+            · Beklenen Nakit: {{ tlFormatla(gunSonuOzet.beklenenNakit) }}
+          </span>
+        </template>
+      </div>
+
+      <Button
+        v-if="!gunSonuKapanis"
+        label="Günü Kapat"
+        icon="pi pi-lock"
+        size="small"
+        severity="warn"
+        outlined
+        @click.stop="gunSonunaGit"
+      />
+      <i v-else class="pi pi-check-circle strip-ok-icon"></i>
     </div>
 
     <!-- ── Content Grid ───────────────────────────── -->
@@ -1446,5 +1509,68 @@ onUnmounted(() => {
 
 :global(html[data-theme="light"] .suggestion-row:hover) {
   background: #f1f5f9 !important;
+}
+/* ── Gün Sonu Durum Bandı ─────────────────────── */
+.daily-closing-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-panel);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.daily-closing-strip:hover {
+  transform: translateY(-1px);
+}
+
+.daily-closing-strip.is-open {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.05);
+}
+
+.daily-closing-strip.is-closed {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.strip-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.is-open .strip-icon {
+  color: #f59e0b;
+}
+
+.is-closed .strip-icon {
+  color: #10b981;
+}
+
+.strip-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.strip-body strong {
+  font-size: 13.5px;
+  color: var(--text-title);
+}
+
+.strip-detail {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.strip-ok-icon {
+  color: #10b981;
+  font-size: 18px;
+  flex-shrink: 0;
 }
 </style>

@@ -13,6 +13,14 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.removeListener('window-maximized-state', handler)
     }
   },
+  pencereKapatZorla: () => ipcRenderer.invoke('pencere-kapat-zorla'),
+  onGunSonuHatirlatma: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('gun-sonu-hatirlatma', handler)
+    return () => {
+      ipcRenderer.removeListener('gun-sonu-hatirlatma', handler)
+    }
+  },
     // Ustalar / Giriş
   ustalariGetir: () => ipcRenderer.invoke('ustalari-getir'),
   ustaGirisYap: (giris) => ipcRenderer.invoke('usta-giris-yap', giris),
@@ -88,6 +96,15 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   giderEkle: (gider) => ipcRenderer.invoke('gider-ekle', gider),
   giderGuncelle: (gider) => ipcRenderer.invoke('gider-guncelle', gider),
   giderSil: (id) => ipcRenderer.invoke('gider-sil', id),
+
+  // Gün Sonu (Günlük Kapanış)
+  gunSonuOzetiGetir: (tarih?: string) => ipcRenderer.invoke('gun-sonu-ozeti-getir', tarih),
+  gunSonuKapat: (veri) => ipcRenderer.invoke('gun-sonu-kapat', veri),
+  gunSonuKapanislariGetir: (limit?: number) => ipcRenderer.invoke('gun-sonu-kapanislari-getir', limit),
+  gunSonuKapanisAc: (veri) => ipcRenderer.invoke('gun-sonu-kapanis-ac', veri),
+
+  // Döviz Kurları (bilgi şeridi)
+  dovizKurlariGetir: () => ipcRenderer.invoke('doviz-kurlari-getir'),
 
   // Telefon Erişimi
   telefonErisimiBaslat: (port) => ipcRenderer.invoke('telefon-erisimi-baslat', port),

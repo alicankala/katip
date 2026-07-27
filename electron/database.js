@@ -575,6 +575,47 @@ migrationCalistir(27, () => {
   `)
 })
 
+migrationCalistir(28, () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS daily_closings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      closing_date TEXT NOT NULL UNIQUE,
+      total_collected REAL NOT NULL DEFAULT 0,
+      cash_total REAL NOT NULL DEFAULT 0,
+      card_total REAL NOT NULL DEFAULT 0,
+      transfer_total REAL NOT NULL DEFAULT 0,
+      other_total REAL NOT NULL DEFAULT 0,
+      total_out REAL NOT NULL DEFAULT 0,
+      expected_cash REAL NOT NULL DEFAULT 0,
+      counted_cash REAL,
+      cash_difference REAL,
+      opened_wo_count INTEGER NOT NULL DEFAULT 0,
+      closed_wo_count INTEGER NOT NULL DEFAULT 0,
+      open_wo_count INTEGER NOT NULL DEFAULT 0,
+      note TEXT,
+      closed_by_master_id INTEGER,
+      closed_by_name TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(closed_by_master_id) REFERENCES masters(id)
+    );
+  `)
+})
+
+// Onarım: "Ödendi" işaretlenmiş ama ödeme tarihi/yöntemi boş bırakılmış giderler
+// hiçbir günün gün sonu çıkışında görünmüyordu. Tarih gider tarihinden alınır,
+// yöntem bilinmediği için 'Diğer' yazılır. Yeni kayıtlarda bu alanlar artık zorunlu.
+migrationCalistir(29, () => {
+  db.exec(`
+    UPDATE general_expenses
+    SET payment_date = expense_date
+    WHERE status = 'Ödendi' AND (payment_date IS NULL OR TRIM(payment_date) = '');
+
+    UPDATE general_expenses
+    SET payment_method = 'Diğer'
+    WHERE status = 'Ödendi' AND (payment_method IS NULL OR TRIM(payment_method) = '');
+  `)
+})
+
   // Index'ler migration'lardan SONRA oluşturulmalı: bazı sütun ve tablolar
   // (ör. customers.is_active, work_order_payments) ancak migration'larla ekleniyor.
   db.exec(`

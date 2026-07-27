@@ -6,6 +6,7 @@ import path from 'node:path'
 import { app } from 'electron'
 import db from './database.js'
 import { hashPin, verifyPin } from './security'
+import { gunSonuVerisiHesapla, bugununTarihi, kapaliGunKontrol } from './controllers/closingController.js'
 import { isRestoreInProgress } from './restoreState.js'
 
 // PrimeIcons artık harici bir CDN'den (unpkg) değil, uygulamayla birlikte gelen
@@ -1290,6 +1291,29 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       </div>
     </div>
 
+    <!-- Gun Sonu Ozet Karti (salt okunur) -->
+    <div id="daily-summary-card" class="card" style="padding: 14px; margin-bottom: 16px; display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+        <span style="font-weight: 700; font-size: 14.5px;"><i class="pi pi-wallet" style="color: var(--accent);"></i> Bugun (Gun Sonu)</span>
+        <span id="ds-status" style="font-size: 11.5px; font-weight: 700; padding: 3px 10px; border-radius: 99px;"></span>
+      </div>
+      <div style="display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 13px; color: var(--text-secondary);">
+        <div>Toplam Tahsilat</div><div id="ds-total" style="text-align: right; font-weight: 700; color: var(--text-primary);">-</div>
+        <div style="padding-left: 10px;">Nakit</div><div id="ds-cash" style="text-align: right;">-</div>
+        <div style="padding-left: 10px;">Kart</div><div id="ds-card" style="text-align: right;">-</div>
+        <div style="padding-left: 10px;">Havale / EFT</div><div id="ds-transfer" style="text-align: right;">-</div>
+        <div>Cikislar (Gider + Tedarikci)</div><div id="ds-out" style="text-align: right;">-</div>
+        <div style="font-weight: 700; color: var(--text-primary);">Beklenen Nakit</div><div id="ds-expected" style="text-align: right; font-weight: 700; color: var(--text-primary);">-</div>
+        <div>Is Emri (Acilan / Kapanan)</div><div id="ds-wo" style="text-align: right;">-</div>
+      </div>
+    </div>
+
+    <!-- Kritik Stok Listesi -->
+    <div id="critical-parts-wrap" style="display: none; margin-bottom: 16px;">
+      <div class="section-title" style="color: #f59e0b;"><i class="pi pi-exclamation-triangle"></i> Kritik Stok (<span id="critical-count">0</span>)</div>
+      <div id="critical-parts-list" class="card" style="padding: 4px 14px;"></div>
+    </div>
+
     <!-- Tabs Selector -->
     <div class="tabs-container" style="display: flex; background-color: var(--bg-card); border-radius: 10px; padding: 4px; margin-bottom: 16px; border: 1px solid var(--border);">
       <button id="tab-open" class="tab-btn active" style="flex: 1; height: 36px; border: none; border-radius: 8px; font-weight: 600; font-size: 13.5px; cursor: pointer; transition: all 0.15s ease; background: var(--bg-active); color: var(--accent);">
@@ -1516,6 +1540,56 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
 
         <button id="reception-save-btn" class="btn btn-primary" style="margin-top: 10px;">
           <i class="pi pi-save"></i> Servis Kabulunu Kaydet
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- SCREEN 4.5: COMPLETE ORDER + PAYMENT -->
+  <div id="screen-complete-order" class="screen">
+    <div class="header" style="border-bottom: none; margin-bottom: 10px;">
+      <h2 style="font-size: 18px; font-weight: 700;">Isi Tamamla</h2>
+      <button id="complete-back-btn" class="btn btn-secondary" style="width: auto; height: 32px; padding: 0 12px; font-size: 13px;">
+        <i class="pi pi-arrow-left"></i> Geri Don
+      </button>
+    </div>
+
+    <div class="card">
+      <div style="display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 14px; margin-bottom: 16px; color: var(--text-secondary);">
+        <div>Toplam Tutar</div><div id="co-total" style="text-align: right; font-weight: 600; color: var(--text-primary);">-</div>
+        <div>Onceden Tahsil Edilen</div><div id="co-paid" style="text-align: right;">-</div>
+        <div style="font-weight: 700; color: var(--text-primary);">Kalan Borc</div><div id="co-remaining" style="text-align: right; font-weight: 700; color: #f59e0b;">-</div>
+      </div>
+
+      <div id="co-error" class="error-msg"></div>
+
+      <form id="co-form" onsubmit="return false;">
+        <div class="form-group">
+          <label>Odeme Durumu</label>
+          <select id="co-option" style="width: 100%; height: 44px; padding: 0 12px; border-radius: 10px; background-color: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); font-size: 15px;">
+            <option value="full">Tam Odeme (kalanin tamami alindi)</option>
+            <option value="partial">Kismi Odeme</option>
+            <option value="none">Odeme Alinmadi</option>
+          </select>
+        </div>
+
+        <div id="co-amount-wrap" class="form-group">
+          <label>Alinan Tutar (TL)</label>
+          <input id="co-amount" type="number" step="0.01" inputmode="decimal" placeholder="0.00">
+        </div>
+
+        <div id="co-method-wrap" class="form-group">
+          <label>Odeme Yontemi</label>
+          <select id="co-method" style="width: 100%; height: 44px; padding: 0 12px; border-radius: 10px; background-color: var(--bg-primary); border: 1px solid var(--border); color: var(--text-primary); font-size: 15px;">
+            <option value="Nakit">Nakit</option>
+            <option value="Kart">Kart</option>
+            <option value="Havale / EFT">Havale / EFT</option>
+            <option value="Diğer">Diger</option>
+          </select>
+        </div>
+
+        <button id="co-save-btn" class="btn btn-primary" style="margin-top: 10px; height: 44px; background-color: var(--success); color: #000; border: none; font-weight: 600;">
+          <i class="pi pi-check-circle"></i> Tamamla ve Kaydet
         </button>
       </form>
     </div>
@@ -1836,6 +1910,7 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       reception: document.getElementById('screen-new-reception'),
       addLabor: document.getElementById('screen-add-labor'),
       addPart: document.getElementById('screen-add-part'),
+      completeOrder: document.getElementById('screen-complete-order'),
       customerHistory: document.getElementById('screen-customer-history'),
       historyDetail: document.getElementById('screen-history-detail'),
       historyWoDetail: document.getElementById('screen-history-wo-detail')
@@ -2159,8 +2234,76 @@ async function loadMasters(selectedMasterId) {
         document.getElementById('stat-parts-sub').textContent = 'Kritik: ' + (stats.dusukStok || 0) + '  Biten: ' + (stats.bitenStok || 0);
 
         await loadTabOrders();
+        loadDailySummary();
+        loadCriticalParts();
       } catch (e) {
         console.error('Yukleme hatasi:', e);
+      }
+    }
+
+    async function loadDailySummary() {
+      try {
+        const res = await authFetch('/api/daily-summary');
+        const data = await res.json();
+        if (!data || !data.success) return;
+
+        document.getElementById('ds-total').textContent = tlFormat(data.toplamTahsilat) + ' (' + (data.tahsilatSayisi || 0) + ' islem)';
+        document.getElementById('ds-cash').textContent = tlFormat(data.yontemTahsilat && data.yontemTahsilat.nakit);
+        document.getElementById('ds-card').textContent = tlFormat(data.yontemTahsilat && data.yontemTahsilat.kart);
+        document.getElementById('ds-transfer').textContent = tlFormat(data.yontemTahsilat && data.yontemTahsilat.havale);
+        document.getElementById('ds-out').textContent = tlFormat(data.toplamCikis);
+        document.getElementById('ds-expected').textContent = tlFormat(data.beklenenNakit);
+        document.getElementById('ds-wo').textContent = (data.isEmri ? data.isEmri.acilan : 0) + ' / ' + (data.isEmri ? data.isEmri.kapanan : 0);
+
+        const st = document.getElementById('ds-status');
+        if (data.kapatildi) {
+          st.textContent = 'Gun Kapatildi';
+          st.style.background = 'rgba(16, 185, 129, 0.15)';
+          st.style.color = '#34d399';
+        } else {
+          st.textContent = 'Gun Acik';
+          st.style.background = 'rgba(245, 158, 11, 0.15)';
+          st.style.color = '#f59e0b';
+        }
+
+        document.getElementById('daily-summary-card').style.display = 'block';
+      } catch (e) {
+        console.error('Gun sonu ozeti yuklenemedi:', e);
+      }
+    }
+
+    async function loadCriticalParts() {
+      try {
+        const res = await authFetch('/api/parts/critical');
+        const data = await res.json();
+        if (!data || !data.success) return;
+
+        const wrap = document.getElementById('critical-parts-wrap');
+        const list = document.getElementById('critical-parts-list');
+        const parcalar = data.parcalar || [];
+
+        if (parcalar.length === 0) {
+          wrap.style.display = 'none';
+          return;
+        }
+
+        document.getElementById('critical-count').textContent = parcalar.length;
+        list.innerHTML = parcalar.map(function(p) {
+          const stok = Number(p.stock) || 0;
+          const renk = stok <= 0 ? '#f87171' : '#f59e0b';
+          return '<div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px;">' +
+            '<div style="min-width: 0;">' +
+              '<div style="font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + escapeHtml(p.name || p.code || '-') + '</div>' +
+              '<div style="font-size: 11.5px; color: var(--text-secondary);">' + escapeHtml(p.code || '') + (p.brand ? ' - ' + escapeHtml(p.brand) : '') + '</div>' +
+            '</div>' +
+            '<div style="flex-shrink: 0; font-weight: 700; color: ' + renk + ';">' + stok + ' ' + escapeHtml(p.unit || 'Adet') + '</div>' +
+          '</div>';
+        }).join('');
+        if (list.lastElementChild) list.lastElementChild.style.borderBottom = 'none';
+
+        wrap.style.display = 'block';
+      } catch (e) {
+        console.error('Kritik stok yuklenemedi:', e);
       }
     }
 
@@ -2560,34 +2703,143 @@ resolve(dataUrl);
       loadDashboard();
     });
 
+    // ─── COMPLETE + PAYMENT FLOW ───
+    let completeCtx = { orderId: null, kalanBorc: 0 };
+
+    async function isEmriTamamlaGonder(paymentOption, amount, method) {
+      const res = await authFetch('/api/work-orders/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          work_order_id: completeCtx.orderId,
+          master_id: activeUser.id,
+          payment_option: paymentOption,
+          amount: amount,
+          payment_method: method
+        })
+      });
+      return await res.json();
+    }
+
+    function coOptionGuncelle() {
+      const opt = document.getElementById('co-option').value;
+      const amountWrap = document.getElementById('co-amount-wrap');
+      const methodWrap = document.getElementById('co-method-wrap');
+      const amountInput = document.getElementById('co-amount');
+
+      if (opt === 'none') {
+        amountWrap.style.display = 'none';
+        methodWrap.style.display = 'none';
+      } else if (opt === 'full') {
+        amountWrap.style.display = 'block';
+        methodWrap.style.display = 'block';
+        amountInput.value = completeCtx.kalanBorc.toFixed(2);
+        amountInput.disabled = true;
+      } else {
+        amountWrap.style.display = 'block';
+        methodWrap.style.display = 'block';
+        amountInput.value = '';
+        amountInput.disabled = false;
+      }
+    }
+
+    document.getElementById('co-option').addEventListener('change', coOptionGuncelle);
+
+    document.getElementById('complete-back-btn').addEventListener('click', () => {
+      showScreen('details');
+    });
+
     document.getElementById('complete-order-btn').addEventListener('click', async () => {
       const curId = document.getElementById('detail-back-btn').dataset.orderId;
       if (!activeUser || !activeUser.id) {
         alert('Kapatacak usta bilgisi bulunamadi. Lutfen cikis yapip tekrar girin.');
         return;
       }
-      const ustaName = activeUser.name || 'Bilinmeyen Usta';
-      if (!confirm('Bu is emrini ' + ustaName + ' adina tamamlandi olarak kapatmak istiyor musunuz?')) {
+
+      completeCtx.orderId = curId;
+
+      let kalanBorc = 0;
+      try {
+        const res = await authFetch('/api/work-orders/payment-summary?work_order_id=' + encodeURIComponent(curId));
+        const data = await res.json();
+        if (data && data.success) {
+          kalanBorc = Number(data.kalan_borc) || 0;
+          document.getElementById('co-total').textContent = tlFormat(data.total_price);
+          document.getElementById('co-paid').textContent = tlFormat(data.toplam_tahsilat);
+          document.getElementById('co-remaining').textContent = tlFormat(data.kalan_borc);
+        }
+      } catch (e) {
+        console.error('Odeme ozeti alinamadi:', e);
+      }
+
+      completeCtx.kalanBorc = kalanBorc;
+
+      // Kalan borc yoksa odeme adimina gerek yok: eski hizli onay akisi
+      if (kalanBorc <= 0.01) {
+        const ustaName = activeUser.name || 'Bilinmeyen Usta';
+        if (!confirm('Bu is emrini ' + ustaName + ' adina tamamlandi olarak kapatmak istiyor musunuz?')) {
+          return;
+        }
+        try {
+          const result = await isEmriTamamlaGonder('none', 0, 'Nakit');
+          if (result.success) {
+            showScreen('dashboard');
+            loadDashboard();
+          } else {
+            alert(result.error || 'Is emri kapatilamadi.');
+          }
+        } catch (e) {
+          alert('Sunucuyla baglanti kurulamadi.');
+        }
         return;
       }
+
+      // Kalan borc var: odeme ekranini ac
+      document.getElementById('co-error').textContent = '';
+      document.getElementById('co-error').style.display = 'none';
+      document.getElementById('co-option').value = 'full';
+      coOptionGuncelle();
+      showScreen('completeOrder');
+    });
+
+    document.getElementById('co-save-btn').addEventListener('click', async () => {
+      const errorBox = document.getElementById('co-error');
+      errorBox.style.display = 'none';
+
+      const opt = document.getElementById('co-option').value;
+      const method = document.getElementById('co-method').value;
+      let amount = 0;
+
+      if (opt === 'partial') {
+        amount = Number(document.getElementById('co-amount').value) || 0;
+        if (amount <= 0) {
+          errorBox.textContent = 'Kismi odeme icin gecerli bir tutar girin.';
+          errorBox.style.display = 'block';
+          return;
+        }
+        if (amount > completeCtx.kalanBorc + 0.01) {
+          errorBox.textContent = 'Odeme tutari kalan borctan buyuk olamaz.';
+          errorBox.style.display = 'block';
+          return;
+        }
+      }
+
+      const saveBtn = document.getElementById('co-save-btn');
+      saveBtn.disabled = true;
       try {
-        const res = await authFetch('/api/work-orders/complete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            work_order_id: curId,
-            master_id: activeUser.id
-          })
-        });
-        const result = await res.json();
+        const result = await isEmriTamamlaGonder(opt, amount, method);
         if (result.success) {
           showScreen('dashboard');
           loadDashboard();
         } else {
-          alert(result.error || 'Is emri kapatilamadi.');
+          errorBox.textContent = result.error || 'Is emri kapatilamadi.';
+          errorBox.style.display = 'block';
         }
       } catch (e) {
-        alert('Sunucuyla baglanti kurulamadi.');
+        errorBox.textContent = 'Sunucuyla baglanti kurulamadi.';
+        errorBox.style.display = 'block';
+      } finally {
+        saveBtn.disabled = false;
       }
     });
 
@@ -3778,6 +4030,94 @@ document
           return
         }
 
+        // 4.1. API: Gun Sonu Ozeti (salt okunur)
+        if (pathName === '/api/daily-summary') {
+          try {
+            const bugun = bugununTarihi()
+            const ozet = gunSonuVerisiHesapla(bugun)
+            const kapanis = db.prepare(`
+              SELECT closed_by_name, created_at, cash_difference
+              FROM daily_closings
+              WHERE closing_date = ?
+            `).get(bugun) as any
+
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({
+              success: true,
+              tarih: bugun,
+              toplamTahsilat: ozet.toplamTahsilat,
+              tahsilatSayisi: ozet.tahsilatlar.length,
+              toplamCikis: ozet.toplamCikis,
+              yontemTahsilat: ozet.yontemTahsilat,
+              beklenenNakit: ozet.beklenenNakit,
+              isEmri: ozet.isEmri,
+              kapatildi: !!kapanis,
+              kapanis: kapanis || null
+            }))
+          } catch (err: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({ success: false, error: err.message }))
+          }
+          return
+        }
+
+        // 4.2. API: Kritik Stok Listesi
+        if (pathName === '/api/parts/critical') {
+          try {
+            const parcalar = db.prepare(`
+              SELECT id, code, name, brand, stock, unit, critical_stock
+              FROM parts
+              WHERE IFNULL(is_active, 1) = 1
+                AND (
+                  (IFNULL(critical_stock_enabled, 1) = 1 AND IFNULL(stock, 0) <= IFNULL(critical_stock, 5))
+                  OR IFNULL(stock, 0) <= 0
+                )
+              ORDER BY IFNULL(stock, 0) ASC, name ASC
+              LIMIT 50
+            `).all()
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({ success: true, parcalar }))
+          } catch (err: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({ success: false, error: err.message }))
+          }
+          return
+        }
+
+        // 4.3. API: Is Emri Odeme Ozeti (tamamlama ekrani icin kalan borc)
+        if (pathName === '/api/work-orders/payment-summary') {
+          try {
+            const woId = Number(parsedUrl.searchParams.get('work_order_id'))
+            if (!woId) {
+              res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: false, error: 'İş emri seçilmedi.' }))
+              return
+            }
+            const wo = db.prepare('SELECT id, total_price FROM work_orders WHERE id = ?').get(woId) as any
+            if (!wo) {
+              res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ success: false, error: 'İş emri bulunamadı.' }))
+              return
+            }
+            const tahsilat = db.prepare(`
+              SELECT COALESCE(SUM(amount), 0) AS toplam
+              FROM work_order_payments
+              WHERE work_order_id = ? AND IFNULL(is_cancelled, 0) = 0
+            `).get(woId) as any
+
+            const totalPrice = Number(wo.total_price || 0)
+            const toplamTahsilat = Number(tahsilat?.toplam || 0)
+            const kalanBorc = Number((totalPrice - toplamTahsilat).toFixed(2))
+
+            res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({ success: true, total_price: totalPrice, toplam_tahsilat: toplamTahsilat, kalan_borc: kalanBorc }))
+          } catch (err: any) {
+            res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' })
+            res.end(JSON.stringify({ success: false, error: err.message }))
+          }
+          return
+        }
+
         // 4.5. API: Work Order Photos Endpoints
         if (pathName === '/api/work-order-photos' && req.method === 'GET') {
           try {
@@ -4318,14 +4658,73 @@ closed_master.name AS closed_by_master_name,
 
               console.log('[PhoneServer] Kapatan Usta:', masterExists.name)
 
-              db.prepare(`
-                UPDATE work_orders
-                SET 
-                  status = 'Tamamlandı',
-                  closed_at = CURRENT_TIMESTAMP,
-                  closed_by_master_id = ?
-                WHERE id = ? AND status = 'Açık'
-              `).run(masterIdNum, Number(work_order_id))
+              const woIdNum = Number(work_order_id)
+              const paymentOption = String(data.payment_option || 'none')
+              const paymentAmount = Number(data.amount) || 0
+              const paymentMethod = String(data.payment_method || 'Nakit').trim()
+
+              const wo = db.prepare('SELECT id, total_price FROM work_orders WHERE id = ?').get(woIdNum) as any
+              if (!wo) {
+                res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' })
+                res.end(JSON.stringify({ success: false, error: 'İş emri bulunamadı.' }))
+                return
+              }
+
+              // Tamamlama + (varsa) teslimde alınan ödeme tek transaction'da kaydedilir;
+              // ödeme masaüstündeki akışla aynı kurallara tabidir (kalan borç sınırı, kapalı gün kontrolü).
+              const tamamlaVeOdemeKaydet = db.transaction(() => {
+                db.prepare(`
+                  UPDATE work_orders
+                  SET
+                    status = 'Tamamlandı',
+                    closed_at = CURRENT_TIMESTAMP,
+                    closed_by_master_id = ?
+                  WHERE id = ? AND status = 'Açık'
+                `).run(masterIdNum, woIdNum)
+
+                if (paymentOption === 'full' || paymentOption === 'partial') {
+                  const odemeTarihi = bugununTarihi()
+                  kapaliGunKontrol(odemeTarihi)
+
+                  const tahsilat = db.prepare(`
+                    SELECT COALESCE(SUM(amount), 0) AS toplam
+                    FROM work_order_payments
+                    WHERE work_order_id = ? AND IFNULL(is_cancelled, 0) = 0
+                  `).get(woIdNum) as any
+
+                  const kalanBorc = Number((Number(wo.total_price || 0) - Number(tahsilat?.toplam || 0)).toFixed(2))
+
+                  if (kalanBorc > 0.01) {
+                    let odenecekTutar = paymentOption === 'full' ? kalanBorc : paymentAmount
+                    odenecekTutar = Number(odenecekTutar.toFixed(2))
+
+                    if (odenecekTutar <= 0) {
+                      throw new Error('Ödeme tutarı 0\'dan büyük olmalıdır.')
+                    }
+                    if (odenecekTutar > kalanBorc + 0.01) {
+                      throw new Error(`Ödeme tutarı kalan borçtan (${kalanBorc.toLocaleString('tr-TR')} TL) büyük olamaz.`)
+                    }
+                    if (!paymentMethod) {
+                      throw new Error('Ödeme yöntemi seçilmelidir.')
+                    }
+
+                    db.prepare(`
+                      INSERT INTO work_order_payments (
+                        work_order_id, amount, payment_method, payment_date, received_by, note
+                      ) VALUES (?, ?, ?, ?, ?, ?)
+                    `).run(
+                      woIdNum,
+                      odenecekTutar,
+                      paymentMethod,
+                      odemeTarihi,
+                      masterIdNum,
+                      paymentOption === 'full' ? 'Mobil: teslimde alınan tam ödeme' : 'Mobil: teslimde alınan kısmi ödeme'
+                    )
+                  }
+                }
+              })
+
+              tamamlaVeOdemeKaydet()
 
               res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
               res.end(JSON.stringify({ success: true }))
