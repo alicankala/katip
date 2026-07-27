@@ -189,6 +189,8 @@ const tercihleriKaydet = async () => {
     weather_city: String(ayarlarForm.weather_city || 'Ankara').trim() || 'Ankara'
   }
 
+  const oncekiSehir = String(orijinalAyarlar.value?.weather_city || '').trim()
+
   try {
     const res = await window.api.ayarlariKaydet(payload)
     if (res?.success) {
@@ -208,6 +210,31 @@ const tercihleriKaydet = async () => {
         detail: 'Ayarlar kaydedildi.',
         life: 3000
       })
+
+      // Şehir değiştiyse hemen dene: bulunduysa şeridi güncelle, bulunamadıysa söyle
+      if (payload.weather_city !== oncekiSehir && window.api?.havaDurumuGetir) {
+        try {
+          const havaRes = await window.api.havaDurumuGetir()
+          if (havaRes?.success) {
+            toast.add({
+              severity: 'info',
+              summary: 'Hava Durumu',
+              detail: `${havaRes.sehir}: ${havaRes.sicaklik}°C, ${havaRes.durum}. Bilgi şeridi güncellendi.`,
+              life: 4000
+            })
+            window.dispatchEvent(new CustomEvent('hava-durumu-yenile'))
+          } else {
+            toast.add({
+              severity: 'warn',
+              summary: 'Hava Durumu',
+              detail: havaRes?.error || `"${payload.weather_city}" şehri bulunamadı. Yazımı kontrol edin.`,
+              life: 5000
+            })
+          }
+        } catch (e) {
+          console.error('Hava durumu denemesi hatası:', e)
+        }
+      }
     } else {
       toast.add({
         severity: 'error',

@@ -525,6 +525,7 @@ onMounted(async () => {
   localStorage.removeItem('aktifUsta')
   ustalariYukle()
   window.addEventListener('usta-cikis-yapildi', disaridanCikisYap)
+  window.addEventListener('hava-durumu-yenile', havaYukle)
 
   // Bilgi şeridi zamanlayıcıları
   saatTimer = setInterval(() => { simdikiZaman.value = new Date() }, 1000)
@@ -614,6 +615,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('usta-cikis-yapildi', disaridanCikisYap)
+  window.removeEventListener('hava-durumu-yenile', havaYukle)
   if (saatTimer) clearInterval(saatTimer)
   if (tickerTimer) clearInterval(tickerTimer)
   if (kurTimer) clearInterval(kurTimer)
