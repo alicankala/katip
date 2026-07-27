@@ -36,8 +36,7 @@
       ]
     }
   ],
-  "artifactName": "${productName}-Windows-${version}-Setup.${ext}",
-  "signAndEditExecutable": false
+  "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
 },
   "nsis": {
     "oneClick": false,

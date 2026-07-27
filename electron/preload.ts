@@ -78,6 +78,7 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   yedektenGeriYukle: (filePath?: string) => ipcRenderer.invoke('yedekten-geri-yukle', filePath),
   yedekleriListele: () => ipcRenderer.invoke('yedekleri-listele'),
   veritabaniBilgileriGetir: () => ipcRenderer.invoke('veritabani-bilgileri-getir'),
+  veritabaniSifirla: () => ipcRenderer.invoke('veritabani-sifirla'),
 
   // Cari Hesaplar
   cariHesapleriGetir: () => ipcRenderer.invoke('cari-hesaplari-getir'),

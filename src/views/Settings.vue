@@ -465,6 +465,43 @@ const verileriYenileBtn = async () => {
   }
 }
 
+const sifirlaniyor = ref(false)
+
+const veritabaniSifirla = async () => {
+  if (sifirlaniyor.value) return
+
+  const onay1 = confirm(
+    'TÜM VERİLER SİLİNECEK!\n\n' +
+    'Müşteriler, araçlar, iş emirleri, stok, cari hesaplar, giderler, ' +
+    'ayarlar ve araç fotoğrafları dahil her şey varsayılana dönecek.\n\n' +
+    'Sıfırlamadan önce otomatik bir güvenlik yedeği alınacak ' +
+    '(gerekirse Yedekten Kurtarma Sihirbazı ile geri dönebilirsiniz).\n\n' +
+    'Devam etmek istiyor musunuz?'
+  )
+  if (!onay1) return
+
+  const onay2 = confirm(
+    'SON UYARI - Emin misiniz?\n\n' +
+    'Bu işlem geri alınamaz. Onaylarsanız veritabanı fabrika ayarlarına ' +
+    'sıfırlanacak ve uygulama yeniden başlatılacak.'
+  )
+  if (!onay2) return
+
+  sifirlaniyor.value = true
+  try {
+    const res = await window.api.veritabaniSifirla()
+    if (res?.success) {
+      toast.add({ severity: 'success', summary: 'Sıfırlandı', detail: 'Veritabanı sıfırlandı. Uygulama yeniden başlatılıyor...', life: 4000 })
+    } else {
+      toast.add({ severity: 'error', summary: 'Hata', detail: res?.error || 'Sıfırlama başarısız.', life: 6000 })
+      sifirlaniyor.value = false
+    }
+  } catch (err) {
+    toast.add({ severity: 'error', summary: 'Hata', detail: 'Sıfırlama sırasında hata oluştu.', life: 6000 })
+    sifirlaniyor.value = false
+  }
+}
+
 const logKlasoruAc = async () => {
   try {
     const res = await window.api.logKlasoruAc()
@@ -1062,6 +1099,23 @@ onMounted(async () => {
           <div class="path-box mt-12">
             <strong>Veritabanı Dosya Yolu:</strong>
             <span class="break-all">{{ destekBilgileri.dbPath || 'Görüntülenemiyor' }}</span>
+          </div>
+
+          <!-- Fabrika Sıfırlaması (Tehlikeli Bölge) -->
+          <div style="border-top: 1px dashed var(--border-color, #334155); padding-top: 16px; margin-top: 16px;">
+            <div style="font-weight: bold; margin-bottom: 6px; font-size: 0.9rem; color: #f87171;">Fabrika Sıfırlaması (Tehlikeli Bölge)</div>
+            <div style="color: var(--text-muted, #94a3b8); font-size: 0.8rem; margin-bottom: 12px; line-height: 1.4;">
+              Tüm verileri (müşteri, araç, iş emri, stok, cari, ayarlar, fotoğraflar) kalıcı olarak siler ve
+              uygulamayı ilk kurulum haline döndürür. İşlem öncesi otomatik güvenlik yedeği alınır.
+            </div>
+            <Button
+              label="Veritabanını Sıfırla (Varsayılana Dön)"
+              icon="pi pi-exclamation-triangle"
+              severity="danger"
+              size="small"
+              :loading="sifirlaniyor"
+              @click="veritabaniSifirla"
+            />
           </div>
         </div>
 

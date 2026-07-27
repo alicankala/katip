@@ -30,7 +30,7 @@ export function fotograflarKlasoruYoluGetir(): string {
   return path.join(app.getPath('userData'), 'fotograflar')
 }
 
-type YedekTuru = 'manual' | 'automatic' | 'pre-restore'
+type YedekTuru = 'manual' | 'automatic' | 'pre-restore' | 'pre-reset'
 
 export interface TamYedekSonucu {
   success: boolean
@@ -87,6 +87,7 @@ async function klasorOzetiGetir(rootDir: string): Promise<{ count: number; bytes
 function yedekDosyaAdiOlustur(tur: YedekTuru, stamp: string): string {
   if (tur === 'automatic') return `otoservis_auto_backup_${stamp}.zip`
   if (tur === 'pre-restore') return `geri-yukleme-oncesi-tam-yedek-${stamp}.zip`
+  if (tur === 'pre-reset') return `sifirlama-oncesi-tam-yedek-${stamp}.zip`
   return `katip-tam-yedek-${stamp}.zip`
 }
 
@@ -654,5 +655,61 @@ export function registerBackupHandlers(
   // 6. Otomatik yedek al
   kanalEkle('otomatik-yedek-al', async () => {
     return await otomatikYedekAlBackend()
+  })
+
+  // 7. Veritabanını sıfırla (fabrika ayarlarına dön)
+  // Önce tam güvenlik yedeği alınır; yedek alınamazsa sıfırlama yapılmaz.
+  // Veritabanı ve fotoğraflar silinir, uygulama yeniden başlatılınca
+  // migration'lar temiz bir veritabanını varsayılan değerlerle kurar.
+  kanalEkle('veritabani-sifirla', async () => {
+    if (isRestoreInProgress()) {
+      return { success: false, error: 'Devam eden bir geri yükleme/sıfırlama işlemi var.' }
+    }
+
+    const guvenlikYedegi = await tamYedekPaketiOlustur('pre-reset')
+    if (!guvenlikYedegi.success) {
+      return {
+        success: false,
+        error: 'Sıfırlama iptal edildi: güvenlik yedeği alınamadı. (' + (guvenlikYedegi.error || 'bilinmeyen hata') + ')'
+      }
+    }
+
+    setRestoreInProgress(true)
+
+    const yenidenBaslat = () => {
+      app.relaunch()
+      setTimeout(() => {
+        app.exit(0)
+      }, 1200)
+    }
+
+    try {
+      console.log('[Reset] Veritabanı sıfırlanıyor. Güvenlik yedeği:', guvenlikYedegi.path)
+
+      db.close()
+
+      try { await fs.rm(dbPath + '-wal', { force: true }) } catch {}
+      try { await fs.rm(dbPath + '-shm', { force: true }) } catch {}
+      await fs.rm(dbPath, { force: true })
+      await fs.rm(fotograflarKlasoruYoluGetir(), { recursive: true, force: true })
+
+      console.log('[Reset] Sıfırlama tamamlandı. Uygulama yeniden başlatılıyor...')
+      yenidenBaslat()
+
+      return {
+        success: true,
+        backupPath: guvenlikYedegi.path,
+        restartRequired: true
+      }
+    } catch (error) {
+      console.error('[Reset] Sıfırlama hatası:', error)
+      // Veritabanı bağlantısı kapandığı için güvenli devam mümkün değil;
+      // uygulama yine de yeniden başlatılır ve açılışta kendini toparlar.
+      yenidenBaslat()
+      return {
+        success: false,
+        error: getErrorMessage(error) + ' (Uygulama yeniden başlatılacak.)'
+      }
+    }
   })
 }

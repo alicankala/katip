@@ -76,6 +76,7 @@ veritabaniYedekle: () => Promise<any>
 yedekKlasorunuAc: () => Promise<any>
 yedektenGeriYukle: () => Promise<any>
 veritabaniBilgileriGetir: () => Promise<any>
+veritabaniSifirla: () => Promise<{ success: boolean; backupPath?: string; restartRequired?: boolean; error?: string }>
 
     // Cari Hesaplar
     cariHesapleriGetir: () => Promise<any>
