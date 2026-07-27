@@ -52,7 +52,8 @@ const ayarlarForm = reactive({
   show_payment_summary_on_receipt: true,
   automatic_backup_enabled: false,
   backup_on_exit: false,
-  backup_retention_count: '20'
+  backup_retention_count: '20',
+  weather_city: 'Ankara'
 })
 
 const pinForm = reactive({
@@ -124,7 +125,8 @@ const isDirty = computed(() => {
     show_payment_summary_on_receipt: String(ayarlarForm.show_payment_summary_on_receipt),
     automatic_backup_enabled: String(ayarlarForm.automatic_backup_enabled),
     backup_on_exit: String(ayarlarForm.backup_on_exit),
-    backup_retention_count: String(ayarlarForm.backup_retention_count)
+    backup_retention_count: String(ayarlarForm.backup_retention_count),
+    weather_city: String(ayarlarForm.weather_city || 'Ankara').trim() || 'Ankara'
   }
   return JSON.stringify(snapshot) !== JSON.stringify(orijinalAyarlar.value)
 })
@@ -150,6 +152,7 @@ const ayarlarYukle = async () => {
       ayarlarForm.automatic_backup_enabled = s.automatic_backup_enabled === 'true'
       ayarlarForm.backup_on_exit = s.backup_on_exit === 'true'
       ayarlarForm.backup_retention_count = s.backup_retention_count || '20'
+      ayarlarForm.weather_city = s.weather_city || 'Ankara'
 
       // Apply theme & density live
       document.documentElement.setAttribute('data-theme', ayarlarForm.theme)
@@ -182,7 +185,8 @@ const tercihleriKaydet = async () => {
     show_payment_summary_on_receipt: String(ayarlarForm.show_payment_summary_on_receipt),
     automatic_backup_enabled: String(ayarlarForm.automatic_backup_enabled),
     backup_on_exit: String(ayarlarForm.backup_on_exit),
-    backup_retention_count: String(ayarlarForm.backup_retention_count)
+    backup_retention_count: String(ayarlarForm.backup_retention_count),
+    weather_city: String(ayarlarForm.weather_city || 'Ankara').trim() || 'Ankara'
   }
 
   try {
@@ -553,6 +557,20 @@ onMounted(async () => {
                 optionLabel="label"
                 optionValue="value"
                 class="compact-dropdown"
+              />
+            </div>
+          </div>
+
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-name">Hava Durumu Şehri</div>
+              <div class="setting-desc">Sol alttaki bilgi şeridinde hava durumu gösterilecek şehir</div>
+            </div>
+            <div class="setting-control">
+              <InputText
+                v-model="ayarlarForm.weather_city"
+                placeholder="Örn: Ankara"
+                style="width: 160px;"
               />
             </div>
           </div>

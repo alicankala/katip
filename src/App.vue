@@ -376,6 +376,7 @@ const telefonErisimiDurdur = async () => {
 // ── Bilgi Şeridi: saat / tarih / döviz (NTV alt bandı tarzı döngü) ──
 const simdikiZaman = ref(new Date())
 const dovizKurlari = ref(null)
+const havaDurumu = ref(null)
 const tickerIndex = ref(0)
 let saatTimer = null
 let tickerTimer = null
@@ -407,6 +408,19 @@ const tickerItems = computed(() => {
   if (k?.EUR && (k.EUR.alis || k.EUR.satis)) {
     items.push({ icon: 'pi pi-euro', label: 'Euro (Alış / Satış)', value: kurFormatla(k.EUR) })
   }
+  if (k?.GBP && (k.GBP.alis || k.GBP.satis)) {
+    items.push({ icon: 'pi pi-pound', label: 'Sterlin (Alış / Satış)', value: kurFormatla(k.GBP) })
+  }
+  const h = havaDurumu.value
+  if (h?.sicaklik !== undefined && h?.sicaklik !== null) {
+    const kod = Number(h.kod)
+    const havaIkonu = kod >= 95 ? 'pi pi-bolt' : (kod <= 1 && kod >= 0 ? 'pi pi-sun' : 'pi pi-cloud')
+    items.push({
+      icon: havaIkonu,
+      label: `Hava — ${h.sehir || ''}`,
+      value: `${h.sicaklik}°C, ${h.durum || ''}`
+    })
+  }
   return items
 })
 
@@ -425,6 +439,18 @@ const dovizYukle = async () => {
     }
   } catch (e) {
     console.error('Döviz kuru yüklenemedi:', e)
+  }
+}
+
+const havaYukle = async () => {
+  if (!window.api?.havaDurumuGetir) return
+  try {
+    const res = await window.api.havaDurumuGetir()
+    if (res?.success) {
+      havaDurumu.value = res
+    }
+  } catch (e) {
+    console.error('Hava durumu yüklenemedi:', e)
   }
 }
 
@@ -507,7 +533,11 @@ onMounted(async () => {
     if (adet > 0) tickerIndex.value = (tickerIndex.value + 1) % adet
   }, 5000)
   dovizYukle()
-  kurTimer = setInterval(dovizYukle, 30 * 60 * 1000)
+  havaYukle()
+  kurTimer = setInterval(() => {
+    dovizYukle()
+    havaYukle()
+  }, 30 * 60 * 1000)
 
   let autoStartPhone = false
   if (window.api?.ayarlariGetir) {

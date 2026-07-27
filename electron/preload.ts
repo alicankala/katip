@@ -103,8 +103,9 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   gunSonuKapanislariGetir: (limit?: number) => ipcRenderer.invoke('gun-sonu-kapanislari-getir', limit),
   gunSonuKapanisAc: (veri) => ipcRenderer.invoke('gun-sonu-kapanis-ac', veri),
 
-  // Döviz Kurları (bilgi şeridi)
+  // Döviz Kurları & Hava Durumu (bilgi şeridi)
   dovizKurlariGetir: () => ipcRenderer.invoke('doviz-kurlari-getir'),
+  havaDurumuGetir: () => ipcRenderer.invoke('hava-durumu-getir'),
 
   // Telefon Erişimi
   telefonErisimiBaslat: (port) => ipcRenderer.invoke('telefon-erisimi-baslat', port),

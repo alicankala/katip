@@ -648,7 +648,8 @@ export const DEFAULT_SETTINGS = {
   show_payment_summary_on_receipt: 'true',
   automatic_backup_enabled: 'false',
   backup_on_exit: 'true',
-  backup_retention_count: '20'
+  backup_retention_count: '20',
+  weather_city: 'Ankara'
 }
 
 export function ayarlariGetirBackend() {

@@ -114,6 +114,7 @@ veritabaniBilgileriGetir: () => Promise<any>
     gunSonuKapanisAc: (veri: { closing_date: string; admin_pin: string }) => Promise<{ success: boolean; error?: string }>
     pencereKapatZorla: () => Promise<{ success: boolean }>
     dovizKurlariGetir: () => Promise<{ success: boolean; kurlar?: Record<string, { alis: number | null; satis: number | null }>; kaynakTarihi?: string | null; guncellendi?: string; cached?: boolean; stale?: boolean; error?: string }>
+    havaDurumuGetir: () => Promise<{ success: boolean; sehir?: string; sicaklik?: number; durum?: string; kod?: number; guncellendi?: string; cached?: boolean; stale?: boolean; error?: string }>
     onGunSonuHatirlatma: (callback: () => void) => () => void
   }
 }
