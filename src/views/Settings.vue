@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'
@@ -36,6 +36,63 @@ const destekBilgileri = ref({
   lastBackupSize: '0 B',
   appVersion: '1.0.0'
 })
+
+// ── Güncelleme ──────────────────────────────────────────────
+const mevcutSurum = ref('1.0.0')
+const guncellemeDenetleniyor = ref(false)
+const guncellemeDurumu = ref({ durum: 'bilinmiyor', surum: '', yuzde: 0, hata: '' })
+
+const guncellemeDurumMetni = computed(() => {
+  const d = guncellemeDurumu.value
+  switch (d.durum) {
+    case 'denetleniyor': return 'Yeni sürüm denetleniyor...'
+    case 'guncel': return 'Programınız güncel.'
+    case 'indiriliyor': return `Yeni sürüm indiriliyor: %${d.yuzde || 0}`
+    case 'hazir': return `Sürüm ${d.surum || ''} indirildi. Yeniden başlatınca kurulacak.`
+    case 'hata': return 'Güncelleme denetlenemedi. İnternet bağlantısını kontrol edin.'
+    default: return 'Son denetim yapılmadı.'
+  }
+})
+
+const guncellemeleriDenetle = async () => {
+  if (!window.api?.guncellemeDenetle) return
+  guncellemeDenetleniyor.value = true
+
+  try {
+    const res = await window.api.guncellemeDenetle()
+    if (res?.gelistirmeModu) {
+      toast.add({
+        severity: 'info',
+        summary: 'Güncelleme',
+        detail: 'Güncelleme denetimi yalnızca kurulu uygulamada çalışır.',
+        life: 4000
+      })
+    } else if (!res?.success) {
+      toast.add({
+        severity: 'error',
+        summary: 'Güncelleme',
+        detail: res?.error || 'Güncelleme denetlenemedi.',
+        life: 4000
+      })
+    }
+  } catch (e) {
+    console.error('Güncelleme denetimi hatası:', e)
+  } finally {
+    guncellemeDenetleniyor.value = false
+  }
+}
+
+const guncellemeyiKur = async () => {
+  const res = await window.api?.guncellemeyiKur?.()
+  if (!res?.success) {
+    toast.add({
+      severity: 'error',
+      summary: 'Güncelleme',
+      detail: res?.error || 'Güncelleme kurulamadı.',
+      life: 4000
+    })
+  }
+}
 
 const orijinalAyarlar = ref({})
 
@@ -529,6 +586,24 @@ const destekBilgileriniYukle = async () => {
 onMounted(async () => {
   aktifUsta.value = JSON.parse(localStorage.getItem('aktifUsta') || 'null')
   await ayarlarYukle()
+
+  if (window.api?.guncellemeDurumGetir) {
+    try {
+      const res = await window.api.guncellemeDurumGetir()
+      if (res?.success) {
+        mevcutSurum.value = res.mevcutSurum || mevcutSurum.value
+        guncellemeDurumu.value = res
+      }
+    } catch (e) {}
+  }
+
+  if (window.api?.onGuncellemeDurumu) {
+    const unbind = window.api.onGuncellemeDurumu((durum) => {
+      guncellemeDurumu.value = durum || { durum: 'bilinmiyor' }
+    })
+    onUnmounted(unbind)
+  }
+
   if (isAdmin.value) {
     await destekBilgileriniYukle()
     await yedekleriYukle()
@@ -580,6 +655,56 @@ onMounted(async () => {
           <div class="info-item">
             <span class="info-label">Uyarı</span>
             <span class="info-val text-amber">Bu uygulama fatura kesmez.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 1b. GÜNCELLEME (herkes görür: destek sırasında telefonla yönlendirilebilsin) -->
+      <div class="settings-card panel">
+        <div class="card-header">
+          <div class="card-header-title">
+            <i class="pi pi-cloud-download card-icon icon-blue"></i>
+            <div>
+              <h2>Güncelleme</h2>
+              <div class="card-subtitle">Yeni sürüm denetimi ve kurulum</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <div class="setting-name">Kurulu Sürüm</div>
+            <div class="setting-desc">{{ guncellemeDurumMetni }}</div>
+          </div>
+          <div class="setting-control">
+            <span class="info-val">{{ mevcutSurum }}</span>
+          </div>
+        </div>
+
+        <div class="setting-row border-none">
+          <div class="setting-info">
+            <div class="setting-name">Yeni Sürüm Var mı?</div>
+            <div class="setting-desc">
+              Program açılışta kendiliğinden denetler. Buradan elle de denetleyebilirsiniz.
+            </div>
+          </div>
+          <div class="setting-control" style="display: flex; gap: 8px;">
+            <Button
+              label="Güncellemeleri Denetle"
+              icon="pi pi-sync"
+              severity="secondary"
+              outlined
+              size="small"
+              :loading="guncellemeDenetleniyor"
+              @click="guncellemeleriDenetle"
+            />
+            <Button
+              v-if="guncellemeDurumu.durum === 'hazir'"
+              label="Şimdi Yeniden Başlat"
+              icon="pi pi-refresh"
+              size="small"
+              @click="guncellemeyiKur"
+            />
           </div>
         </div>
       </div>

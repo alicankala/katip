@@ -117,6 +117,18 @@ karlilikRaporuGetir: () => ipcRenderer.invoke('karlilik-raporu-getir'),
   telefonOturumKapat: (token: string) => ipcRenderer.invoke('telefon-oturum-kapat', token),
   telefonTumOturumlariKapat: () => ipcRenderer.invoke('telefon-tum-oturumlari-kapat'),
 
+  // Güncelleme
+  guncellemeDurumGetir: () => ipcRenderer.invoke('guncelleme-durum-getir'),
+  guncellemeDenetle: () => ipcRenderer.invoke('guncelleme-denetle'),
+  guncellemeyiKur: () => ipcRenderer.invoke('guncellemeyi-kur'),
+  onGuncellemeDurumu: (callback: (durum: any) => void) => {
+    const handler = (_event: any, durum: any) => callback(durum)
+    ipcRenderer.on('guncelleme-durumu', handler)
+    return () => {
+      ipcRenderer.removeListener('guncelleme-durumu', handler)
+    }
+  },
+
   // Veri Yenileme & Ayarlar
   uygulamaVerileriniYenile: () => ipcRenderer.invoke('uygulama-verilerini-yenile'),
   ayarlariGetir: () => ipcRenderer.invoke('ayarlari-getir'),

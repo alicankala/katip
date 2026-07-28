@@ -127,6 +127,67 @@ function createWindow() {
   }
 }
 
+// ── Güncelleme durumu ────────────────────────────────────────────────
+// electron-updater'ın kendi bildirimi Windows'un İngilizce sistem bildirimi
+// olduğu için dükkanda fark edilmiyordu. Durum artık arayüze aktarılıp
+// uygulamanın içinde Türkçe bir şeritle gösteriliyor.
+type GuncellemeDurumu = {
+  durum: 'bilinmiyor' | 'denetleniyor' | 'guncel' | 'indiriliyor' | 'hazir' | 'hata'
+  surum?: string
+  yuzde?: number
+  hata?: string
+}
+
+let guncellemeDurumu: GuncellemeDurumu = { durum: 'bilinmiyor' }
+let guncellemeDinleyicileriKuruldu = false
+
+function guncellemeDurumunuYayinla(yeni: GuncellemeDurumu): void {
+  guncellemeDurumu = yeni
+  if (win && !win.isDestroyed()) {
+    win.webContents.send('guncelleme-durumu', yeni)
+  }
+}
+
+function guncellemeDinleyicileriniKur(): void {
+  if (guncellemeDinleyicileriKuruldu) return
+  guncellemeDinleyicileriKuruldu = true
+
+  autoUpdater.logger = log
+  autoUpdater.autoDownload = true
+
+  autoUpdater.on('checking-for-update', () => {
+    guncellemeDurumunuYayinla({ durum: 'denetleniyor' })
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    guncellemeDurumunuYayinla({ durum: 'guncel', surum: app.getVersion() })
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    guncellemeDurumunuYayinla({ durum: 'indiriliyor', surum: info?.version, yuzde: 0 })
+  })
+
+  autoUpdater.on('download-progress', (ilerleme) => {
+    guncellemeDurumunuYayinla({
+      durum: 'indiriliyor',
+      surum: guncellemeDurumu.surum,
+      yuzde: Math.round(ilerleme?.percent || 0)
+    })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    guncellemeDurumunuYayinla({ durum: 'hazir', surum: info?.version })
+  })
+
+  autoUpdater.on('error', (err) => {
+    console.error('Güncelleme hatası:', err)
+    guncellemeDurumunuYayinla({
+      durum: 'hata',
+      hata: err instanceof Error ? err.message : String(err)
+    })
+  })
+}
+
 function kanalEkle(kanal: string, fonksiyon: (event: IpcMainInvokeEvent, ...args: any[]) => any): void {
   ipcMain.removeHandler(kanal)
   ipcMain.handle(kanal, (event, ...args) => {
@@ -168,6 +229,41 @@ function ipcKopruleriniKur() {
   kanalEkle('pencere-kapat-zorla', () => {
     gunSonuHatirlatmasiAtlandi = true
     win?.close()
+    return { success: true }
+  })
+
+  // Güncelleme
+  kanalEkle('guncelleme-durum-getir', () => {
+    return { success: true, ...guncellemeDurumu, mevcutSurum: app.getVersion(), paketli: app.isPackaged }
+  })
+
+  kanalEkle('guncelleme-denetle', async () => {
+    // Geliştirme sırasında electron-updater çalışmaz; arayüzün bunu kullanıcıya
+    // "hata" diye göstermemesi için ayrı bir yanıt dönülür.
+    if (!app.isPackaged) {
+      return { success: false, gelistirmeModu: true, error: 'Güncelleme denetimi yalnızca kurulu uygulamada çalışır.' }
+    }
+
+    try {
+      guncellemeDinleyicileriniKur()
+      await autoUpdater.checkForUpdates()
+      return { success: true }
+    } catch (error) {
+      const mesaj = error instanceof Error ? error.message : String(error)
+      console.error('Güncelleme denetimi hatası:', error)
+      guncellemeDurumunuYayinla({ durum: 'hata', hata: mesaj })
+      return { success: false, error: mesaj }
+    }
+  })
+
+  kanalEkle('guncellemeyi-kur', () => {
+    if (guncellemeDurumu.durum !== 'hazir') {
+      return { success: false, error: 'Kurulmaya hazır bir güncelleme yok.' }
+    }
+
+    // quitAndInstall uygulamayı kapatır; kapanışta alınan yedek 'before-quit'
+    // içinde çalışmaya devam eder, kurulum uygulama kapanana kadar bekler.
+    setImmediate(() => autoUpdater.quitAndInstall())
     return { success: true }
   })
 
@@ -239,8 +335,10 @@ app.whenReady().then(async () => {
   createWindow()
 
   if (app.isPackaged) {
-    autoUpdater.logger = log
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    guncellemeDinleyicileriniKur()
+    // checkForUpdatesAndNotify yerine sade denetim: bildirimi Windows'un
+    // İngilizce sistem bildirimi değil, uygulama içindeki şerit üstleniyor.
+    autoUpdater.checkForUpdates().catch((err) => {
       console.error('Otomatik güncelleme kontrolü hatası:', err)
     })
   }

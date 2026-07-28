@@ -72,6 +72,40 @@ const yardimaGit = () => {
   router.push('/help')
 }
 
+// ── Güncelleme şeridi ────────────────────────────────────────────────
+// Windows'un İngilizce sistem bildirimi dükkanda fark edilmediği için
+// güncelleme hazır olduğunda uygulamanın içinde şerit gösteriliyor.
+const guncelleme = ref({ durum: 'bilinmiyor', surum: '', yuzde: 0 })
+const guncellemeKuruluyor = ref(false)
+const guncellemeSeridiKapatildi = ref(false)
+
+const guncellemeSeridiGorunur = computed(() =>
+  !guncellemeSeridiKapatildi.value &&
+  (guncelleme.value.durum === 'hazir' || guncelleme.value.durum === 'indiriliyor')
+)
+
+const guncellemeyiKur = async () => {
+  if (guncellemeKuruluyor.value) return
+  guncellemeKuruluyor.value = true
+
+  try {
+    const res = await window.api?.guncellemeyiKur?.()
+    if (!res?.success) {
+      guncellemeKuruluyor.value = false
+      toast.add({
+        severity: 'error',
+        summary: 'Güncelleme',
+        detail: res?.error || 'Güncelleme kurulamadı.',
+        life: 4000
+      })
+    }
+    // Başarılıysa uygulama kapanıp kurulum başlayacağı için durum sıfırlanmaz.
+  } catch (e) {
+    guncellemeKuruluyor.value = false
+    console.error('Güncelleme kurulum hatası:', e)
+  }
+}
+
 const ustalariYukle = async () => {
   try {
     const res = await window.api.ustalariGetir()
@@ -555,6 +589,22 @@ onMounted(async () => {
   window.addEventListener('hava-durumu-yenile', havaYukle)
   window.addEventListener('kurulum-sihirbazi-ac', kurulumSihirbaziniAc)
 
+  if (window.api?.onGuncellemeDurumu) {
+    const unbindGuncelleme = window.api.onGuncellemeDurumu((durum) => {
+      guncelleme.value = durum || { durum: 'bilinmiyor' }
+      // Yeni bir güncelleme geldiğinde daha önce kapatılmış şerit tekrar açılır.
+      if (durum?.durum === 'hazir') guncellemeSeridiKapatildi.value = false
+    })
+    onUnmounted(unbindGuncelleme)
+  }
+
+  if (window.api?.guncellemeDurumGetir) {
+    try {
+      const gRes = await window.api.guncellemeDurumGetir()
+      if (gRes?.success) guncelleme.value = gRes
+    } catch (e) {}
+  }
+
   // Bilgi şeridi zamanlayıcıları
   saatTimer = setInterval(() => { simdikiZaman.value = new Date() }, 1000)
   tickerTimer = setInterval(() => {
@@ -965,6 +1015,35 @@ v-for="item in menuItems.slice(6, 9)"
         </Transition>
       </router-view>
     </main>
+  </div>
+
+  <!-- Güncelleme şeridi: yalnızca giriş yapılmışken, sağ altta -->
+  <div v-if="aktifUsta && guncellemeSeridiGorunur" class="update-bar">
+    <i :class="guncelleme.durum === 'hazir' ? 'pi pi-download' : 'pi pi-cloud-download'" class="update-bar-icon"></i>
+
+    <div class="update-bar-texts">
+      <template v-if="guncelleme.durum === 'hazir'">
+        <strong>Yeni sürüm hazır{{ guncelleme.surum ? ` (${guncelleme.surum})` : '' }}</strong>
+        <span>Programı kapatıp açtığınızda kendiliğinden kurulacak.</span>
+      </template>
+      <template v-else>
+        <strong>Yeni sürüm indiriliyor{{ guncelleme.surum ? ` (${guncelleme.surum})` : '' }}</strong>
+        <span>%{{ guncelleme.yuzde || 0 }} tamamlandı. Çalışmaya devam edebilirsiniz.</span>
+      </template>
+    </div>
+
+    <Button
+      v-if="guncelleme.durum === 'hazir'"
+      label="Şimdi Yeniden Başlat"
+      icon="pi pi-refresh"
+      size="small"
+      :loading="guncellemeKuruluyor"
+      @click="guncellemeyiKur"
+    />
+
+    <button class="update-bar-close" title="Kapat" @click="guncellemeSeridiKapatildi = true">
+      <i class="pi pi-times"></i>
+    </button>
   </div>
 
   <!-- Kurulum Sihirbazı (ilk giriş) -->
@@ -2034,6 +2113,76 @@ v-for="item in menuItems.slice(6, 9)"
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+/* ── Güncelleme şeridi ───────────────────────────── */
+.update-bar {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(560px, calc(100vw - 40px));
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--accent-color);
+  box-shadow: var(--shadow-xl);
+  animation: update-bar-in 0.25s ease;
+}
+
+.update-bar-icon {
+  font-size: 20px;
+  color: var(--accent-color);
+  flex-shrink: 0;
+}
+
+.update-bar-texts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.update-bar-texts strong {
+  color: var(--text-title);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.update-bar-texts span {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.update-bar-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.update-bar-close:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-primary);
+}
+
+.update-bar-close i { font-size: 12px; }
+
+@keyframes update-bar-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 .help-btn-titlebar {
