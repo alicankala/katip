@@ -7,6 +7,7 @@ import Dropdown from 'primevue/dropdown'
 import InputText from 'primevue/inputtext'
 import Tag from 'primevue/tag'
 import { useFormatters } from '../composables/useFormatters'
+import HelpButton from '../components/HelpButton.vue'
 
 const rapor = ref([])
 const giderler = ref([])
@@ -246,7 +247,7 @@ onUnmounted(() => {
   <div class="profit-report-page">
     <div class="page-header">
       <div>
-        <h2>İç Kâr Raporu</h2>
+        <h2>İç Kâr Raporu <HelpButton konu="kar-raporu" /></h2>
         <p>Bu ekran sadece servis içi takip içindir. Müşteriye gösterilmez.</p>
       </div>
 

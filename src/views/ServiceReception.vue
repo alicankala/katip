@@ -6,6 +6,7 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
+import HelpButton from '../components/HelpButton.vue'
 
 const router = useRouter()
 const toast = useToast()
@@ -346,7 +347,7 @@ onMounted(() => {
   <div class="page servis-kabul-page">
     <div class="page-header">
       <div>
-<h1 class="page-title">Servis Kabul</h1>
+<h1 class="page-title">Servis Kabul <HelpButton konu="servis-kabul" /></h1>
 
 <p class="page-subtitle">
   Müşteri geldiğinde müşteri, araç ve şikâyet bilgilerini tek ekrandan girip iş emri açın.

@@ -6,6 +6,7 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'
 import { useFormatters } from '../../composables/useFormatters'
+import EmptyState from '../EmptyState.vue'
 
 const props = defineProps({
   expenses: {
@@ -174,11 +175,30 @@ const { tlFormatla, tarihFormatla } = useFormatters()
     <DataTable
       :value="filtrelenmisGiderler"
       responsiveLayout="scroll"
-      emptyMessage="Kayıtlı işletme gideri bulunamadı."
       paginator
       :rows="15"
       class="p-datatable-sm"
     >
+      <template #empty>
+        <EmptyState
+          v-if="aramaMetni || seciliTurFiltresi !== 'Tümü' || seciliDurumFiltresi !== 'Tümü' || seciliZamanFiltresi !== 'Tümü'"
+          icon="pi pi-search-minus"
+          title="Bu süzgeçte gider yok"
+          description="Tür, durum ve zaman seçimlerini 'Tümü' yapıp yeniden bakın."
+          compact
+        />
+        <EmptyState
+          v-else
+          icon="pi pi-receipt"
+          title="Henüz gider kaydı yok"
+          description="Kira, elektrik, yakıt gibi dükkan giderlerini buraya girin. Ödediğiniz giderler, ödeme tarihiyle birlikte o günün gün sonu çıkışlarında görünür."
+          action-label="Yeni Gider Ekle"
+          action-icon="pi pi-plus"
+          compact
+          @action="emit('add-expense')"
+        />
+      </template>
+
       <Column field="company_name" header="Kurum / Firma">
         <template #body="slotProps">
           <strong>{{ slotProps.data.company_name || '-' }}</strong>

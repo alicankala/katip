@@ -10,9 +10,16 @@ import Textarea from 'primevue/textarea'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
+import { useRouter } from 'vue-router'
 import PrintPreviewDialog from '../components/work-orders/PrintPreviewDialog.vue'
 import EditItemDialog from '../components/work-orders/EditItemDialog.vue'
+import EmptyState from '../components/EmptyState.vue'
+import HelpButton from '../components/HelpButton.vue'
 import { useFormatters } from '../composables/useFormatters'
+
+const router = useRouter()
+const yardimaGit = (konu) => router.push({ path: '/help', query: { konu } })
+const servisKabuleGit = () => router.push('/service-reception')
 
 const isEmirleri = ref([])
 const yukleniyor = ref(true)
@@ -1223,7 +1230,7 @@ onUnmounted(() => {
     <!-- Üst Başlık -->
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
       <div>
-        <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--text-title, #fff);">İş Emirleri</h2>
+        <h2 style="margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--text-title, #fff);">İş Emirleri <HelpButton konu="kalem-ekleme" /></h2>
         <p style="margin: 4px 0 0; color: var(--text-muted, #94a3b8); font-size: 0.88rem;">
           Açık, bekleyen ve tamamlanan iş emirlerini yönetin.
         </p>
@@ -1401,9 +1408,33 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div v-if="filtrelenmisIsEmirleri.length === 0" class="empty-state-row">
-          Kayıtlı iş emri bulunamadı.
-        </div>
+        <template v-if="filtrelenmisIsEmirleri.length === 0">
+          <EmptyState
+            v-if="aramaKelimesi"
+            icon="pi pi-search-minus"
+            title="Arama sonucu bulunamadı"
+            :description="`&quot;${aramaKelimesi}&quot; ile eşleşen iş emri yok. Plakayı boşluksuz yazmayı veya süzgeci &quot;Hepsi&quot; yapmayı deneyin.`"
+            compact
+          />
+          <EmptyState
+            v-else-if="isEmirleri.length > 0"
+            icon="pi pi-check-circle"
+            :title="durumFiltresi === 'Açık' ? 'Açık iş emri yok' : 'Bu süzgeçte iş emri yok'"
+            description="Yukarıdaki sekmelerden başka bir durumu seçerek diğer iş emirlerine bakabilirsiniz."
+            compact
+          />
+          <EmptyState
+            v-else
+            icon="pi pi-wrench"
+            title="Henüz iş emri açılmamış"
+            description="Servise gelen aracı Servis Kabul ekranından alırsanız iş emri kendiliğinden açılır. Kayıtlı bir araç için doğrudan iş emri de açabilirsiniz."
+            action-label="Servis Kabul'e Git"
+            action-icon="pi pi-bolt"
+            hint-label="Nasıl yapılır?"
+            @action="servisKabuleGit"
+            @hint="yardimaGit('servis-kabul')"
+          />
+        </template>
       </div>
     </div>
 

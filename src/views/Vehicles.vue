@@ -9,6 +9,9 @@ import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
+import { useRouter } from 'vue-router'
+import EmptyState from '../components/EmptyState.vue'
+import HelpButton from '../components/HelpButton.vue'
 
 const araclar = ref([])
 const yukleniyor = ref(true)
@@ -17,6 +20,18 @@ const dialogAcik = ref(false)
 const aramaKelimesi = ref('')
 const toast = useToast()
 const confirmDialog = useConfirm()
+const router = useRouter()
+
+const yeniAracAc = () => {
+  Object.assign(form, {
+    id: null, customer_id: null, plate: '', brand: '', model: '',
+    year: null, mileage: null, chassis: ''
+  })
+  dialogAcik.value = true
+}
+
+const yardimaGit = (konu) => router.push({ path: '/help', query: { konu } })
+const servisKabuleGit = () => router.push('/service-reception')
 
 const basariMesaji = (detay) => {
   toast.add({
@@ -225,7 +240,7 @@ onUnmounted(() => {
 <template>
   <div>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h2>Araç Yönetimi</h2>
+      <h2>Araç Yönetimi <HelpButton konu="arac" /></h2>
       
       <div style="display: flex; gap: 15px; align-items: center;">
         <span class="p-input-icon-left" style="width: 360px;">
@@ -235,17 +250,38 @@ onUnmounted(() => {
             placeholder="Plaka, Müşteri, Marka, Model veya Şase Ara..."
           />
         </span>
-        <Button 
-  label="Yeni Araç Ekle" 
-  icon="pi pi-car" 
-  severity="warning" 
-  @click="Object.assign(form, { id: null, customer_id: null, plate: '', brand: '', model: '', year: null, mileage: null, chassis: '' }); dialogAcik = true" 
+        <Button
+  label="Yeni Araç Ekle"
+  icon="pi pi-car"
+  severity="warning"
+  @click="yeniAracAc"
 />
       </div>
     </div>
 
     <div class="table-panel">
-      <DataTable :value="filtrelenmisAraclar" :loading="yukleniyor" responsiveLayout="scroll" emptyMessage="Kayıtlı araç bulunamadı.">
+      <DataTable :value="filtrelenmisAraclar" :loading="yukleniyor" responsiveLayout="scroll">
+        <template #empty>
+          <EmptyState
+            v-if="aramaKelimesi"
+            icon="pi pi-search-minus"
+            title="Arama sonucu bulunamadı"
+            :description="`&quot;${aramaKelimesi}&quot; ile eşleşen araç yok. Plakayı boşluksuz yazmayı deneyin.`"
+            compact
+          />
+          <EmptyState
+            v-else
+            icon="pi pi-car"
+            title="Henüz araç kaydı yok"
+            description="Araçları buradan elle ekleyebilirsiniz. Genelde buna gerek kalmaz: Servis Kabul ekranında yeni bir plaka girdiğinizde araç kaydı kendiliğinden açılır."
+            action-label="Servis Kabul'e Git"
+            action-icon="pi pi-bolt"
+            hint-label="Nasıl yapılır?"
+            @action="servisKabuleGit"
+            @hint="yardimaGit('arac')"
+          />
+        </template>
+
         <Column field="plate" header="Plaka"></Column>
         <Column field="customer_name" header="Araç Sahibi"></Column>
         <Column field="brand" header="Marka"></Column>

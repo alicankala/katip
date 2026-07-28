@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import { useFormatters } from '../../composables/useFormatters'
+import { firmaBilgileri, firmaIletisimSatirlari } from '../../data/firmaBilgileri.js'
 
 const props = defineProps({
   visible: {
@@ -76,11 +77,7 @@ const servisFisiYazdirGercek = async () => {
 
   const isEmri = props.seciliIsEmri
 
-  const firma = {
-    unvan: 'Kâtip',
-    altBaslik: 'Oto Servis Takip Sistemi',
-    aciklama: 'Bakım, onarım ve servis takip fişi'
-  }
+  const firma = firmaBilgileri
 
   const kalemSatirlari = props.kalemler.map((kalem, index) => {
     const tip = kalem.type || '-'
@@ -400,7 +397,7 @@ const servisFisiYazdirGercek = async () => {
             <div class="company-box">
               <h1 class="company-name">${guvenliMetin(firma.unvan)}</h1>
               <div class="company-subtitle">${guvenliMetin(firma.altBaslik)}</div>
-              <div class="company-desc">${guvenliMetin(firma.aciklama)}</div>
+              ${firmaIletisimSatirlari().map((satir) => `<div class="company-desc">${guvenliMetin(satir)}</div>`).join('')}
             </div>
 
             <div class="document-box">
@@ -581,9 +578,9 @@ ${showPayment ? `
       <div class="preview-sheet">
         <div class="top-header">
           <div class="company-box">
-            <h1 class="company-name">Kâtip</h1>
-            <div class="company-subtitle">Oto Servis Takip Sistemi</div>
-            <div class="company-desc">Bakım, onarım ve servis takip fişi</div>
+            <h1 class="company-name">{{ firmaBilgileri.unvan }}</h1>
+            <div class="company-subtitle">{{ firmaBilgileri.altBaslik }}</div>
+            <div v-for="satir in firmaIletisimSatirlari()" :key="satir" class="company-desc">{{ satir }}</div>
           </div>
 
           <div class="document-box">

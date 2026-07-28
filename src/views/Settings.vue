@@ -5,6 +5,7 @@ import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'
 import Toast from 'primevue/toast'
 import { useToast } from 'primevue/usetoast'
+import HelpButton from '../components/HelpButton.vue'
 
 const toast = useToast()
 
@@ -539,7 +540,7 @@ onMounted(async () => {
   <div class="page settings-page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">Ayarlar</h1>
+        <h1 class="page-title">Ayarlar <HelpButton konu="pinler" /></h1>
         <p class="page-subtitle">
           Görünüm, kullanım tercihleri ve sistem ayarlarınızı buradan yönetin.
         </p>

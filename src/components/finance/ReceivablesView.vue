@@ -5,6 +5,7 @@ import Column from 'primevue/column'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import { useFormatters } from '../../composables/useFormatters'
+import EmptyState from '../EmptyState.vue'
 
 const props = defineProps({
   workOrderReceivables: {
@@ -145,14 +146,30 @@ const getStatusClass = (durum) => {
     </div>
 
     <!-- Veri Tablosu -->
-    <DataTable 
-      :value="filtrelenmisAlacaklar" 
-      responsiveLayout="scroll" 
-      emptyMessage="Kayıtlı müşteri alacağı bulunamadı."
-      paginator 
+    <DataTable
+      :value="filtrelenmisAlacaklar"
+      responsiveLayout="scroll"
+      paginator
       :rows="15"
       class="p-datatable-sm"
     >
+      <template #empty>
+        <EmptyState
+          v-if="aramaMetni || altFiltre !== 'tumu'"
+          icon="pi pi-search-minus"
+          title="Bu süzgeçte alacak yok"
+          description="Arama kutusunu temizleyin veya üstteki sekmelerden 'Tümü' seçeneğine dönün."
+          compact
+        />
+        <EmptyState
+          v-else
+          icon="pi pi-check-circle"
+          title="Tahsil edilmemiş alacağınız yok"
+          description="İş emri tahsil edilmeden kapatıldığında kalan tutar buraya alacak olarak düşer. Elle alacak kaydı da açabilirsiniz."
+          compact
+        />
+      </template>
+
       <Column field="kaynak" header="Kaynak" style="width: 110px;">
         <template #body="slotProps">
           <span 

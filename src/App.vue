@@ -9,6 +9,7 @@ import Dropdown from 'primevue/dropdown'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
+import SetupWizard from './components/SetupWizard.vue'
 
 const router = useRouter()
 const toast = useToast()
@@ -25,8 +26,10 @@ const toggleAdminLogin = () => {
   pin.value = ''
   girisHatasi.value = ''
 }
+const mevcutTema = ref(localStorage.getItem('uygulamaTema') || 'dark')
 const temaUygula = () => {
   const kayitliTema = localStorage.getItem('uygulamaTema') || 'dark'
+  mevcutTema.value = kayitliTema
   document.documentElement.setAttribute('data-theme', kayitliTema)
   document.documentElement.style.colorScheme = kayitliTema
   if (kayitliTema === 'dark') {
@@ -46,8 +49,28 @@ const menuItems = ref([
   { label: 'Cari Hesap', icon: 'pi pi-wallet', path: '/current-accounts', command: () => router.push('/current-accounts') },
   { label: 'İç Kâr Raporu', icon: 'pi pi-chart-line', path: '/profit-report', command: () => router.push('/profit-report') },
   { label: 'Gün Sonu', icon: 'pi pi-lock', path: '/daily-closing', command: () => router.push('/daily-closing') },
-  { label: 'Ayarlar', icon: 'pi pi-cog', path: '/settings', command: () => router.push('/settings') }
+  { label: 'Ayarlar', icon: 'pi pi-cog', path: '/settings', command: () => router.push('/settings') },
+  { label: 'Yardım', icon: 'pi pi-question-circle', path: '/help', command: () => router.push('/help') }
 ])
+
+// Kurulum Sihirbazı: ilk girişte bir kez açılır, Yardım Merkezi'nden yeniden çağrılabilir.
+const kurulumSihirbaziAcik = ref(false)
+const kurulumSihirbaziGerekli = ref(false)
+
+const kurulumSihirbaziniKontrolEt = () => {
+  if (kurulumSihirbaziGerekli.value) {
+    kurulumSihirbaziGerekli.value = false
+    kurulumSihirbaziAcik.value = true
+  }
+}
+
+const kurulumSihirbaziniAc = () => {
+  kurulumSihirbaziAcik.value = true
+}
+
+const yardimaGit = () => {
+  router.push('/help')
+}
 
 const ustalariYukle = async () => {
   try {
@@ -96,7 +119,10 @@ const girisYap = async () => {
     } finally {
       girisYukleniyor.value = false
     }
-    if (aktifUsta.value) router.push('/dashboard')
+    if (aktifUsta.value) {
+      router.push('/dashboard')
+      kurulumSihirbaziniKontrolEt()
+    }
     return
   }
 
@@ -154,6 +180,7 @@ const girisYap = async () => {
     localStorage.setItem('aktifUsta', JSON.stringify(ustaBilgisi))
     pin.value = ''
     router.push('/dashboard')
+    kurulumSihirbaziniKontrolEt()
   } catch (err) {
     if (timerHandle) { clearTimeout(timerHandle); timerHandle = null }
     console.error('Usta giriş hatası:', err)
@@ -526,6 +553,7 @@ onMounted(async () => {
   ustalariYukle()
   window.addEventListener('usta-cikis-yapildi', disaridanCikisYap)
   window.addEventListener('hava-durumu-yenile', havaYukle)
+  window.addEventListener('kurulum-sihirbazi-ac', kurulumSihirbaziniAc)
 
   // Bilgi şeridi zamanlayıcıları
   saatTimer = setInterval(() => { simdikiZaman.value = new Date() }, 1000)
@@ -547,6 +575,7 @@ onMounted(async () => {
       if (sRes?.success && sRes.settings) {
         const set = sRes.settings
         const savedTheme = set.theme || localStorage.getItem('uygulamaTema') || 'dark'
+        mevcutTema.value = savedTheme
         document.documentElement.setAttribute('data-theme', savedTheme)
         document.documentElement.style.colorScheme = savedTheme
         if (savedTheme === 'dark') {
@@ -561,6 +590,9 @@ onMounted(async () => {
         if (set.phone_server_auto_start === 'true') {
           autoStartPhone = true
         }
+
+        // Sihirbaz giriş ekranında değil, girişten sonra açılır.
+        kurulumSihirbaziGerekli.value = set.setup_wizard_done !== 'true'
       }
     } catch (err) {
       console.error('Ayarlar uygulanamadı:', err)
@@ -616,6 +648,7 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('usta-cikis-yapildi', disaridanCikisYap)
   window.removeEventListener('hava-durumu-yenile', havaYukle)
+  window.removeEventListener('kurulum-sihirbazi-ac', kurulumSihirbaziniAc)
   if (saatTimer) clearInterval(saatTimer)
   if (tickerTimer) clearInterval(tickerTimer)
   if (kurTimer) clearInterval(kurTimer)
@@ -679,6 +712,16 @@ onUnmounted(() => {
         title="Telefon Erişimi"
       >
         <i class="pi pi-mobile"></i>
+      </button>
+
+      <button
+        v-if="aktifUsta"
+        type="button"
+        class="window-btn help-btn-titlebar"
+        @click.stop="yardimaGit"
+        title="Yardım Merkezi"
+      >
+        <i class="pi pi-question-circle"></i>
       </button>
 
       <button
@@ -894,6 +937,16 @@ v-for="item in menuItems.slice(6, 9)"
 
   <a
     class="nav-item"
+    :class="{ active: $route.path === menuItems[10].path }"
+    @click.prevent="menuItems[10].command()"
+    href="#"
+  >
+    <i :class="menuItems[10].icon" class="nav-icon"></i>
+    <span>{{ menuItems[10].label }}</span>
+  </a>
+
+  <a
+    class="nav-item"
     :class="{ active: $route.path === menuItems[9].path }"
     @click.prevent="menuItems[9].command()"
     href="#"
@@ -913,6 +966,14 @@ v-for="item in menuItems.slice(6, 9)"
       </router-view>
     </main>
   </div>
+
+  <!-- Kurulum Sihirbazı (ilk giriş) -->
+  <SetupWizard
+    v-model:visible="kurulumSihirbaziAcik"
+    :is-admin="aktifUsta?.role === 'admin'"
+    :mevcut-tema="mevcutTema"
+    @telefon-ac="togglePhoneAccessModal"
+  />
 
   <!-- Telefon Erişimi Modalı -->
   <div v-if="showPhoneAccessModal" class="phone-modal-overlay" @click.self="showPhoneAccessModal = false">
@@ -1969,6 +2030,13 @@ v-for="item in menuItems.slice(6, 9)"
 }
 
 .phone-btn-titlebar {
+  font-size: 16px !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.help-btn-titlebar {
   font-size: 16px !important;
   display: inline-flex;
   align-items: center;

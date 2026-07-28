@@ -319,10 +319,13 @@ migrationCalistir(9, () => {
     );
   `)
 
+  // Sıra, listelerde göründükleri sıradır (bkz. migration 30 / display_order).
+  // Başlangıç PIN'leri bilinçli olarak sabittir; kurulumdan sonra Ayarlar'dan
+  // değiştirilmesi önerilir (bkz. migration 31).
   const seedUstalar = [
-    { name: 'Ali Kala', pin: '1111' },
-    { name: 'Bünyamin Kala', pin: '2222' },
-    { name: 'Yusuf Kala', pin: '3333' }
+    { name: 'Bünyamin Kala', pin: '1111' },
+    { name: 'Yusuf Kala', pin: '2222' },
+    { name: 'Ali Kala', pin: '3333' }
   ]
 
   for (const usta of seedUstalar) {
@@ -614,6 +617,31 @@ migrationCalistir(29, () => {
     SET payment_method = 'Diğer'
     WHERE status = 'Ödendi' AND (payment_method IS NULL OR TRIM(payment_method) = '');
   `)
+})
+
+// Usta listelerinin sırası kayıt id'sine bağlıydı; kurulu veritabanlarında sıra
+// ancak id değiştirilerek düzeltilebilirdi, o da iş emri/stok kayıtlarındaki usta
+// referanslarını bozardı. Sıra artık ayrı bir sütunda tutuluyor.
+migrationCalistir(30, () => {
+  kolonEkleEksikse('masters', 'display_order', 'INTEGER')
+  const sira = ['Bünyamin Kala', 'Yusuf Kala', 'Ali Kala']
+  const guncelle = db.prepare('UPDATE masters SET display_order = ? WHERE name = ?')
+  sira.forEach((name, index) => guncelle.run(index + 1, name))
+})
+
+// Teslim öncesi PIN normalizasyonu: başlangıç PIN'leri Bünyamin/Yusuf/Ali için
+// 1111/2222/3333 olarak yeniden belirlendi. Migration 9'un seed'i yalnızca kayıt
+// yoksa çalıştığından, kurulu veritabanları eski PIN'lerde kalıyordu.
+migrationCalistir(31, () => {
+  const baslangicPinleri = [
+    { name: 'Bünyamin Kala', pin: '1111' },
+    { name: 'Yusuf Kala', pin: '2222' },
+    { name: 'Ali Kala', pin: '3333' }
+  ]
+  const guncelle = db.prepare('UPDATE masters SET pin = ? WHERE name = ?')
+  for (const usta of baslangicPinleri) {
+    guncelle.run(hashPin(usta.pin), usta.name)
+  }
 })
 
   // Index'ler migration'lardan SONRA oluşturulmalı: bazı sütun ve tablolar

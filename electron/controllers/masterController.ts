@@ -15,7 +15,7 @@ export function registerMasterHandlers(kanalEkle: (kanal: string, fonksiyon: (..
         SELECT id, name, is_active
         FROM masters
         WHERE IFNULL(is_active, 1) = 1
-        ORDER BY id ASC
+        ORDER BY IFNULL(display_order, 9999) ASC, id ASC
       `).all()
 
       return { success: true, ustalar, dbPath }

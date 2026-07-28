@@ -9,7 +9,13 @@ import Dropdown from 'primevue/dropdown'
 import Tag from 'primevue/tag'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
+import { useRouter } from 'vue-router'
 import { useFormatters } from '../composables/useFormatters'
+import EmptyState from '../components/EmptyState.vue'
+import HelpButton from '../components/HelpButton.vue'
+
+const router = useRouter()
+const yardimaGit = (konu) => router.push({ path: '/help', query: { konu } })
 
 const parcalar = ref([])
 const yukleniyor = ref(true)
@@ -322,7 +328,7 @@ onUnmounted(() => {
   <div class="page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">Yedek Parça ve Stok Yönetimi</h1>
+        <h1 class="page-title">Yedek Parça ve Stok Yönetimi <HelpButton konu="parca" /></h1>
         <p class="page-subtitle">Depo stokunu, kritik parçaları ve hareketleri buradan yönetin.</p>
       </div>
       <div style="display: flex; gap: 12px; align-items: center;">
@@ -413,9 +419,32 @@ onUnmounted(() => {
         :value="filtrelenmisParcalar"
         :loading="yukleniyor"
         responsiveLayout="scroll"
-        emptyMessage="Aradığınız kriterlere uygun parça bulunamadı."
         :rowClass="(row) => Number(row.stock || 0) <= 0 ? 'row-critical' : (row.critical_stock_enabled !== 0 && Number(row.stock || 0) <= Number(row.critical_stock ?? 5) ? 'row-critical' : '')"
       >
+        <template #empty>
+          <EmptyState
+            v-if="parcalar.length > 0 || aramaKelimesi || seciliMarka || seciliKategori || stokFiltresi !== 'aktif'"
+            icon="pi pi-filter-slash"
+            title="Bu süzgeçlere uyan parça yok"
+            description="Arama kelimesini, marka/kategori seçimini veya stok durumu sekmesini değiştirip yeniden deneyin."
+            action-label="Filtreleri Temizle"
+            action-icon="pi pi-filter-slash"
+            compact
+            @action="filtreleriTemizle"
+          />
+          <EmptyState
+            v-else
+            icon="pi pi-box"
+            title="Stok listeniz boş"
+            description="Sık kullandığınız parçaları alış ve satış fiyatlarıyla girin. İş emrine stoktan parça eklediğinizde adet kendiliğinden düşer, kâr hesabı da alış fiyatından yapılır."
+            action-label="Yeni Parça Ekle"
+            action-icon="pi pi-plus"
+            hint-label="Nasıl yapılır?"
+            @action="formuTemizle(); dialogAcik = true"
+            @hint="yardimaGit('parca')"
+          />
+        </template>
+
 <Column field="code" header="Parça Kodu">
   <template #body="slotProps">
     <span class="plate-cell">{{ slotProps.data.code }}</span>

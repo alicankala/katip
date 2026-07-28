@@ -10,6 +10,7 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useRoute } from 'vue-router'
 import { useFormatters } from '../composables/useFormatters'
+import { firmaBilgileri, firmaIletisimSatirlari } from '../data/firmaBilgileri.js'
 
 // Sub-components
 import FinanceSummary from '../components/finance/FinanceSummary.vue'
@@ -17,6 +18,7 @@ import ReceivablesView from '../components/finance/ReceivablesView.vue'
 import PayablesView from '../components/finance/PayablesView.vue'
 import ExpensesView from '../components/finance/ExpensesView.vue'
 import MovementsView from '../components/finance/MovementsView.vue'
+import HelpButton from '../components/HelpButton.vue'
 
 // Helper: Bugünün Tarihi (YYYY-MM-DD)
 function bugununTarihi() {
@@ -777,11 +779,7 @@ const ekstreYazdir = () => {
   }
 
   const cari = seciliCari.value
-  const firma = {
-    unvan: 'Kâtip',
-    altBaslik: 'Oto Servis Takip Sistemi',
-    aciklama: 'Cari Hesap Ekstre Belgesi'
-  }
+  const firma = firmaBilgileri
 
   const guvenliMetin = (str) => {
     if (str === null || str === undefined) return ''
@@ -1064,7 +1062,7 @@ const ekstreYazdir = () => {
             <div class="company-box">
               <h1 class="company-name">${guvenliMetin(firma.unvan)}</h1>
               <div class="company-subtitle">${guvenliMetin(firma.altBaslik)}</div>
-              <div class="company-desc">${guvenliMetin(firma.aciklama)}</div>
+              ${firmaIletisimSatirlari().map((satir) => `<div class="company-desc">${guvenliMetin(satir)}</div>`).join('')}
             </div>
 
             <div class="document-box">
@@ -1179,7 +1177,7 @@ onUnmounted(() => {
     <!-- Page Header -->
     <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
       <div>
-        <h2 class="page-title" style="margin: 0;">Cari Hesap & Finans Yönetimi</h2>
+        <h2 class="page-title" style="margin: 0;">Cari Hesap & Finans Yönetimi <HelpButton konu="cari" /></h2>
         <p class="page-subtitle" style="margin: 4px 0 0; color: var(--text-muted, #94a3b8); font-size: 0.9rem;">
           Müşteri alacakları, tedarikçi borçları ve işletme giderlerinin sadeleştirilmiş takibi
         </p>

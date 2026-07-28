@@ -11,7 +11,8 @@ const routes = [
 { path: '/profit-report', component: () => import('../views/ProfitReport.vue') },
 { path: '/daily-closing', component: () => import('../views/DailyClosing.vue') },
   { path: '/current-accounts', component: () => import('../views/CurrentAccounts.vue') },
-  { path: '/settings', component: () => import('../views/Settings.vue') }
+  { path: '/settings', component: () => import('../views/Settings.vue') },
+  { path: '/help', component: () => import('../views/Help.vue') }
 ]
 
 const router = createRouter({

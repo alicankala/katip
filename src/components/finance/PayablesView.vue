@@ -7,6 +7,7 @@ import InputText from 'primevue/inputtext'
 import Dropdown from 'primevue/dropdown'
 import Checkbox from 'primevue/checkbox'
 import { useFormatters } from '../../composables/useFormatters'
+import EmptyState from '../EmptyState.vue'
 
 const props = defineProps({
   suppliers: {
@@ -116,11 +117,30 @@ const getCariTipClass = (type) => {
     <DataTable
       :value="filtrelenmisTedarikciler"
       responsiveLayout="scroll"
-      emptyMessage="Kayıtlı tedarikçi veya borç hesabı bulunamadı."
       paginator
       :rows="15"
       class="p-datatable-sm"
     >
+      <template #empty>
+        <EmptyState
+          v-if="aramaMetni || seciliTipFiltresi || sadeceBorclular"
+          icon="pi pi-search-minus"
+          title="Bu süzgeçte kayıt yok"
+          description="Arama kutusunu, tür seçimini veya 'sadece borçlular' işaretini kaldırıp yeniden bakın."
+          compact
+        />
+        <EmptyState
+          v-else
+          icon="pi pi-truck"
+          title="Henüz tedarikçi hesabı yok"
+          description="Parça aldığınız tedarikçileri ve çalıştığınız taşeronları buraya ekleyin; borçlarınızı ve yaptığınız ödemeleri bu ekrandan takip edersiniz."
+          action-label="Yeni Cari Ekle"
+          action-icon="pi pi-plus"
+          compact
+          @action="emit('add-cari')"
+        />
+      </template>
+
       <Column field="name" header="Firma / Kişi Adı">
         <template #body="slotProps">
           <strong>{{ slotProps.data.name }}</strong>

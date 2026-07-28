@@ -43,6 +43,28 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 
 let win: BrowserWindow | null = null
 
+// Kısayola iki kez tıklandığında ikinci bir kopya açılıyor; iki pencere aynı
+// veritabanına yazıyor ve Chromium'un önbellek kilidi çakışıyordu. İkinci kopya
+// artık kendini kapatıp var olan pencereyi öne getiriyor.
+//
+// Kilit yalnızca kurulu uygulamada uygulanır: geliştirme sırasında dosya
+// değişince Electron yeniden başlatıldığı için, eski süreç kilidi henüz
+// bırakmamışken yeni süreç açılamaz ve uygulama geri gelmezdi.
+if (app.isPackaged) {
+  if (!app.requestSingleInstanceLock()) {
+    // exit(), quit()'ten farklı olarak 'before-quit' çalıştırmaz; yoksa bu ikinci
+    // kopya kapanırken gereksiz yere çıkış yedeği almaya kalkardı.
+    app.exit(0)
+  } else {
+    app.on('second-instance', () => {
+      if (!win) return
+      if (win.isMinimized()) win.restore()
+      win.show()
+      win.focus()
+    })
+  }
+}
+
 // Kullanıcı hatırlatmaya rağmen "Kapatmadan Çık" derse bir daha sorulmaz
 let gunSonuHatirlatmasiAtlandi = false
 

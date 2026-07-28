@@ -510,7 +510,7 @@ export function startPhoneServer(requestedPort: number): Promise<{ success: bool
       FROM masters
       WHERE IFNULL(is_active, 1) = 1
         AND IFNULL(hidden_from_mobile, 0) = 0
-      ORDER BY id ASC
+      ORDER BY IFNULL(display_order, 9999) ASC, id ASC
     `).all() as Array<{ id: number; name: string }>
 
     const masterOptionsHtml = mobileMasters.length
@@ -3800,7 +3800,7 @@ document
         // 2. API: Get Masters List
         if (pathName === '/api/masters') {
           try {
-            const rows = db.prepare("SELECT id, name FROM masters WHERE IFNULL(is_active, 1) = 1 AND IFNULL(hidden_from_mobile, 0) = 0 ORDER BY id ASC").all()
+            const rows = db.prepare("SELECT id, name FROM masters WHERE IFNULL(is_active, 1) = 1 AND IFNULL(hidden_from_mobile, 0) = 0 ORDER BY IFNULL(display_order, 9999) ASC, id ASC").all()
             res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' })
             res.end(JSON.stringify({ success: true, masters: rows }))
           } catch (err: any) {

@@ -9,6 +9,8 @@ import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import { useFormatters } from '../composables/useFormatters'
+import { firmaBilgileri } from '../data/firmaBilgileri.js'
+import HelpButton from '../components/HelpButton.vue'
 
 const toast = useToast()
 const confirmDialog = useConfirm()
@@ -240,6 +242,7 @@ const raporYazdir = () => {
         <style>
           * { box-sizing: border-box; }
           body { margin: 0; padding: 24px; font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 12px; }
+          .firma { font-size: 15px; font-weight: 800; letter-spacing: -0.2px; margin-bottom: 2px; }
           h1 { font-size: 18px; margin: 0; }
           .sub { color: #555; margin: 2px 0 16px; }
           .box { border: 1px solid #ccc; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; }
@@ -257,8 +260,9 @@ const raporYazdir = () => {
         </style>
       </head>
       <body>
+        <div class="firma">${guvenliMetin(firmaBilgileri.unvan)}</div>
         <h1>Gün Sonu Raporu</h1>
-        <div class="sub">Kâtip Servis Takip Sistemi — ${guvenliMetin(tarihFormatla(o.tarih))}</div>
+        <div class="sub">${guvenliMetin(tarihFormatla(o.tarih))}</div>
 
         <div class="box">
           <div class="box-title">Özet</div>
@@ -323,7 +327,7 @@ onUnmounted(() => {
   <div class="daily-closing-page">
     <div class="page-header">
       <div>
-        <h2>Gün Sonu</h2>
+        <h2>Gün Sonu <HelpButton konu="gun-sonu" /></h2>
         <p>Günün tahsilat ve çıkış özeti, kasa sayımı ve günlük kapanış kaydı.</p>
       </div>
 

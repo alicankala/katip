@@ -1,5 +1,6 @@
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Button from 'primevue/button'
@@ -7,6 +8,8 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
+import EmptyState from '../components/EmptyState.vue'
+import HelpButton from '../components/HelpButton.vue'
 
 const musteriler = ref([])
 const yukleniyor = ref(true)
@@ -15,6 +18,14 @@ const aramaKelimesi = ref('')
 
 const toast = useToast()
 const confirmDialog = useConfirm()
+const router = useRouter()
+
+const yeniMusteriAc = () => {
+  Object.assign(form, { id: null, name: '', phone: '', note: '' })
+  dialogAcik.value = true
+}
+
+const yardimaGit = (konu) => router.push({ path: '/help', query: { konu } })
 
 const basariMesaji = (detay) => {
   toast.add({
@@ -142,19 +153,40 @@ onUnmounted(() => {
 <template>
   <div>
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-      <h2>Müşteri Yönetimi</h2>
+      <h2>Müşteri Yönetimi <HelpButton konu="musteri" /></h2>
       
       <div style="display: flex; gap: 15px; align-items: center;">
         <span class="p-input-icon-left" style="width: 300px;">
           <i class="pi pi-search" />
           <InputText v-model="aramaKelimesi" placeholder="İsim veya Telefon Ara..." />
         </span>
-        <Button label="Yeni Müşteri Ekle" icon="pi pi-user-plus" severity="info" @click="Object.assign(form, { id: null, name: '', phone: '', note: '' }); dialogAcik = true" />
+        <Button label="Yeni Müşteri Ekle" icon="pi pi-user-plus" severity="info" @click="yeniMusteriAc" />
       </div>
     </div>
 
     <div class="table-panel">
-      <DataTable :value="filtrelenmisMusteriler" :loading="yukleniyor" responsiveLayout="scroll" emptyMessage="Kayıtlı müşteri bulunamadı.">
+      <DataTable :value="filtrelenmisMusteriler" :loading="yukleniyor" responsiveLayout="scroll">
+        <template #empty>
+          <EmptyState
+            v-if="aramaKelimesi"
+            icon="pi pi-search-minus"
+            title="Arama sonucu bulunamadı"
+            :description="`&quot;${aramaKelimesi}&quot; ile eşleşen müşteri yok. Arama kutusunu temizleyip yeniden deneyin.`"
+            compact
+          />
+          <EmptyState
+            v-else
+            icon="pi pi-users"
+            title="Henüz müşteri kaydı yok"
+            description="Müşteriyi buradan elle ekleyebilirsiniz. Servis Kabul ekranından araç aldığınızda müşteri kaydı zaten kendiliğinden oluşur."
+            action-label="Yeni Müşteri Ekle"
+            action-icon="pi pi-user-plus"
+            hint-label="Nasıl yapılır?"
+            @action="yeniMusteriAc"
+            @hint="yardimaGit('musteri')"
+          />
+        </template>
+
         <Column field="name" header="Ad Soyad"></Column>
         <Column field="phone" header="Telefon Numarası"></Column>
         <Column field="note" header="Müşteri Notu"></Column>

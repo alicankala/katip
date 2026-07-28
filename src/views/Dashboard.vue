@@ -8,6 +8,8 @@ import InputText from 'primevue/inputtext'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
+import EmptyState from '../components/EmptyState.vue'
+import HelpButton from '../components/HelpButton.vue'
 
 const router = useRouter()
 
@@ -345,7 +347,7 @@ onUnmounted(() => {
     <!-- ── Page Header ──────────────────────────────── -->
     <div class="page-header dash-header">
       <div>
-        <h1 class="page-title">Servis Yönetim Paneli</h1>
+        <h1 class="page-title">Servis Yönetim Paneli <HelpButton konu="ekran-duzeni" /></h1>
         <p class="page-subtitle">Günlük servis durumu, açık işler ve müşteri geçmişi</p>
       </div>
       <Button
@@ -541,11 +543,18 @@ onUnmounted(() => {
           </DataTable>
         </div>
 
-        <div v-else class="empty-state">
-          <i class="pi pi-inbox"></i>
-          <h3>Açık iş emri yok</h3>
-          <p>Tamamlanmamış iş emri bulunmuyor.</p>
-        </div>
+        <EmptyState
+          v-else
+          icon="pi pi-inbox"
+          title="Açık iş emri yok"
+          description="Şu an serviste bekleyen araç bulunmuyor. Yeni bir araç geldiğinde Servis Kabul ekranından alın; iş emri kendiliğinden açılır."
+          action-label="Servis Kabul'e Git"
+          action-icon="pi pi-bolt"
+          hint-label="Nasıl yapılır?"
+          compact
+          @action="router.push('/service-reception')"
+          @hint="router.push({ path: '/help', query: { konu: 'servis-kabul' } })"
+        />
       </div>
 
       <!-- ─ Sağ: Arama + Kritik Stok ─ -->
