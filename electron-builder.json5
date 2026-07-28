@@ -36,7 +36,11 @@
       ]
     }
   ],
-  "artifactName": "${productName}-Windows-${version}-Setup.${ext}"
+  // Dosya adi bilerek ASCII: "Kâtip" icindeki 'â' yuzunden electron-builder
+  // latest.yml'ye guvenli (ASCII) bir ad yaziyor, uretilen dosya ise ${productName}
+  // ile adlandiriliyordu. Ikisi tutmayinca guncelleyici dosyayi bulamayip
+  // sessizce basarisiz oluyordu. productName degismiyor, yalnizca dosya adi.
+  "artifactName": "Katip-Windows-${version}-Setup.${ext}"
 },
   "nsis": {
     "oneClick": false,
