@@ -1,6 +1,6 @@
-import Database from 'better-sqlite3'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { createRequire } from 'node:module'
 import db, { dbPath, uygulamaVerileriniYenileBackend, ayarlariGetirBackend } from '../database.js'
 import { app, BrowserWindow, dialog, shell } from 'electron'
 import fsSync, { promises as fs } from 'node:fs'
@@ -8,6 +8,13 @@ import path from 'node:path'
 import { isRestoreInProgress, setRestoreInProgress } from '../restoreState.js'
 
 const execFileAsync = promisify(execFile)
+
+// better-sqlite3 doğrudan ESM import ile yüklenirse Vite'in derlediği main
+// paketinde native modülün __filename/__dirname'e dayanan yükleme mantığı
+// bozuluyor ("__filename is not defined"). database.js'teki gibi Node'un
+// gerçek CommonJS require'ı kullanılmalı.
+const require = createRequire(import.meta.url)
+const Database = require('better-sqlite3')
 
 function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message

@@ -31,6 +31,7 @@ const kapatiliyor = ref(false)
 const ozet = ref(null)
 const kapanis = ref(null)
 const gecmisKapanislar = ref([])
+const yenidenAcmaLoglari = ref([])
 
 // Kapanış formu
 const sayilanNakit = ref(null)
@@ -59,9 +60,10 @@ const farkRenk = (fark) => {
 const veriYukle = async () => {
   yukleniyor.value = true
   try {
-    const [ozetRes, gecmisRes] = await Promise.all([
+    const [ozetRes, gecmisRes, yenidenAcmaRes] = await Promise.all([
       window.api.gunSonuOzetiGetir(seciliTarih.value),
-      window.api.gunSonuKapanislariGetir(60)
+      window.api.gunSonuKapanislariGetir(60),
+      window.api.gunSonuYenidenAcmaLoglariGetir(60)
     ])
 
     if (ozetRes?.success) {
@@ -75,6 +77,10 @@ const veriYukle = async () => {
 
     if (gecmisRes?.success) {
       gecmisKapanislar.value = gecmisRes.kapanislar || []
+    }
+
+    if (yenidenAcmaRes?.success) {
+      yenidenAcmaLoglari.value = yenidenAcmaRes.loglar || []
     }
   } catch (e) {
     console.error('Gün sonu verisi yükleme hatası:', e)
@@ -138,10 +144,12 @@ const gunuKapat = () => {
 // ── Günü Yeniden Açma (Admin PIN gerekir) ─────────
 const acilisDialogAcik = ref(false)
 const adminPinGirisi = ref('')
+const acilisNedeni = ref('')
 const acilisYukleniyor = ref(false)
 
 const acilisDialogunuAc = () => {
   adminPinGirisi.value = ''
+  acilisNedeni.value = ''
   acilisDialogAcik.value = true
 }
 
@@ -151,6 +159,10 @@ const adminPinDuzenle = (event) => {
 
 const gunuYenidenAc = async () => {
   if (acilisYukleniyor.value) return
+  if (!acilisNedeni.value.trim()) {
+    toast.add({ severity: 'warn', summary: 'Uyarı', detail: 'Günü yeniden açma nedenini yazmalısınız.', life: 3000 })
+    return
+  }
   if (adminPinGirisi.value.length !== 4) {
     toast.add({ severity: 'warn', summary: 'Uyarı', detail: 'Admin PIN 4 haneli olmalıdır.', life: 3000 })
     return
@@ -160,7 +172,8 @@ const gunuYenidenAc = async () => {
   try {
     const res = await window.api.gunSonuKapanisAc({
       closing_date: seciliTarih.value,
-      admin_pin: adminPinGirisi.value
+      admin_pin: adminPinGirisi.value,
+      reason: acilisNedeni.value.trim()
     })
     if (res?.success) {
       acilisDialogAcik.value = false
@@ -175,6 +188,7 @@ const gunuYenidenAc = async () => {
   } finally {
     acilisYukleniyor.value = false
     adminPinGirisi.value = ''
+    acilisNedeni.value = ''
   }
 }
 
@@ -582,6 +596,17 @@ onUnmounted(() => {
         </p>
 
         <div class="form-field">
+          <label>Neden (zorunlu, geçmişe kaydedilir)</label>
+          <Textarea
+            v-model="acilisNedeni"
+            rows="2"
+            style="width: 100%;"
+            placeholder="Örn: Kasa sayımı hatalı girildi, düzeltilecek..."
+            autofocus
+          />
+        </div>
+
+        <div class="form-field">
           <label>Admin PIN</label>
           <InputText
             :value="adminPinGirisi"
@@ -590,7 +615,6 @@ onUnmounted(() => {
             inputmode="numeric"
             placeholder="4 haneli Admin PIN"
             style="width: 100%;"
-            autofocus
             @input="adminPinDuzenle"
             @keyup.enter="gunuYenidenAc"
           />
@@ -649,6 +673,35 @@ onUnmounted(() => {
         </Column>
         <Column header="Kapatan">
           <template #body="slotProps">{{ slotProps.data.master_name || slotProps.data.closed_by_name || '-' }}</template>
+        </Column>
+      </DataTable>
+    </div>
+
+    <!-- Yeniden Açma Geçmişi -->
+    <div class="panel" style="margin-top: 20px;">
+      <div class="panel-title">
+        <i class="pi pi-lock-open" style="color: #f59e0b;"></i>
+        Yeniden Açma Geçmişi
+      </div>
+      <DataTable :value="yenidenAcmaLoglari" size="small" :rows="10" :paginator="yenidenAcmaLoglari.length > 10">
+        <template #empty>
+          <div class="empty-mini">Henüz yeniden açma kaydı yok.</div>
+        </template>
+        <Column header="Gün" style="width: 110px;">
+          <template #body="slotProps">
+            <a class="date-link" @click.prevent="seciliTarih = slotProps.data.closing_date; tarihDegisti()">
+              {{ tarihFormatla(slotProps.data.closing_date) }}
+            </a>
+          </template>
+        </Column>
+        <Column header="Açan">
+          <template #body="slotProps">{{ slotProps.data.master_name || slotProps.data.reopened_by_name || '-' }}</template>
+        </Column>
+        <Column header="Açılma Zamanı" style="width: 150px;">
+          <template #body="slotProps">{{ tarihSaatFormatla(slotProps.data.created_at) }}</template>
+        </Column>
+        <Column header="Neden">
+          <template #body="slotProps">{{ slotProps.data.reason }}</template>
         </Column>
       </DataTable>
     </div>

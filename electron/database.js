@@ -644,6 +644,26 @@ migrationCalistir(31, () => {
   }
 })
 
+// Günü yeniden açma işlemi eskiden yalnızca console/electron-log dosyasına
+// yazılıyordu; kullanıcı arayüzünde kimin, ne zaman, neden açtığı görünmüyordu.
+// Artık her yeniden açma bu tabloya kaydedilip Gün Sonu ekranında listeleniyor.
+migrationCalistir(32, () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS daily_closing_reopen_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      closing_date TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      reopened_by_master_id INTEGER,
+      reopened_by_name TEXT,
+      total_collected REAL,
+      counted_cash REAL,
+      cash_difference REAL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(reopened_by_master_id) REFERENCES masters(id)
+    );
+  `)
+})
+
   // Index'ler migration'lardan SONRA oluşturulmalı: bazı sütun ve tablolar
   // (ör. customers.is_active, work_order_payments) ancak migration'larla ekleniyor.
   db.exec(`

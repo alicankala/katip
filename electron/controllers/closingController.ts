@@ -318,6 +318,11 @@ export function registerClosingHandlers(kanalEkle: (kanal: string, fonksiyon: (.
   kanalEkle('gun-sonu-kapanis-ac', (_event, veri: any) => {
     try {
       const gecerliTarih = tarihDogrula(veri?.closing_date)
+      const neden = String(veri?.reason || '').trim()
+
+      if (!neden) {
+        throw new Error('Günü yeniden açma nedeni yazılmalıdır.')
+      }
 
       if (!verifyAdminPin(veri?.admin_pin)) {
         return { success: false, error: 'Hatalı Admin PIN.' }
@@ -328,19 +333,62 @@ export function registerClosingHandlers(kanalEkle: (kanal: string, fonksiyon: (.
         throw new Error('Bu gün için kapanış kaydı bulunamadı.')
       }
 
+      // Açan kimliği main process oturumundan alınır (client'a güvenilmez)
+      const session = getActiveMasterSession()
+      let reopenedByMasterId: number | null = null
+      let reopenedByName = 'Bilinmiyor'
+      if (session === 'admin') {
+        reopenedByName = 'Admin / Destek'
+      } else if (typeof session === 'number' && Number.isFinite(session) && session > 0) {
+        reopenedByMasterId = session
+        const master = db.prepare('SELECT name FROM masters WHERE id = ?').get(session) as any
+        if (master?.name) reopenedByName = String(master.name)
+      }
+
+      db.prepare(`
+        INSERT INTO daily_closing_reopen_logs (
+          closing_date, reason, reopened_by_master_id, reopened_by_name,
+          total_collected, counted_cash, cash_difference
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        gecerliTarih,
+        neden,
+        reopenedByMasterId,
+        reopenedByName,
+        mevcut.total_collected,
+        mevcut.counted_cash,
+        mevcut.cash_difference
+      )
+
       db.prepare('DELETE FROM daily_closings WHERE closing_date = ?').run(gecerliTarih)
 
       // Kalıcı loga iz bırak (electron-log console çıktısını dosyaya da yazar)
-      const session = getActiveMasterSession()
       console.log(
-        `[GünSonu] ${gecerliTarih} kapanışı admin onayıyla yeniden açıldı.`,
-        `Silinen kayıt: toplam=${mevcut.total_collected}, sayılan=${mevcut.counted_cash}, fark=${mevcut.cash_difference}, kapatan=${mevcut.closed_by_name}.`,
-        `Aktif oturum: ${session === 'admin' ? 'Admin' : session || 'yok'}`
+        `[GünSonu] ${gecerliTarih} kapanışı yeniden açıldı. Açan: ${reopenedByName}. Neden: ${neden}.`,
+        `Silinen kayıt: toplam=${mevcut.total_collected}, sayılan=${mevcut.counted_cash}, fark=${mevcut.cash_difference}, kapatan=${mevcut.closed_by_name}.`
       )
 
       return { success: true }
     } catch (error) {
       console.error('Gün sonu yeniden açma hatası:', error)
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+
+  // 3b. Günü Yeniden Açma Geçmişi
+  kanalEkle('gun-sonu-yeniden-acma-loglari-getir', (_event, limit: any) => {
+    try {
+      const kayitLimiti = Math.min(Math.max(Number(limit) || 60, 1), 365)
+      const loglar = db.prepare(`
+        SELECT rl.*, m.name AS master_name
+        FROM daily_closing_reopen_logs rl
+        LEFT JOIN masters m ON m.id = rl.reopened_by_master_id
+        ORDER BY rl.created_at DESC
+        LIMIT ?
+      `).all(kayitLimiti)
+      return { success: true, loglar }
+    } catch (error) {
+      console.error('Gün sonu yeniden açma logları getirme hatası:', error)
       return { success: false, error: getErrorMessage(error) }
     }
   })

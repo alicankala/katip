@@ -255,7 +255,7 @@ export const yardimBolumleri = [
           'Fark varsa açıklama notu yazın.',
           '"Günü Kapat" düğmesine basın. Dilerseniz "Yazdır" ile kapanış çıktısı alın.'
         ],
-        ipucu: 'Gün sonu yapılmadan programı kapatmaya çalışırsanız uyarı alırsınız. Kapatılmış bir günü düzeltmek için "Günü Yeniden Aç" düğmesi ve Admin PIN gerekir.'
+        ipucu: 'Gün sonu yapılmadan programı kapatmaya çalışırsanız uyarı alırsınız. Kapatılmış bir günü düzeltmek için "Günü Yeniden Aç" düğmesi, bir neden yazısı ve Admin PIN gerekir; kim, ne zaman ve neden açtığı "Yeniden Açma Geçmişi" tablosuna kaydedilir.'
       }
     ]
   },
