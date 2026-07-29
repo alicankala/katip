@@ -1,5 +1,5 @@
 <script setup>
-import { ref, reactive, onMounted, watch, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, watch, computed } from 'vue'
 import { decodeVin } from '../utils/vinDecoder'
 import { useRouter } from 'vue-router'
 import Button from 'primevue/button'
@@ -340,6 +340,11 @@ const isEmriRes = await window.api.isEmriEkle({
 onMounted(() => {
   aktifUsta.value = JSON.parse(localStorage.getItem('aktifUsta') || 'null')
   verileriYukle()
+  window.addEventListener('app-data-refreshed', verileriYukle)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('app-data-refreshed', verileriYukle)
 })
 </script>
 

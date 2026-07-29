@@ -68,6 +68,27 @@ const kurulumSihirbaziniAc = () => {
   kurulumSihirbaziAcik.value = true
 }
 
+// ── Durum çubuğu: gün sonu göstergesi ───────────────
+const gunSonuOzet = ref(null)
+const gunSonuKapanis = ref(null)
+
+const gunSonuDurumunuYukle = async () => {
+  if (!window.api?.gunSonuOzetiGetir) return
+  try {
+    const res = await window.api.gunSonuOzetiGetir()
+    if (res?.success) {
+      gunSonuOzet.value = res.ozet || null
+      gunSonuKapanis.value = res.kapanis || null
+    }
+  } catch (e) {
+    console.error('Gün sonu durumu yüklenemedi:', e)
+  }
+}
+
+const gunSonunaGit = () => {
+  router.push('/daily-closing')
+}
+
 // ── Güncelleme şeridi ────────────────────────────────────────────────
 // Windows'un İngilizce sistem bildirimi dükkanda fark edilmediği için
 // güncelleme hazır olduğunda uygulamanın içinde şerit gösteriliyor.
@@ -584,6 +605,9 @@ onMounted(async () => {
   window.addEventListener('usta-cikis-yapildi', disaridanCikisYap)
   window.addEventListener('hava-durumu-yenile', havaYukle)
   window.addEventListener('kurulum-sihirbazi-ac', kurulumSihirbaziniAc)
+  window.addEventListener('app-data-refreshed', gunSonuDurumunuYukle)
+  onUnmounted(() => window.removeEventListener('app-data-refreshed', gunSonuDurumunuYukle))
+  gunSonuDurumunuYukle()
 
   if (window.api?.onGuncellemeDurumu) {
     const unbindGuncelleme = window.api.onGuncellemeDurumu((durum) => {
@@ -674,7 +698,7 @@ onMounted(async () => {
         telefonErisimi.value.port = res.port || 4317
         telefonErisimi.value.ip = res.ip
         telefonErisimi.value.ips = res.ips || []
-        
+
         if (!res.running && autoStartPhone && window.api?.telefonErisimiBaslat) {
           const startRes = await window.api.telefonErisimiBaslat(Number(telefonErisimi.value.port))
           if (startRes?.success) {
@@ -683,6 +707,10 @@ onMounted(async () => {
             telefonErisimi.value.ip = startRes.ip
             telefonErisimi.value.ips = startRes.ips || []
           }
+        }
+
+        if (telefonErisimi.value.running) {
+          await mobilOturumlariYukle()
         }
       }
     } catch (error) {
@@ -751,32 +779,6 @@ onUnmounted(() => {
     </div>
 
     <div class="custom-titlebar-actions" @dblclick.stop>
-      <div
-        v-if="aktifUsta"
-        class="active-master-box"
-        :class="{ 'admin-mode-box': aktifUsta?.role === 'admin' }"
-      >
-        <div class="master-avatar" :class="{ 'admin-avatar': aktifUsta?.role === 'admin' }">
-          {{ aktifUsta?.name?.charAt(0)?.toUpperCase() }}
-        </div>
-        <div class="master-info">
-          <span class="master-label">{{ aktifUsta?.role === 'admin' ? 'Destek Modu' : 'Aktif Usta' }}</span>
-          <strong class="master-name">{{ aktifUsta?.name }}</strong>
-        </div>
-        <button class="master-logout-btn" @click.stop="cikisYap" title="Çıkış Yap">
-          <i class="pi pi-sign-out"></i>
-        </button>
-      </div>
-
-      <button
-        type="button"
-        class="window-btn phone-btn-titlebar"
-        @click.stop="togglePhoneAccessModal"
-        title="Telefon Erişimi"
-      >
-        <i class="pi pi-mobile"></i>
-      </button>
-
       <button
         type="button"
         class="window-btn refresh-btn-titlebar"
@@ -961,19 +963,6 @@ v-for="item in menuItems.slice(6, 9)"
         </div>
 
 <div class="nav-group nav-group-bottom">
-  <!-- Bilgi Şeridi: saat / tarih / döviz döngüsü -->
-  <div v-if="aktifTickerItem" class="ticker-box" title="Kurlar TCMB'den alınır, 30 dakikada bir yenilenir">
-    <Transition name="ticker-slide" mode="out-in">
-      <div :key="aktifTickerItem.label" class="ticker-item">
-        <i :class="aktifTickerItem.icon" class="ticker-icon"></i>
-        <div class="ticker-texts">
-          <span class="ticker-label">{{ aktifTickerItem.label }}</span>
-          <strong class="ticker-value">{{ aktifTickerItem.value }}</strong>
-        </div>
-      </div>
-    </Transition>
-  </div>
-
   <a
     class="nav-item"
     :class="{ active: $route.path === menuItems[10].path }"
@@ -1004,6 +993,68 @@ v-for="item in menuItems.slice(6, 9)"
         </Transition>
       </router-view>
     </main>
+  </div>
+
+  <!-- Alt Durum Çubuğu: aktif usta + bilgi şeridi (saat/tarih/döviz) -->
+  <div v-if="aktifUsta" class="app-status-bar">
+    <div class="status-master-box" :class="{ 'admin-mode-box': aktifUsta?.role === 'admin' }">
+      <div class="status-master-avatar" :class="{ 'admin-avatar': aktifUsta?.role === 'admin' }">
+        {{ aktifUsta?.name?.charAt(0)?.toUpperCase() }}
+      </div>
+      <span class="status-master-label">{{ aktifUsta?.role === 'admin' ? 'Destek Modu' : 'Aktif Usta' }}</span>
+      <strong class="status-master-name">{{ aktifUsta?.name }}</strong>
+      <button class="status-master-logout-btn" @click="cikisYap" title="Çıkış Yap">
+        <i class="pi pi-sign-out"></i>
+      </button>
+    </div>
+
+    <div v-if="aktifTickerItem" class="status-bar-sep"></div>
+
+    <div v-if="aktifTickerItem" class="status-ticker" title="Kurlar TCMB'den alınır, 30 dakikada bir yenilenir">
+      <Transition name="ticker-slide" mode="out-in">
+        <div :key="aktifTickerItem.label" class="status-ticker-item">
+          <i :class="aktifTickerItem.icon" class="status-ticker-icon"></i>
+          <span class="status-ticker-label">{{ aktifTickerItem.label }}:</span>
+          <strong class="status-ticker-value">{{ aktifTickerItem.value }}</strong>
+        </div>
+      </Transition>
+    </div>
+
+    <div class="status-bar-spacer"></div>
+
+    <div
+      v-if="gunSonuOzet"
+      class="status-gunsonu"
+      :class="gunSonuKapanis ? 'is-closed' : 'is-open'"
+      role="button"
+      tabindex="0"
+      :title="gunSonuKapanis ? 'Bugün kapatıldı — Kapatan: ' + (gunSonuKapanis.master_name || gunSonuKapanis.closed_by_name || '-') : 'Bugün henüz kapatılmadı — Gün Sonu ekranına git'"
+      @click="gunSonunaGit"
+      @keyup.enter="gunSonunaGit"
+    >
+      <i :class="['pi', gunSonuKapanis ? 'pi-lock' : 'pi-lock-open']"></i>
+      <span class="status-gunsonu-text">{{ gunSonuKapanis ? 'Gün Kapatıldı' : 'Gün Açık' }}</span>
+    </div>
+
+    <div v-if="gunSonuOzet" class="status-bar-sep"></div>
+
+    <div
+      class="status-phone"
+      :class="{ 'is-active': telefonErisimi.running }"
+      role="button"
+      tabindex="0"
+      title="Telefon Erişimi"
+      @click="togglePhoneAccessModal"
+      @keyup.enter="togglePhoneAccessModal"
+    >
+      <span class="status-dot"></span>
+      <i class="pi pi-mobile"></i>
+      <span class="status-phone-text">
+        {{ telefonErisimi.running
+          ? ('Açık' + (mobilOturumlar.length ? ' · ' + mobilOturumlar.length + ' cihaz' : ''))
+          : 'Kapalı' }}
+      </span>
+    </div>
   </div>
 
   <!-- Güncelleme şeridi: yalnızca giriş yapılmışken, sağ altta -->
@@ -1819,7 +1870,7 @@ v-for="item in menuItems.slice(6, 9)"
 
 /* ── App Layout ──────────────────────────────────── */
 .app-layout {
-  height: calc(100vh - 52px);
+  height: calc(100vh - 52px - 42px);
   width: 100vw;
   overflow: hidden;
   display: grid;
@@ -1845,52 +1896,55 @@ v-for="item in menuItems.slice(6, 9)"
 
 
 
-/* ── Active Master Box (titlebar) ────────────────── */
-.active-master-box {
+/* ── Alt Durum Çubuğu (aktif usta + bilgi şeridi) ── */
+.app-status-bar {
+  height: 42px;
+  flex-shrink: 0;
+  width: 100vw;
+  background: var(--bg-active-box);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 14px;
+  color: var(--text-primary);
+}
+
+.status-master-box {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 100%;
-  padding: 0 12px;
-  margin-right: 2px;
-  border-right: 1px solid var(--border-color-soft, var(--border-color));
+  flex-shrink: 0;
   cursor: default;
 }
 
-.admin-mode-box {
+.status-master-box.admin-mode-box {
   background: rgba(245, 158, 11, 0.06);
+  border-radius: 8px;
+  padding: 4px 10px;
+  margin: 0 -10px 0 0;
 }
 
-.master-avatar {
-  width: 26px;
-  height: 26px;
+.status-master-avatar {
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--accent-color);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 700;
   flex-shrink: 0;
-  letter-spacing: 0;
 }
 
-.admin-avatar {
-  background: linear-gradient(135deg, #f59e0b, #d97706) !important;
+.status-master-avatar.admin-avatar {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
   box-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
 }
 
-.master-info {
-  min-width: 0;
-  max-width: 120px;
-  display: flex;
-  flex-direction: column;
-  gap: 0px;
-  line-height: 1.2;
-}
-
-.master-label {
+.status-master-label {
   font-size: 9px;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -1898,18 +1952,19 @@ v-for="item in menuItems.slice(6, 9)"
   font-weight: 600;
 }
 
-.master-name {
+.status-master-name {
   font-size: 12.5px;
   font-weight: 600;
   color: var(--text-title);
   white-space: nowrap;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.master-logout-btn {
-  width: 28px;
-  height: 28px;
+.status-master-logout-btn {
+  width: 24px;
+  height: 24px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   background: transparent;
@@ -1918,14 +1973,132 @@ v-for="item in menuItems.slice(6, 9)"
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: 11px;
   flex-shrink: 0;
   transition: background 0.12s, color 0.12s, border-color 0.12s;
 }
-.master-logout-btn:hover {
+.status-master-logout-btn:hover {
   background: rgba(239, 68, 68, 0.12);
   border-color: rgba(239, 68, 68, 0.4);
   color: #f87171;
+}
+
+.status-bar-sep {
+  width: 1px;
+  height: 22px;
+  background: var(--border-color);
+  flex-shrink: 0;
+}
+
+.status-ticker {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  user-select: none;
+}
+
+.status-ticker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.status-ticker-icon {
+  font-size: 13px;
+  color: var(--accent-color, #38bdf8);
+  flex-shrink: 0;
+}
+
+.status-ticker-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-ticker-value {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-title);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+:global(html[data-theme="light"] .app-status-bar) {
+  background: #ffffff;
+  border-top-color: var(--border-color);
+}
+
+.status-bar-spacer {
+  flex: 1;
+}
+
+.status-gunsonu {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.status-gunsonu:hover {
+  background: var(--bg-card-hover);
+}
+.status-gunsonu i {
+  font-size: 12.5px;
+}
+.status-gunsonu.is-open {
+  color: #f59e0b;
+}
+.status-gunsonu.is-closed {
+  color: #34d399;
+}
+
+.status-phone {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.status-phone:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-title);
+}
+.status-phone i {
+  font-size: 12px;
+}
+.status-phone.is-active {
+  color: #34d399;
+}
+.status-phone.is-active:hover {
+  color: #34d399;
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+.status-phone.is-active .status-dot {
+  background: #34d399;
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.5);
 }
 
 /* ── Sidebar Navigation ──────────────────────────── */
@@ -2008,9 +2181,6 @@ v-for="item in menuItems.slice(6, 9)"
   border-right-color: var(--border-color);
 }
 
-:global(html[data-theme="light"] .active-master-box) {
-  border-right-color: var(--border-color);
-}
 :global(html[data-theme="light"] .nav-item.active) {
   background: rgba(37, 99, 235, 0.08);
   color: #1d4ed8;
@@ -2094,18 +2264,12 @@ v-for="item in menuItems.slice(6, 9)"
   font-size: 15px;
 }
 
-.phone-btn-titlebar {
-  font-size: 16px !important;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
 
 /* ── Güncelleme şeridi ───────────────────────────── */
 .update-bar {
   position: fixed;
   right: 20px;
-  bottom: 20px;
+  bottom: 62px;
   z-index: 9000;
   display: flex;
   align-items: center;
@@ -2202,65 +2366,7 @@ v-for="item in menuItems.slice(6, 9)"
   flex-shrink: 0;
 }
 
-/* ── Bilgi Şeridi (saat / tarih / döviz) ─────────── */
-.ticker-box {
-  border: 1px solid var(--border-color);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.02);
-  padding: 7px 12px;
-  margin-bottom: 6px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  user-select: none;
-}
-
-.ticker-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  width: 100%;
-}
-
-.ticker-icon {
-  font-size: 14px;
-  color: var(--accent-color, #38bdf8);
-  flex-shrink: 0;
-  width: 16px;
-  text-align: center;
-}
-
-.ticker-texts {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  line-height: 1.25;
-  min-width: 0;
-}
-
-.ticker-label {
-  font-size: 9.5px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.ticker-value {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--text-title);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
+/* ── Bilgi Şeridi geçiş animasyonu (durum çubuğunda kullanılır) ── */
 .ticker-slide-enter-active,
 .ticker-slide-leave-active {
   transition: opacity 0.25s ease, transform 0.25s ease;
@@ -2276,7 +2382,4 @@ v-for="item in menuItems.slice(6, 9)"
   transform: translateY(-8px);
 }
 
-:global(html[data-theme="light"]) .ticker-box {
-  background: #f8fafc;
-}
 </style>

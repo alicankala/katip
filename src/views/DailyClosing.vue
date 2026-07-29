@@ -128,6 +128,7 @@ const gunuKapat = () => {
           sayilanNakit.value = null
           kapanisNotu.value = ''
           await veriYukle()
+          window.dispatchEvent(new CustomEvent('app-data-refreshed'))
         } else {
           toast.add({ severity: 'error', summary: 'Hata', detail: res?.error || 'Kapanış kaydedilemedi.', life: 4000 })
         }
@@ -179,6 +180,7 @@ const gunuYenidenAc = async () => {
       acilisDialogAcik.value = false
       toast.add({ severity: 'success', summary: 'Gün Açıldı', detail: 'Kapanış kaydı silindi. Gün yeniden kapatılabilir.', life: 3500 })
       await veriYukle()
+      window.dispatchEvent(new CustomEvent('app-data-refreshed'))
     } else {
       toast.add({ severity: 'error', summary: 'Hata', detail: res?.error || 'Gün yeniden açılamadı.', life: 4000 })
     }
