@@ -68,10 +68,6 @@ const kurulumSihirbaziniAc = () => {
   kurulumSihirbaziAcik.value = true
 }
 
-const yardimaGit = () => {
-  router.push('/help')
-}
-
 // ── Güncelleme şeridi ────────────────────────────────────────────────
 // Windows'un İngilizce sistem bildirimi dükkanda fark edilmediği için
 // güncelleme hazır olduğunda uygulamanın içinde şerit gösteriliyor.
@@ -755,6 +751,23 @@ onUnmounted(() => {
     </div>
 
     <div class="custom-titlebar-actions" @dblclick.stop>
+      <div
+        v-if="aktifUsta"
+        class="active-master-box"
+        :class="{ 'admin-mode-box': aktifUsta?.role === 'admin' }"
+      >
+        <div class="master-avatar" :class="{ 'admin-avatar': aktifUsta?.role === 'admin' }">
+          {{ aktifUsta?.name?.charAt(0)?.toUpperCase() }}
+        </div>
+        <div class="master-info">
+          <span class="master-label">{{ aktifUsta?.role === 'admin' ? 'Destek Modu' : 'Aktif Usta' }}</span>
+          <strong class="master-name">{{ aktifUsta?.name }}</strong>
+        </div>
+        <button class="master-logout-btn" @click.stop="cikisYap" title="Çıkış Yap">
+          <i class="pi pi-sign-out"></i>
+        </button>
+      </div>
+
       <button
         type="button"
         class="window-btn phone-btn-titlebar"
@@ -762,16 +775,6 @@ onUnmounted(() => {
         title="Telefon Erişimi"
       >
         <i class="pi pi-mobile"></i>
-      </button>
-
-      <button
-        v-if="aktifUsta"
-        type="button"
-        class="window-btn help-btn-titlebar"
-        @click.stop="yardimaGit"
-        title="Yardım Merkezi"
-      >
-        <i class="pi pi-question-circle"></i>
       </button>
 
       <button
@@ -969,20 +972,6 @@ v-for="item in menuItems.slice(6, 9)"
         </div>
       </div>
     </Transition>
-  </div>
-
-  <!-- Active Master -->
-  <div class="active-master-box" :class="{ 'admin-mode-box': aktifUsta?.role === 'admin' }">
-    <div class="master-avatar" :class="{ 'admin-avatar': aktifUsta?.role === 'admin' }">
-      {{ aktifUsta?.name?.charAt(0)?.toUpperCase() }}
-    </div>
-    <div class="master-info">
-      <span class="master-label">{{ aktifUsta?.role === 'admin' ? 'Destek Modu' : 'Aktif Usta' }}</span>
-      <strong class="master-name">{{ aktifUsta?.name }}</strong>
-    </div>
-    <button class="master-logout-btn" @click="cikisYap" title="Çıkış Yap">
-      <i class="pi pi-sign-out"></i>
-    </button>
   </div>
 
   <a
@@ -1856,34 +1845,32 @@ v-for="item in menuItems.slice(6, 9)"
 
 
 
-/* ── Active Master Box ───────────────────────────── */
+/* ── Active Master Box (titlebar) ────────────────── */
 .active-master-box {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-  margin: 0 0 6px 0;
-  border-radius: 7px;
-  min-height: 48px;
-  border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.02);
+  gap: 8px;
+  height: 100%;
+  padding: 0 12px;
+  margin-right: 2px;
+  border-right: 1px solid var(--border-color-soft, var(--border-color));
+  cursor: default;
 }
 
 .admin-mode-box {
-  border: 1px dashed rgba(245, 158, 11, 0.25) !important;
-  background: rgba(245, 158, 11, 0.03) !important;
+  background: rgba(245, 158, 11, 0.06);
 }
 
 .master-avatar {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
   background: var(--accent-color);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-weight: 700;
   flex-shrink: 0;
   letter-spacing: 0;
@@ -1895,16 +1882,16 @@ v-for="item in menuItems.slice(6, 9)"
 }
 
 .master-info {
-  flex: 1;
   min-width: 0;
+  max-width: 120px;
   display: flex;
   flex-direction: column;
   gap: 0px;
-  line-height: 1.25;
+  line-height: 1.2;
 }
 
 .master-label {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1912,7 +1899,7 @@ v-for="item in menuItems.slice(6, 9)"
 }
 
 .master-name {
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   color: var(--text-title);
   white-space: nowrap;
@@ -1921,8 +1908,8 @@ v-for="item in menuItems.slice(6, 9)"
 }
 
 .master-logout-btn {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border: 1px solid var(--border-color);
   border-radius: 6px;
   background: transparent;
@@ -2022,8 +2009,7 @@ v-for="item in menuItems.slice(6, 9)"
 }
 
 :global(html[data-theme="light"] .active-master-box) {
-  background: #f8fafc;
-  border-color: var(--border-color);
+  border-right-color: var(--border-color);
 }
 :global(html[data-theme="light"] .nav-item.active) {
   background: rgba(37, 99, 235, 0.08);
@@ -2183,13 +2169,6 @@ v-for="item in menuItems.slice(6, 9)"
 @keyframes update-bar-in {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
-}
-
-.help-btn-titlebar {
-  font-size: 16px !important;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
 }
 
 .refresh-btn-titlebar {
