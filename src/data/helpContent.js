@@ -21,7 +21,7 @@ export const yardimBolumleri = [
         adimlar: [
           'Açılış ekranındaki listeden kendi adınızı seçin.',
           '4 haneli PIN kodunuzu girin ve "Giriş Yap" düğmesine basın.',
-          'Gün içinde başka bir usta devralacaksa, sol alttaki çıkış düğmesiyle oturumu kapatın.'
+          'Gün içinde başka bir usta devralacaksa, üst çubuktaki (sağ üstte, telefon simgesinin solundaki) çıkış düğmesiyle oturumu kapatın.'
         ],
         ipucu: 'Hangi iş emrini kimin açtığı ve kimin kapattığı PIN girişine göre kaydedilir; bu yüzden herkesin kendi PIN\'iyle girmesi önemlidir.'
       },
@@ -43,7 +43,8 @@ export const yardimBolumleri = [
         ozet: 'Sol menü, üst şerit ve ana panelin ne işe yaradığı.',
         adimlar: [
           'Sol menü üç grup halindedir: Operasyon (Ana Sayfa, Servis Kabul, İş Emirleri), Kayıtlar (Müşteriler, Araçlar, Parça / Stok), Finans & Raporlar (Cari Hesap, İç Kâr Raporu, Gün Sonu).',
-          'Sol menünün en altında aktif ustanın adı, çıkış düğmesi, Yardım ve Ayarlar bulunur.',
+          'Üst çubukta, sağ tarafta telefon simgesinin solunda aktif ustanın adı ve çıkış düğmesi bulunur.',
+          'Sol menünün en altında Yardım ve Ayarlar bulunur.',
           'Her ekranın başlığının yanındaki küçük "?" düğmesi, doğrudan o ekranın anlatımını açar.',
           'Üst şeritteki telefon simgesi mobil erişimi, dairesel ok simgesi ise verileri yenilemeyi açar.',
           'Sol alttaki küçük kutu sırayla saat, tarih, döviz kuru ve hava durumunu gösterir.'

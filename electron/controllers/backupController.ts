@@ -182,7 +182,10 @@ export async function tamYedekPaketiOlustur(tur: YedekTuru): Promise<TamYedekSon
 export async function otomatikYedekleriTemizle(): Promise<void> {
   const backupDir = yedekKlasoruYoluGetir()
   const settingsRes = ayarlariGetirBackend()
-  const retentionCount = Number(settingsRes?.settings?.backup_retention_count) || 14
+  const rawRetentionCount = settingsRes?.settings?.backup_retention_count
+  const retentionCount = rawRetentionCount === undefined || rawRetentionCount === null || rawRetentionCount === ''
+    ? 0
+    : Number(rawRetentionCount)
   if (retentionCount <= 0) return
 
   const files = await fs.readdir(backupDir)

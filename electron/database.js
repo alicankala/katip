@@ -668,15 +668,15 @@ export const DEFAULT_SETTINGS = {
   work_orders_default_filter: 'Açık',
   show_critical_stock_warnings: 'true',
   show_long_open_workorder_warnings: 'true',
-  long_open_workorder_days: '3',
+  long_open_workorder_days: '10',
   phone_server_auto_start: 'false',
   default_payment_method: 'Nakit',
   ask_payment_on_completion: 'true',
   warn_unpaid_completion: 'true',
-  show_payment_summary_on_receipt: 'true',
+  show_payment_summary_on_receipt: 'false',
   automatic_backup_enabled: 'false',
   backup_on_exit: 'true',
-  backup_retention_count: '20',
+  backup_retention_count: '0',
   weather_city: 'Ankara'
 }
 

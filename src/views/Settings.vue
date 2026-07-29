@@ -102,15 +102,15 @@ const ayarlarForm = reactive({
   work_orders_default_filter: 'Açık',
   show_critical_stock_warnings: true,
   show_long_open_workorder_warnings: true,
-  long_open_workorder_days: '3',
+  long_open_workorder_days: '10',
   phone_server_auto_start: false,
   default_payment_method: 'Nakit',
   ask_payment_on_completion: true,
   warn_unpaid_completion: true,
-  show_payment_summary_on_receipt: true,
+  show_payment_summary_on_receipt: false,
   automatic_backup_enabled: false,
   backup_on_exit: false,
-  backup_retention_count: '20',
+  backup_retention_count: '0',
   weather_city: 'Ankara'
 })
 
@@ -165,7 +165,7 @@ const retentionOptions = [
 ]
 
 // Elle girilen eşik günü boş/geçersiz/aralık dışı olabilir; 1-90 arasına kırpar
-const esikGunTemizle = (deger) => String(Math.min(90, Math.max(1, Number(deger) || 3)))
+const esikGunTemizle = (deger) => String(Math.min(90, Math.max(1, Number(deger) || 10)))
 
 const isDirty = computed(() => {
   if (!orijinalAyarlar.value || Object.keys(orijinalAyarlar.value).length === 0) return false
@@ -201,15 +201,15 @@ const ayarlarYukle = async () => {
       ayarlarForm.work_orders_default_filter = s.work_orders_default_filter || 'Açık'
       ayarlarForm.show_critical_stock_warnings = s.show_critical_stock_warnings !== 'false'
       ayarlarForm.show_long_open_workorder_warnings = s.show_long_open_workorder_warnings !== 'false'
-      ayarlarForm.long_open_workorder_days = s.long_open_workorder_days || '3'
+      ayarlarForm.long_open_workorder_days = s.long_open_workorder_days || '10'
       ayarlarForm.phone_server_auto_start = s.phone_server_auto_start === 'true'
       ayarlarForm.default_payment_method = s.default_payment_method || 'Nakit'
       ayarlarForm.ask_payment_on_completion = s.ask_payment_on_completion !== 'false'
       ayarlarForm.warn_unpaid_completion = s.warn_unpaid_completion !== 'false'
-      ayarlarForm.show_payment_summary_on_receipt = s.show_payment_summary_on_receipt !== 'false'
+      ayarlarForm.show_payment_summary_on_receipt = s.show_payment_summary_on_receipt === 'true'
       ayarlarForm.automatic_backup_enabled = s.automatic_backup_enabled === 'true'
       ayarlarForm.backup_on_exit = s.backup_on_exit === 'true'
-      ayarlarForm.backup_retention_count = s.backup_retention_count || '20'
+      ayarlarForm.backup_retention_count = s.backup_retention_count || '0'
       ayarlarForm.weather_city = s.weather_city || 'Ankara'
 
       // Apply theme & density live
