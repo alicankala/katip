@@ -10,6 +10,8 @@ import { useToast } from 'primevue/usetoast'
 import { useConfirm } from 'primevue/useconfirm'
 import EmptyState from '../components/EmptyState.vue'
 import HelpButton from '../components/HelpButton.vue'
+import DestekModuUyarisi from '../components/DestekModuUyarisi.vue'
+import { useYetki } from '../composables/useYetki.js'
 
 const musteriler = ref([])
 const yukleniyor = ref(true)
@@ -18,9 +20,14 @@ const aramaKelimesi = ref('')
 
 const toast = useToast()
 const confirmDialog = useConfirm()
+
+// Müşteri kaydı usta işidir; destek (admin) oturumu değiştiremez.
+const { destekModu, destekModundaEngelle } = useYetki()
 const router = useRouter()
 
 const yeniMusteriAc = () => {
+  if (destekModundaEngelle(toast, 'Müşteri ekleme destek modunda yapılamaz.')) return
+
   Object.assign(form, { id: null, name: '', phone: '', note: '' })
   dialogAcik.value = true
 }
@@ -82,6 +89,7 @@ const filtrelenmisMusteriler = computed(() => {
 
 const sil = (id) => {
   if (!id) return
+  if (destekModundaEngelle(toast, 'Müşteri pasife alma destek modunda yapılamaz.')) return
 
   confirmDialog.require({
     message: 'Bu müşteriyi pasife almak istediğinize emin misiniz?',
@@ -104,10 +112,14 @@ const sil = (id) => {
   })
 }
 const duzenle = (musteri) => {
+  if (destekModundaEngelle(toast, 'Müşteri düzenleme destek modunda yapılamaz.')) return
+
   Object.assign(form, { id: musteri.id, name: musteri.name, phone: musteri.phone, note: musteri.note })
   dialogAcik.value = true
 }
 const kaydet = async () => {
+  if (destekModundaEngelle(toast, 'Müşteri kaydetme destek modunda yapılamaz.')) return
+
   if (!form.name) {
     uyariMesaji('Ad/Soyad alanı zorunludur.')
     return
@@ -160,9 +172,11 @@ onUnmounted(() => {
           <i class="pi pi-search" />
           <InputText v-model="aramaKelimesi" placeholder="İsim veya Telefon Ara..." />
         </span>
-        <Button label="Yeni Müşteri Ekle" icon="pi pi-user-plus" severity="info" @click="yeniMusteriAc" />
+        <Button label="Yeni Müşteri Ekle" icon="pi pi-user-plus" severity="info" :disabled="destekModu" @click="yeniMusteriAc" />
       </div>
     </div>
+
+    <DestekModuUyarisi aciklama="Müşteri ekleme, düzenleme ve pasife alma destek modunda kapalıdır." />
 
     <div class="table-panel">
       <DataTable :value="filtrelenmisMusteriler" :loading="yukleniyor" responsiveLayout="scroll">
@@ -182,6 +196,7 @@ onUnmounted(() => {
             action-label="Yeni Müşteri Ekle"
             action-icon="pi pi-user-plus"
             hint-label="Nasıl yapılır?"
+            :action-disabled="destekModu"
             @action="yeniMusteriAc"
             @hint="yardimaGit('musteri')"
           />
@@ -192,8 +207,8 @@ onUnmounted(() => {
         <Column field="note" header="Müşteri Notu"></Column>
         <Column header="İşlem" :exportable="false" style="min-width:8rem">
           <template #body="slotProps">
-            <Button icon="pi pi-pencil" outlined rounded severity="info" @click="duzenle(slotProps.data)" style="margin-right: 8px;" />
-            <Button icon="pi pi-trash" outlined rounded severity="danger" @click="sil(slotProps.data.id)" />
+            <Button icon="pi pi-pencil" outlined rounded severity="info" :disabled="destekModu" @click="duzenle(slotProps.data)" style="margin-right: 8px;" />
+            <Button icon="pi pi-trash" outlined rounded severity="danger" :disabled="destekModu" @click="sil(slotProps.data.id)" />
           </template>
         </Column>
       </DataTable>
@@ -225,7 +240,7 @@ onUnmounted(() => {
       </div>
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="dialogAcik = false" />
-        <Button label="Kaydet" icon="pi pi-check" @click="kaydet" />
+        <Button label="Kaydet" icon="pi pi-check" :disabled="destekModu" @click="kaydet" />
       </template>
     </Dialog>
   </div>

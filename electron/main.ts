@@ -6,6 +6,8 @@ import log from 'electron-log/main'
 import { autoUpdater } from 'electron-updater'
 import { runPhoneServerMigrations } from './phoneServer.js'
 import { isRestoreInProgress } from './restoreState.js'
+import { getActiveMasterSession } from './session.js'
+import { destekModundaYasakMi, DESTEK_ENGEL_MESAJI } from './permissions.js'
 
 // Tüm console.log/warn/error çağrılarını kalıcı log dosyasına da yazar
 // (app.getPath('logs') altında dönen dosya; Ayarlar > Log Klasörünü Aç ile açılan klasörle aynı)
@@ -136,6 +138,50 @@ type GuncellemeDurumu = {
   surum?: string
   yuzde?: number
   hata?: string
+  internetYok?: boolean
+}
+
+// İnternet yokken electron-updater ham İngilizce ağ hatası veriyor
+// ("net::ERR_INTERNET_DISCONNECTED", "getaddrinfo ENOTFOUND github.com" gibi) ve bu
+// metin dükkanda kırmızı bir hata kutusu olarak görünüp tedirgin ediyordu.
+// Ham hata yalnızca log dosyasına yazılır; kullanıcıya sade Türkçe karşılığı gösterilir.
+const AG_HATA_IMZALARI = [
+  'err_internet_disconnected',
+  'err_name_not_resolved',
+  'err_name_resolution_failed',
+  'err_connection',
+  'err_network_changed',
+  'err_internet',
+  'err_address_unreachable',
+  'err_proxy_connection_failed',
+  'err_timed_out',
+  'enotfound',
+  'eai_again',
+  'econnrefused',
+  'econnreset',
+  'etimedout',
+  'enetunreach',
+  'ehostunreach',
+  'getaddrinfo',
+  'socket hang up',
+  'network is unreachable'
+]
+
+function guncellemeHatasiniCevir(error: unknown): { mesaj: string; internetYok: boolean } {
+  const ham = error instanceof Error ? `${error.message} ${error.stack || ''}` : String(error)
+  const kucuk = ham.toLowerCase()
+
+  if (AG_HATA_IMZALARI.some((imza) => kucuk.includes(imza))) {
+    return {
+      mesaj: 'İnternet bağlantısı yok. Güncelleme denetlenemedi; bağlanınca kendiliğinden denenecek.',
+      internetYok: true
+    }
+  }
+
+  return {
+    mesaj: 'Güncelleme sunucusuna şu an ulaşılamıyor. Daha sonra tekrar denenecek.',
+    internetYok: false
+  }
 }
 
 let guncellemeDurumu: GuncellemeDurumu = { durum: 'bilinmiyor' }
@@ -180,11 +226,10 @@ function guncellemeDinleyicileriniKur(): void {
   })
 
   autoUpdater.on('error', (err) => {
+    // Ham hata log dosyasına gider (Ayarlar → Log Klasörünü Aç), arayüze sadeleştirilmiş hâli.
     console.error('Güncelleme hatası:', err)
-    guncellemeDurumunuYayinla({
-      durum: 'hata',
-      hata: err instanceof Error ? err.message : String(err)
-    })
+    const { mesaj, internetYok } = guncellemeHatasiniCevir(err)
+    guncellemeDurumunuYayinla({ durum: 'hata', hata: mesaj, internetYok })
   })
 }
 
@@ -193,6 +238,11 @@ function kanalEkle(kanal: string, fonksiyon: (event: IpcMainInvokeEvent, ...args
   ipcMain.handle(kanal, (event, ...args) => {
     if (isRestoreInProgress() && kanal !== 'yedekten-geri-yukle') {
       return { success: false, error: 'Veritabanı yedekten geri yükleniyor, lütfen bekleyin.' }
+    }
+    // Destek (Admin) oturumu usta işlerini yapamaz; arayüz atlatılsa bile burada durur.
+    if (destekModundaYasakMi(kanal, getActiveMasterSession())) {
+      console.warn(`[Yetki] Destek modunda reddedildi: ${kanal}`)
+      return { success: false, error: DESTEK_ENGEL_MESAJI, yetkiHatasi: true }
     }
     return fonksiyon(event, ...args)
   })
@@ -249,10 +299,12 @@ function ipcKopruleriniKur() {
       await autoUpdater.checkForUpdates()
       return { success: true }
     } catch (error) {
-      const mesaj = error instanceof Error ? error.message : String(error)
+      // checkForUpdates hem 'error' olayını yayar hem de hatayı yeniden fırlatır;
+      // ikisi de aynı sadeleştirilmiş metni kullansın diye burada da çevriliyor.
       console.error('Güncelleme denetimi hatası:', error)
-      guncellemeDurumunuYayinla({ durum: 'hata', hata: mesaj })
-      return { success: false, error: mesaj }
+      const { mesaj, internetYok } = guncellemeHatasiniCevir(error)
+      guncellemeDurumunuYayinla({ durum: 'hata', hata: mesaj, internetYok })
+      return { success: false, error: mesaj, internetYok }
     }
   })
 
@@ -263,7 +315,19 @@ function ipcKopruleriniKur() {
 
     // quitAndInstall uygulamayı kapatır; kapanışta alınan yedek 'before-quit'
     // içinde çalışmaya devam eder, kurulum uygulama kapanana kadar bekler.
-    setImmediate(() => autoUpdater.quitAndInstall())
+    // setImmediate içinde yakalanmayan bir hata, Electron'un İngilizce
+    // "A JavaScript error occurred in the main process" kutusunu açardı.
+    setImmediate(() => {
+      try {
+        autoUpdater.quitAndInstall()
+      } catch (error) {
+        console.error('Güncelleme kurulum hatası:', error)
+        guncellemeDurumunuYayinla({
+          durum: 'hata',
+          hata: 'Güncelleme kurulumu başlatılamadı. Programı kapatıp yeniden açmayı deneyin.'
+        })
+      }
+    })
     return { success: true }
   })
 
@@ -334,10 +398,14 @@ app.whenReady().then(async () => {
 
   createWindow()
 
+  // Dinleyiciler her zaman kurulur: autoUpdater 'error' olayını dinleyicisiz yayarsa
+  // EventEmitter hatayı fırlatır ve Electron'un İngilizce hata kutusu açılır.
+  guncellemeDinleyicileriniKur()
+
   if (app.isPackaged) {
-    guncellemeDinleyicileriniKur()
     // checkForUpdatesAndNotify yerine sade denetim: bildirimi Windows'un
     // İngilizce sistem bildirimi değil, uygulama içindeki şerit üstleniyor.
+    // İnternet yokken buradaki hata sessizce loglanır; arayüz Türkçe durum metnini gösterir.
     autoUpdater.checkForUpdates().catch((err) => {
       console.error('Otomatik güncelleme kontrolü hatası:', err)
     })

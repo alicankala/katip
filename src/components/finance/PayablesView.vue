@@ -17,6 +17,11 @@ const props = defineProps({
   supplierTypes: {
     type: Array,
     default: () => []
+  },
+  // Destek (Admin) oturumunda kayıt oluşturan düğmeler pasiftir; bkz. composables/useYetki.js
+  destekModu: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -109,6 +114,7 @@ const getCariTipClass = (type) => {
         icon="pi pi-plus"
         severity="info"
         size="small"
+        :disabled="destekModu"
         @click="emit('add-cari')"
       />
     </div>
@@ -137,6 +143,7 @@ const getCariTipClass = (type) => {
           action-label="Yeni Cari Ekle"
           action-icon="pi pi-plus"
           compact
+          :action-disabled="destekModu"
           @action="emit('add-cari')"
         />
       </template>
@@ -197,6 +204,7 @@ const getCariTipClass = (type) => {
               severity="warning"
               outlined
               title="Borç Ekle"
+              :disabled="destekModu"
               @click="emit('add-transaction', slotProps.data)"
             />
             <Button
@@ -206,6 +214,7 @@ const getCariTipClass = (type) => {
               severity="danger"
               outlined
               title="Ödeme Yap"
+              :disabled="destekModu"
               @click="emit('add-payment', slotProps.data)"
             />
           </div>

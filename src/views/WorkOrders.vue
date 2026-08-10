@@ -15,7 +15,9 @@ import PrintPreviewDialog from '../components/work-orders/PrintPreviewDialog.vue
 import EditItemDialog from '../components/work-orders/EditItemDialog.vue'
 import EmptyState from '../components/EmptyState.vue'
 import HelpButton from '../components/HelpButton.vue'
+import DestekModuUyarisi from '../components/DestekModuUyarisi.vue'
 import { useFormatters } from '../composables/useFormatters'
+import { useYetki } from '../composables/useYetki.js'
 
 const router = useRouter()
 const yardimaGit = (konu) => router.push({ path: '/help', query: { konu } })
@@ -56,6 +58,21 @@ const uyariMesaji = (detay) => {
     detail: detay,
     life: 3000
   })
+}
+
+const { destekModu, destekModundaEngelle } = useYetki()
+
+// İş emri işlemleri usta işidir: destek (admin) oturumu ve oturumsuz durum tek yerden elenir.
+// true dönerse çağıran fonksiyon durmalıdır.
+const ustaIsiEngelli = (islemAdi) => {
+  if (destekModundaEngelle(toast, `${islemAdi} destek modunda yapılamaz.`)) return true
+
+  if (!aktifUsta.value?.id) {
+    uyariMesaji(`${islemAdi} için önce usta girişi yapılmalıdır.`)
+    return true
+  }
+
+  return false
 }
 
 const dialogAcik = ref(false)
@@ -266,10 +283,7 @@ const durumSayisi = (durum) => {
   return isEmirleri.value.filter(i => i.status === durum).length
 }
 const yeniIsEmriAc = () => {
-  if (!aktifUsta.value?.id) {
-    uyariMesaji('İş emri açmak için önce usta girişi yapılmalıdır.')
-    return
-  }
+  if (ustaIsiEngelli('İş emri açma')) return
 
   Object.assign(form, {
     id: null,
@@ -283,6 +297,8 @@ const yeniIsEmriAc = () => {
   dialogAcik.value = true
 }
 const duzenle = (isEmri) => {
+  if (ustaIsiEngelli('İş emri düzenleme')) return
+
   if (isEmri?.status === 'Tamamlandı') {
     uyariMesaji('Tamamlanmış iş emri düzenlenemez. Gerekirse önce Tekrar Aç yapın.')
     return
@@ -302,6 +318,7 @@ const duzenle = (isEmri) => {
 
 const sil = (isEmri) => {
   if (!isEmri?.id) return
+  if (ustaIsiEngelli('İş emri silme')) return
 
   if (isEmri.status === 'Tamamlandı') {
     uyariMesaji('Tamamlanmış iş emri silinemez. Gerekirse önce Tekrar Aç yapın.')
@@ -330,10 +347,7 @@ const sil = (isEmri) => {
 }
 
 const kaydet = async () => {
-  if (!aktifUsta.value?.id) {
-    uyariMesaji('İş emri kaydetmek için önce usta girişi yapılmalıdır.')
-    return
-  }
+  if (ustaIsiEngelli('İş emri kaydetme')) return
 
   if (!form.vehicle_id) {
     uyariMesaji('Lütfen işlem yapılacak aracı seçin.')
@@ -423,10 +437,7 @@ const durumDegistir = async (isEmri, yeniDurum) => {
   if (!isEmri?.id || !yeniDurum) return
   if (isEmri.status === yeniDurum) return
 
-  if (!aktifUsta.value?.id) {
-    uyariMesaji('Durum değiştirmek için önce usta girişi yapılmalıdır.')
-    return
-  }
+  if (ustaIsiEngelli('Durum değiştirme')) return
 
   if (isEmri.status === 'Tamamlandı') {
     uyariMesaji('Tamamlanmış iş emrinin durumu buradan değiştirilemez. Tekrar Aç butonunu kullanın.')
@@ -475,6 +486,8 @@ const getOdemeSeverity = (durum) => {
 }
 
 const odemeAlModalAc = async () => {
+  if (ustaIsiEngelli('Tahsilat')) return
+
   if (!seciliIsEmri.value?.id) {
     uyariMesaji('Lütfen önce bir iş emri seçin.')
     return
@@ -492,6 +505,7 @@ const odemeAlModalAc = async () => {
 }
 
 const odemeKaydet = async () => {
+  if (ustaIsiEngelli('Tahsilat')) return
   if (!odemeForm.work_order_id) return
   if (!odemeForm.amount || Number(odemeForm.amount) <= 0) {
     uyariMesaji('Geçerli bir ödeme tutarı giriniz.')
@@ -530,12 +544,14 @@ const odemeKaydet = async () => {
 
 const odemeIptalModalAc = (odeme) => {
   if (!odeme?.id) return
+  if (ustaIsiEngelli('Ödeme iptali')) return
   iptalForm.payment_id = odeme.id
   iptalForm.cancel_reason = ''
   odemeIptalDialogAcik.value = true
 }
 
 const odemeIptalKaydet = async () => {
+  if (ustaIsiEngelli('Ödeme iptali')) return
   if (!iptalForm.payment_id) return
   if (!iptalForm.cancel_reason || !iptalForm.cancel_reason.trim()) {
     uyariMesaji('Ödeme iptal sebebi zorunludur.')
@@ -599,6 +615,7 @@ const fotograflariYukle = async (workOrderId) => {
 }
 
 const fotografYukleModalAc = async () => {
+  if (ustaIsiEngelli('Fotoğraf ekleme')) return
   if (!seciliIsEmri.value?.id || !window.api?.isEmriFotografYukleDialog) return
   try {
     const res = await window.api.isEmriFotografYukleDialog({
@@ -617,6 +634,7 @@ const fotografYukleModalAc = async () => {
 }
 
 const fotografSil = async (photoId) => {
+  if (ustaIsiEngelli('Fotoğraf silme')) return
   if (!photoId || !window.api?.isEmriFotografSil) return
   if (!confirm('Bu fotoğrafı silmek istediğinize emin misiniz?')) return
   try {
@@ -636,6 +654,7 @@ const fotografSil = async (photoId) => {
 }
 
 const fotografGuncelle = async () => {
+  if (ustaIsiEngelli('Fotoğraf güncelleme')) return
   if (!seciliFotografModal.value?.id || !window.api?.isEmriFotografGuncelle) return
   try {
     const res = await window.api.isEmriFotografGuncelle({
@@ -661,6 +680,7 @@ const filtrelenmisFotograflar = computed(() => {
 
 const tamamlaModalAc = async (isEmri) => {
   if (!isEmri?.id) return
+  if (ustaIsiEngelli('İş emri tamamlama')) return
   const ozetRes = await window.api.isEmriOdemeOzetiGetir(isEmri.id)
   const ozet = ozetRes?.ozet || {}
 
@@ -688,12 +708,9 @@ const tamamlaModalAc = async (isEmri) => {
 
 const tamamlaVeOdemeKaydet = async () => {
   if (!tamamlaForm.id) return
+  if (ustaIsiEngelli('İş emri tamamlama')) return
 
-  const aktifMaster = aktifUsta.value || JSON.parse(localStorage.getItem('aktifUsta') || 'null')
-  if (!aktifMaster?.id) {
-    uyariMesaji('İş emrini tamamlamak için aktif usta girişi yapılmalıdır.')
-    return
-  }
+  const aktifMaster = aktifUsta.value
 
   if (tamamlaForm.kalan_borc <= 0.01) {
     tamamlaForm.payment_option = 'none'
@@ -745,13 +762,7 @@ const tekrarAc = (isEmri) => {
     return
   }
 
-  const aktifUstaBilgisi =
-    aktifUsta.value || JSON.parse(localStorage.getItem('aktifUsta') || 'null')
-
-  if (!aktifUstaBilgisi?.id) {
-    uyariMesaji('İş emrini tekrar açmak için önce usta girişi yapılmalıdır.')
-    return
-  }
+  if (ustaIsiEngelli('İş emrini tekrar açma')) return
 
   if (isEmri.status !== 'Tamamlandı') {
     uyariMesaji('Sadece tamamlanmış iş emirleri tekrar açılabilir.')
@@ -779,14 +790,9 @@ const tekrarAcKaydet = async () => {
     return
   }
 
-  const aktifUstaBilgisi =
-    aktifUsta.value || JSON.parse(localStorage.getItem('aktifUsta') || 'null')
+  if (ustaIsiEngelli('İş emrini tekrar açma')) return
 
-  if (!aktifUstaBilgisi?.id) {
-    uyariMesaji('İş emrini tekrar açmak için önce usta girişi yapılmalıdır.')
-    return
-  }
-
+  const aktifUstaBilgisi = aktifUsta.value
   const reason = String(tekrarAcForm.reason || '').trim()
 
   if (!reason) {
@@ -924,10 +930,7 @@ const kalemDuzenleParcaSecildi = (partId) => {
 const kalemDuzenle = (kalem) => {
   if (!kalem?.id) return
 
-  if (!aktifUsta.value?.id) {
-    uyariMesaji('Kalem düzenlemek için önce usta girişi yapılmalıdır.')
-    return
-  }
+  if (ustaIsiEngelli('Kalem düzenleme')) return
 
   if (seciliIsEmriTamamlandi.value) {
     uyariMesaji('Tamamlanmış iş emrinde kalem düzenlenemez.')
@@ -957,10 +960,7 @@ const kalemGuncelleKaydet = async (payload) => {
     return
   }
 
-  if (!aktifUsta.value?.id) {
-    uyariMesaji('Kalem düzenlemek için önce usta girişi yapılmalıdır.')
-    return
-  }
+  if (ustaIsiEngelli('Kalem düzenleme')) return
 
   if (seciliIsEmriTamamlandi.value) {
     uyariMesaji('Tamamlanmış iş emrinde kalem düzenlenemez.')
@@ -1029,10 +1029,7 @@ const kalemKaydet = async () => {
     uyariMesaji('İş emri seçilemedi.')
     return
   }
-    if (!aktifUsta.value?.id) {
-    uyariMesaji('Kalem eklemek için önce usta girişi yapılmalıdır.')
-    return
-  }
+  if (ustaIsiEngelli('Kalem ekleme')) return
 
   if (seciliIsEmriTamamlandi.value) {
     uyariMesaji('Tamamlanmış iş emrine kalem eklenemez.')
@@ -1093,10 +1090,8 @@ const temizVeri = {
 }
 const kalemSil = (kalem) => {
   if (!kalem?.id) return
-    if (!aktifUsta.value?.id) {
-    uyariMesaji('Kalem silmek için önce usta girişi yapılmalıdır.')
-    return
-  }
+
+  if (ustaIsiEngelli('Kalem silme')) return
 
   if (seciliIsEmriTamamlandi.value) {
     uyariMesaji('Tamamlanmış iş emrinden kalem silinemez.')
@@ -1241,9 +1236,12 @@ onUnmounted(() => {
         icon="pi pi-plus"
         severity="info"
         size="small"
+        :disabled="destekModu"
         @click="yeniIsEmriAc"
       />
     </div>
+
+    <DestekModuUyarisi aciklama="İş emri açma / düzenleme, kalem ekleme, tamamlama ve tahsilat destek modunda kapalıdır." />
 
     <!-- Toolbar & Filtre Çubuğu -->
     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; background: var(--bg-panel); border: 1px solid var(--border-color); padding: 12px 16px; border-radius: 12px;">
@@ -1361,7 +1359,7 @@ onUnmounted(() => {
               :modelValue="isEmri.status"
               :options="durumSecenekleri"
               class="durum-dropdown-compact"
-              :disabled="isEmri.status === 'Tamamlandı'"
+              :disabled="destekModu || isEmri.status === 'Tamamlandı'"
               @change="durumDegistir(isEmri, $event.value)"
             >
               <template #value="valueSlot">
@@ -1382,7 +1380,8 @@ onUnmounted(() => {
               severity="warning"
               text
               rounded
-              title="Tekrar Aç"
+              :disabled="destekModu"
+              :title="destekModu ? 'Destek modunda yapılamaz' : 'Tekrar Aç'"
               @click.stop="tekrarAc(isEmri)"
             />
             <Button
@@ -1391,8 +1390,8 @@ onUnmounted(() => {
               severity="info"
               text
               rounded
-              :disabled="isEmri.status === 'Tamamlandı'"
-              title="Düzenle"
+              :disabled="destekModu || isEmri.status === 'Tamamlandı'"
+              :title="destekModu ? 'Destek modunda yapılamaz' : 'Düzenle'"
               @click.stop="duzenle(isEmri)"
             />
             <Button
@@ -1401,8 +1400,8 @@ onUnmounted(() => {
               severity="danger"
               text
               rounded
-              :disabled="isEmri.status === 'Tamamlandı'"
-              title="Sil"
+              :disabled="destekModu || isEmri.status === 'Tamamlandı'"
+              :title="destekModu ? 'Destek modunda yapılamaz' : 'Sil'"
               @click.stop="sil(isEmri)"
             />
           </div>
@@ -1502,7 +1501,7 @@ onUnmounted(() => {
 
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="dialogAcik = false" />
-        <Button label="Kaydet" icon="pi pi-check" @click="kaydet" />
+        <Button label="Kaydet" icon="pi pi-check" :disabled="destekModu" @click="kaydet" />
       </template>
     </Dialog>
 
@@ -1545,6 +1544,7 @@ onUnmounted(() => {
           label="Tekrar Aç"
           icon="pi pi-undo"
           severity="warning"
+          :disabled="destekModu"
           @click="tekrarAcKaydet"
         />
       </template>
@@ -1609,7 +1609,7 @@ onUnmounted(() => {
 
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="odemeDialogAcik = false" />
-        <Button label="Ödemeyi Kaydet" icon="pi pi-check" severity="success" @click="odemeKaydet" />
+        <Button label="Ödemeyi Kaydet" icon="pi pi-check" severity="success" :disabled="destekModu" @click="odemeKaydet" />
       </template>
     </Dialog>
 
@@ -1694,7 +1694,7 @@ onUnmounted(() => {
 
       <template #footer>
         <Button label="Vazgeç" icon="pi pi-times" text @click="tamamlaDialogAcik = false" />
-        <Button label="İş Emrini Tamamla" icon="pi pi-check" severity="success" @click="tamamlaVeOdemeKaydet" />
+        <Button label="İş Emrini Tamamla" icon="pi pi-check" severity="success" :disabled="destekModu" @click="tamamlaVeOdemeKaydet" />
       </template>
     </Dialog>
 
@@ -1724,7 +1724,7 @@ onUnmounted(() => {
 
       <template #footer>
         <Button label="Vazgeç" icon="pi pi-times" text @click="odemeIptalDialogAcik = false" />
-        <Button label="Ödemeyi İptal Et" icon="pi pi-ban" severity="danger" @click="odemeIptalKaydet" />
+        <Button label="Ödemeyi İptal Et" icon="pi pi-ban" severity="danger" :disabled="destekModu" @click="odemeIptalKaydet" />
       </template>
     </Dialog>
 
@@ -1793,6 +1793,7 @@ onUnmounted(() => {
   severity="warning"
   outlined
   style="margin-top: 8px;"
+  :disabled="destekModu"
   @click.stop="tekrarAc(seciliIsEmri)"
 />
 </div>
@@ -1907,6 +1908,7 @@ onUnmounted(() => {
               label="Ekle"
               icon="pi pi-plus"
               severity="success"
+              :disabled="destekModu"
               @click="kalemKaydet"
             />
           </div>
@@ -1959,7 +1961,7 @@ onUnmounted(() => {
       outlined
       rounded
       severity="info"
-      :disabled="seciliIsEmriTamamlandi"
+      :disabled="seciliIsEmriTamamlandi || destekModu"
       @click="kalemDuzenle(slotProps.data)"
       style="margin-right: 8px;"
     />
@@ -1969,7 +1971,7 @@ onUnmounted(() => {
       outlined
       rounded
       severity="danger"
-      :disabled="seciliIsEmriTamamlandi"
+      :disabled="seciliIsEmriTamamlandi || destekModu"
       @click="kalemSil(slotProps.data)"
     />
   </template>
@@ -1990,6 +1992,7 @@ onUnmounted(() => {
               label="Ödeme Al"
               icon="pi pi-credit-card"
               severity="success"
+              :disabled="destekModu"
               @click="odemeAlModalAc"
             />
           </div>
@@ -2093,6 +2096,7 @@ onUnmounted(() => {
                   rounded
                   severity="danger"
                   title="Ödemeyi İptal Et"
+                  :disabled="destekModu"
                   @click="odemeIptalModalAc(slotProps.data)"
                 />
               </template>
@@ -2120,6 +2124,7 @@ onUnmounted(() => {
               icon="pi pi-plus"
               severity="primary"
               size="small"
+              :disabled="destekModu"
               @click="fotografYukleModalAc"
             />
           </div>
@@ -2198,8 +2203,8 @@ onUnmounted(() => {
           </div>
 
           <template #footer>
-            <Button label="Sil" icon="pi pi-trash" severity="danger" text @click="fotografSil(seciliFotografModal?.id)" />
-            <Button label="Kaydet" icon="pi pi-check" severity="success" @click="fotografGuncelle" />
+            <Button label="Sil" icon="pi pi-trash" severity="danger" text :disabled="destekModu" @click="fotografSil(seciliFotografModal?.id)" />
+            <Button label="Kaydet" icon="pi pi-check" severity="success" :disabled="destekModu" @click="fotografGuncelle" />
           </template>
         </Dialog>
         </div>

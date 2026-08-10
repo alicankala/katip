@@ -11,9 +11,15 @@ import { useConfirm } from 'primevue/useconfirm'
 import { useFormatters } from '../composables/useFormatters'
 import { firmaBilgileri } from '../data/firmaBilgileri.js'
 import HelpButton from '../components/HelpButton.vue'
+import DestekModuUyarisi from '../components/DestekModuUyarisi.vue'
+import { useYetki } from '../composables/useYetki.js'
 
 const toast = useToast()
 const confirmDialog = useConfirm()
+
+// Günü KAPATMA usta işidir (kapanışa kapatan usta yazılır); günü YENİDEN AÇMA
+// zaten Admin PIN isteyen bir destek işlemidir, o yüzden destek modunda açık kalır.
+const { destekModu, destekModundaEngelle } = useYetki()
 const { tlFormatla, tarihFormatla, tarihSaatFormatla } = useFormatters()
 
 function bugununTarihi() {
@@ -97,6 +103,7 @@ const tarihDegisti = () => {
 }
 
 const gunuKapat = () => {
+  if (destekModundaEngelle(toast, 'Gün sonu kapatma destek modunda yapılamaz.')) return
   if (!ozet.value) return
 
   if (farkVar.value && !kapanisNotu.value.trim()) {
@@ -372,6 +379,8 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <DestekModuUyarisi aciklama="Gün sonu kapatma destek modunda kapalıdır; günü yeniden açma açıktır." />
+
     <!-- Kapanış Durum Bandı -->
     <div v-if="kapanis" class="closed-banner">
       <i class="pi pi-lock"></i>
@@ -571,6 +580,7 @@ onUnmounted(() => {
             icon="pi pi-lock"
             severity="danger"
             :loading="kapatiliyor"
+            :disabled="destekModu"
             @click="gunuKapat"
           />
         </div>

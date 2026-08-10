@@ -10,7 +10,9 @@ defineProps({
   actionLabel: { type: String, default: '' },
   actionIcon: { type: String, default: 'pi pi-plus' },
   hintLabel: { type: String, default: '' },
-  compact: { type: Boolean, default: false }
+  compact: { type: Boolean, default: false },
+  // Destek modunda yönlendirme düğmesi pasif kalır; ipucu düğmesi açık kalmalı.
+  actionDisabled: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['action', 'hint'])
@@ -31,6 +33,7 @@ const emit = defineEmits(['action', 'hint'])
         :label="actionLabel"
         :icon="actionIcon"
         size="small"
+        :disabled="actionDisabled"
         @click="emit('action')"
       />
       <Button

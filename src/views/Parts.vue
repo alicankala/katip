@@ -13,6 +13,8 @@ import { useRouter } from 'vue-router'
 import { useFormatters } from '../composables/useFormatters'
 import EmptyState from '../components/EmptyState.vue'
 import HelpButton from '../components/HelpButton.vue'
+import DestekModuUyarisi from '../components/DestekModuUyarisi.vue'
+import { useYetki } from '../composables/useYetki.js'
 
 const router = useRouter()
 const yardimaGit = (konu) => router.push({ path: '/help', query: { konu } })
@@ -43,6 +45,21 @@ const kategoriler = ref([])
 
 const toast = useToast()
 const confirmDialog = useConfirm()
+
+const { destekModu, destekModundaEngelle } = useYetki()
+
+// Stok kaydı usta işidir: destek (admin) oturumu ve oturumsuz durum tek yerden elenir.
+// true dönerse çağıran fonksiyon durmalıdır.
+const ustaIsiEngelli = (islemAdi) => {
+  if (destekModundaEngelle(toast, `${islemAdi} destek modunda yapılamaz.`)) return true
+
+  if (!aktifUsta.value?.id) {
+    uyariMesaji(`${islemAdi} için önce usta girişi yapılmalıdır.`)
+    return true
+  }
+
+  return false
+}
 
 const basariMesaji = (detay) => {
   toast.add({
@@ -177,6 +194,8 @@ return parcalar.value.filter(p =>
 )
 })
 const duzenle = (parca) => {
+  if (ustaIsiEngelli('Parça düzenleme')) return
+
 Object.assign(form, {
   id: parca.id,
   code: parca.code || '',
@@ -219,6 +238,7 @@ const hareketSeverity = (type) => {
 }
 const sil = (id) => {
   if (!id) return
+  if (ustaIsiEngelli('Parçayı pasife alma')) return
 
   confirmDialog.require({
     message: 'Bu parçayı pasife almak istediğinize emin misiniz?',
@@ -243,6 +263,7 @@ const sil = (id) => {
 
 const mevcuttanAktiflestir = async (id) => {
   if (!id) return
+  if (ustaIsiEngelli('Parça aktifleştirme')) return
 
   confirmDialog.require({
     message: 'Bu parçayı tekrar aktif hale getirmek istediğinize emin misiniz?',
@@ -271,10 +292,7 @@ const kaydet = async () => {
     return
   }
 
-  if (!aktifUsta.value?.id) {
-    uyariMesaji('Stok işlemi yapmak için önce usta girişi yapılmalıdır.')
-    return
-  }
+  if (ustaIsiEngelli('Stok işlemi')) return
 
   if (form.critical_stock_enabled && Number(form.critical_stock) < 0) {
     uyariMesaji('Kritik stok limiti negatif olamaz.')
@@ -340,10 +358,13 @@ onUnmounted(() => {
           label="Yeni Parça Ekle"
           icon="pi pi-plus"
           severity="success"
+          :disabled="destekModu"
           @click="formuTemizle(); dialogAcik = true"
         />
       </div>
     </div>
+
+    <DestekModuUyarisi aciklama="Parça ekleme, düzenleme ve stok değişikliği destek modunda kapalıdır." />
 
     <div class="table-panel">
       <div class="stock-filter-panel">
@@ -440,6 +461,7 @@ onUnmounted(() => {
             action-label="Yeni Parça Ekle"
             action-icon="pi pi-plus"
             hint-label="Nasıl yapılır?"
+            :action-disabled="destekModu"
             @action="formuTemizle(); dialogAcik = true"
             @hint="yardimaGit('parca')"
           />
@@ -519,6 +541,7 @@ onUnmounted(() => {
               outlined 
               rounded 
               severity="info" 
+              :disabled="destekModu"
               @click="duzenle(slotProps.data)" 
               style="margin-right: 6px;" 
             />
@@ -528,6 +551,7 @@ onUnmounted(() => {
               outlined 
               rounded 
               severity="success" 
+              :disabled="destekModu"
               @click="mevcuttanAktiflestir(slotProps.data.id)" 
               style="margin-right: 6px;" 
             />
@@ -537,6 +561,7 @@ onUnmounted(() => {
               outlined 
               rounded 
               severity="danger" 
+              :disabled="destekModu"
               @click="sil(slotProps.data.id)" 
             />
           </template>
@@ -699,6 +724,7 @@ onUnmounted(() => {
     <Button
       label="Kaydet"
       icon="pi pi-check"
+      :disabled="destekModu"
       @click="kaydet"
     />
   </template>

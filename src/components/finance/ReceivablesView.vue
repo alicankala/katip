@@ -15,6 +15,11 @@ const props = defineProps({
   manualReceivables: {
     type: Array,
     default: () => []
+  },
+  // Destek (Admin) oturumunda kayıt oluşturan düğmeler pasiftir; bkz. composables/useYetki.js
+  destekModu: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -228,6 +233,7 @@ const getStatusClass = (durum) => {
             icon="pi pi-credit-card"
             size="small"
             severity="success"
+            :disabled="destekModu"
             @click="emit('open-payment', slotProps.data)"
           />
         </template>

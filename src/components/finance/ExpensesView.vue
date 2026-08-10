@@ -16,6 +16,11 @@ const props = defineProps({
   expenseTypes: {
     type: Array,
     default: () => []
+  },
+  // Destek (Admin) oturumunda kayıt oluşturan düğmeler pasiftir; bkz. composables/useYetki.js
+  destekModu: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -167,6 +172,7 @@ const { tlFormatla, tarihFormatla } = useFormatters()
         icon="pi pi-plus"
         severity="warning"
         size="small"
+        :disabled="destekModu"
         @click="emit('add-expense')"
       />
     </div>
@@ -195,6 +201,7 @@ const { tlFormatla, tarihFormatla } = useFormatters()
           action-label="Yeni Gider Ekle"
           action-icon="pi pi-plus"
           compact
+          :action-disabled="destekModu"
           @action="emit('add-expense')"
         />
       </template>
@@ -251,6 +258,7 @@ const { tlFormatla, tarihFormatla } = useFormatters()
               text
               rounded
               title="Hızlı Öde"
+              :disabled="destekModu"
               @click="emit('quick-pay', slotProps.data)"
             />
             <Button
@@ -259,6 +267,7 @@ const { tlFormatla, tarihFormatla } = useFormatters()
               text
               rounded
               title="Düzenle"
+              :disabled="destekModu"
               @click="emit('edit-expense', slotProps.data)"
             />
             <Button
@@ -267,6 +276,7 @@ const { tlFormatla, tarihFormatla } = useFormatters()
               text
               rounded
               title="Sil"
+              :disabled="destekModu"
               @click="emit('delete-expense', slotProps.data)"
             />
           </div>

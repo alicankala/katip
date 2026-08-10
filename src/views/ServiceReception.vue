@@ -7,9 +7,12 @@ import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import HelpButton from '../components/HelpButton.vue'
+import DestekModuUyarisi from '../components/DestekModuUyarisi.vue'
+import { useYetki } from '../composables/useYetki.js'
 
 const router = useRouter()
 const toast = useToast()
+const { destekModu, destekModundaEngelle } = useYetki()
 
 const musteriler = ref([])
 const araclar = ref([])
@@ -171,6 +174,9 @@ watch(() => form.sase, (yeniSase) => {
 })
 
 const serviseAl = async () => {
+  // Destek modu bir usta oturumu değildir; iş emrinin sahibi belirsiz kalırdı.
+  if (destekModundaEngelle(toast, 'Servis kabul ve iş emri açma destek modunda yapılamaz.')) return
+
   const aktifUstaBilgisi =
     aktifUsta.value || JSON.parse(localStorage.getItem('aktifUsta') || 'null')
 
@@ -367,6 +373,8 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <DestekModuUyarisi aciklama="Servis kabul ve iş emri açma destek modunda kapalıdır." />
+
     <div class="reception-layout">
       <div class="panel reception-panel">
         <div class="form-section-title">
@@ -501,6 +509,7 @@ onUnmounted(() => {
             icon="pi pi-check"
             severity="success"
             :loading="kaydediliyor"
+            :disabled="destekModu"
             @click="serviseAl"
           />
         </div>

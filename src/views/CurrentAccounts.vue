@@ -19,6 +19,8 @@ import PayablesView from '../components/finance/PayablesView.vue'
 import ExpensesView from '../components/finance/ExpensesView.vue'
 import MovementsView from '../components/finance/MovementsView.vue'
 import HelpButton from '../components/HelpButton.vue'
+import DestekModuUyarisi from '../components/DestekModuUyarisi.vue'
+import { useYetki } from '../composables/useYetki.js'
 
 // Helper: Bugünün Tarihi (YYYY-MM-DD)
 function bugununTarihi() {
@@ -55,6 +57,9 @@ const cariDetayDialog = ref(false)
 
 const toast = useToast()
 const confirmDialog = useConfirm()
+
+// Kasa ve cari hareketleri usta işidir; destek (admin) oturumu kayıt oluşturamaz.
+const { destekModu, destekModundaEngelle } = useYetki()
 
 // Toast Mesajları
 const basariMesaji = (detay) => {
@@ -387,6 +392,8 @@ const giderleriYukle = async () => {
 
 // Dialog Actions
 const handleOpenReceivablePayment = (row) => {
+  if (destekModundaEngelle(toast, 'Tahsilat destek modunda yapılamaz.')) return
+
   if (row.kaynak === 'İş Emri') {
     musteriOdemeForm.work_order_id = row.work_order_id
     musteriOdemeForm.customer_name = row.customer_name
@@ -408,6 +415,8 @@ const handleOpenReceivablePayment = (row) => {
 }
 
 const musteriOdemeKaydet = async () => {
+  if (destekModundaEngelle(toast, 'Tahsilat destek modunda yapılamaz.')) return
+
   if (!musteriOdemeForm.work_order_id) return
   if (!musteriOdemeForm.amount || Number(musteriOdemeForm.amount) <= 0) {
     uyariMesaji('Geçerli bir ödeme tutarı giriniz.')
@@ -440,6 +449,8 @@ const musteriOdemeKaydet = async () => {
 }
 
 const cariDuzenleAc = (cari) => {
+  if (destekModundaEngelle(toast, 'Cari hesap düzenleme destek modunda yapılamaz.')) return
+
   Object.assign(cariForm, {
     id: cari.id,
     name: cari.name,
@@ -453,6 +464,8 @@ const cariDuzenleAc = (cari) => {
 }
 
 const cariHesapSil = (cari) => {
+  if (destekModundaEngelle(toast, 'Cari hesap silme destek modunda yapılamaz.')) return
+
   confirmDialog.require({
     message: `"${cari.name}" cari hesabını silmek istediğinize emin misiniz? Bu işlem, cariye ait tüm işlem ve ödeme kayıtlarını da silecektir.`,
     header: 'Cari Hesap Silme Onayı',
@@ -479,6 +492,8 @@ const cariHesapSil = (cari) => {
 }
 
 const cariKaydet = async () => {
+  if (destekModundaEngelle(toast, 'Cari hesap kaydetme destek modunda yapılamaz.')) return
+
   if (!cariForm.name) {
     uyariMesaji('Cari adı boş bırakılamaz.')
     return
@@ -508,6 +523,8 @@ const cariKaydet = async () => {
 }
 
 const islemEkleAc = (cari) => {
+  if (destekModundaEngelle(toast, 'Cari işlem ekleme destek modunda yapılamaz.')) return
+
   const target = cari || seciliCari.value
   if (!target) return
   seciliCari.value = target
@@ -526,6 +543,8 @@ const islemEkleAc = (cari) => {
 }
 
 const islemKaydet = async () => {
+  if (destekModundaEngelle(toast, 'Cari işlem kaydetme destek modunda yapılamaz.')) return
+
   if (!islemForm.date || !islemForm.transaction_type || !islemForm.amount || islemForm.amount <= 0) {
     uyariMesaji('Lütfen tüm zorunlu işlem alanlarını doğru doldurun.')
     return
@@ -548,6 +567,8 @@ const islemKaydet = async () => {
 }
 
 const odemeEkleAc = (cari) => {
+  if (destekModundaEngelle(toast, 'Ödeme kaydı destek modunda yapılamaz.')) return
+
   const target = cari || seciliCari.value
   if (!target) return
   seciliCari.value = target
@@ -564,6 +585,8 @@ const odemeEkleAc = (cari) => {
 }
 
 const odemeKaydet = async () => {
+  if (destekModundaEngelle(toast, 'Ödeme kaydı destek modunda yapılamaz.')) return
+
   if (!odemeForm.date || !odemeForm.amount || odemeForm.amount <= 0 || !odemeForm.payment_method) {
     uyariMesaji('Lütfen tüm zorunlu ödeme alanlarını doldurun.')
     return
@@ -614,18 +637,24 @@ watch(() => giderForm.value.status, (yeniDurum) => {
 })
 
 const giderEkleDialogAc = () => {
+  if (destekModundaEngelle(toast, 'Gider ekleme destek modunda yapılamaz.')) return
+
   isEditingGider.value = false
   resetGiderForm()
   giderFormDialog.value = true
 }
 
 const giderDuzenle = (gider) => {
+  if (destekModundaEngelle(toast, 'Gider düzenleme destek modunda yapılamaz.')) return
+
   isEditingGider.value = true
   giderForm.value = { ...gider }
   giderFormDialog.value = true
 }
 
 const giderKaydet = async () => {
+  if (destekModundaEngelle(toast, 'Gider kaydetme destek modunda yapılamaz.')) return
+
   if (!giderForm.value.expense_type || !giderForm.value.amount || Number(giderForm.value.amount) <= 0) {
     uyariMesaji('Gider türü ve geçerli bir tutar girilmelidir.')
     return
@@ -665,6 +694,8 @@ const giderKaydet = async () => {
 }
 
 const giderSil = (gider) => {
+  if (destekModundaEngelle(toast, 'Gider silme destek modunda yapılamaz.')) return
+
   confirmDialog.require({
     message: `"${gider.expense_type}" türündeki gider kaydını silmek istediğinize emin misiniz?`,
     header: 'Kayıt Silme Onayı',
@@ -690,6 +721,8 @@ const giderSil = (gider) => {
 }
 
 const cariIslemSil = (islem) => {
+  if (destekModundaEngelle(toast, 'Cari işlem silme destek modunda yapılamaz.')) return
+
   confirmDialog.require({
     message: `"${islem.description || 'Açıklamasız'}" başlıklı işlemi silmek istediğinize emin misiniz?`,
     header: 'İşlem Silme Onayı',
@@ -716,6 +749,8 @@ const cariIslemSil = (islem) => {
 }
 
 const cariOdemeSil = (odeme) => {
+  if (destekModundaEngelle(toast, 'Cari ödeme silme destek modunda yapılamaz.')) return
+
   confirmDialog.require({
     message: `"${odeme.description || 'Açıklamasız'}" başlıklı ödeme kaydını silmek istediğinize emin misiniz?`,
     header: 'Ödeme Silme Onayı',
@@ -742,6 +777,8 @@ const cariOdemeSil = (odeme) => {
 }
 
 const hizliOde = async (gider) => {
+  if (destekModundaEngelle(toast, 'Gider ödemesi destek modunda yapılamaz.')) return
+
   const bugun = bugununTarihi()
   const guncelGider = {
     ...gider,
@@ -1189,6 +1226,7 @@ onUnmounted(() => {
           label="Yeni Gider Kaydı"
           icon="pi pi-plus"
           severity="warning"
+          :disabled="destekModu"
           @click="giderEkleDialogAc"
         />
         <Button
@@ -1196,10 +1234,13 @@ onUnmounted(() => {
           label="Yeni Cari Hesap"
           icon="pi pi-plus"
           severity="info"
+          :disabled="destekModu"
           @click="Object.assign(cariForm, { id: null, name: '', type: '', phone: '', note: '', direction: 'Borç' }); cariDialogAcik = true"
         />
       </div>
     </div>
+
+    <DestekModuUyarisi aciklama="Tahsilat, ödeme, cari hareket ve gider kaydı destek modunda kapalıdır." />
 
     <!-- Üst Sekme Menüsü (Sadeleştirilmiş 5 Temel Sekme) -->
     <div class="tab-menu" style="display: flex; gap: 8px; border-bottom: 2px solid var(--border-color, #334155); padding-bottom: 10px; flex-wrap: wrap;">
@@ -1262,6 +1303,7 @@ onUnmounted(() => {
         <ReceivablesView
           :workOrderReceivables="musteriAlacaklari"
           :manualReceivables="manualAlacaklar"
+          :destek-modu="destekModu"
           @open-payment="handleOpenReceivablePayment"
         />
       </div>
@@ -1273,6 +1315,7 @@ onUnmounted(() => {
           :supplierTypes="dinamikCariTipleri"
           @add-cari="Object.assign(cariForm, { id: null, name: '', type: '', phone: '', note: '', direction: 'Borç' }); cariDialogAcik = true"
           @select-cari="cariDetaylariniYukle"
+          :destek-modu="destekModu"
           @add-transaction="islemEkleAc"
           @add-payment="odemeEkleAc"
         />
@@ -1283,6 +1326,7 @@ onUnmounted(() => {
         <ExpensesView
           :expenses="giderler"
           :expenseTypes="giderTurleri"
+          :destek-modu="destekModu"
           @add-expense="giderEkleDialogAc"
           @quick-pay="hizliOde"
           @edit-expense="giderDuzenle"
@@ -1351,7 +1395,7 @@ onUnmounted(() => {
 
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="musteriOdemeDialogAcik = false" />
-        <Button label="Tahsilatı Kaydet" icon="pi pi-check" severity="success" @click="musteriOdemeKaydet" />
+        <Button label="Tahsilatı Kaydet" icon="pi pi-check" severity="success" :disabled="destekModu" @click="musteriOdemeKaydet" />
       </template>
     </Dialog>
 
@@ -1419,7 +1463,7 @@ onUnmounted(() => {
 
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="cariDialogAcik = false" />
-        <Button label="Kaydet" icon="pi pi-check" severity="info" @click="cariKaydet" />
+        <Button label="Kaydet" icon="pi pi-check" severity="info" :disabled="destekModu" @click="cariKaydet" />
       </template>
     </Dialog>
 
@@ -1458,7 +1502,7 @@ onUnmounted(() => {
 
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="islemDialogAcik = false" />
-        <Button label="İşlemi Kaydet" icon="pi pi-check" severity="warning" @click="islemKaydet" />
+        <Button label="İşlemi Kaydet" icon="pi pi-check" severity="warning" :disabled="destekModu" @click="islemKaydet" />
       </template>
     </Dialog>
 
@@ -1498,7 +1542,7 @@ onUnmounted(() => {
 
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="odemeDialogAcik = false" />
-        <Button label="Ödemeyi Kaydet" icon="pi pi-check" severity="danger" @click="odemeKaydet" />
+        <Button label="Ödemeyi Kaydet" icon="pi pi-check" severity="danger" :disabled="destekModu" @click="odemeKaydet" />
       </template>
     </Dialog>
 
@@ -1563,7 +1607,7 @@ onUnmounted(() => {
 
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="giderFormDialog = false" />
-        <Button label="Gideri Kaydet" icon="pi pi-check" severity="warning" @click="giderKaydet" />
+        <Button label="Gideri Kaydet" icon="pi pi-check" severity="warning" :disabled="destekModu" @click="giderKaydet" />
       </template>
     </Dialog>
 
@@ -1610,6 +1654,7 @@ onUnmounted(() => {
                 rounded
                 severity="danger"
                 size="small"
+                :disabled="destekModu"
                 @click="slotProps.data.transaction_type ? cariIslemSil(slotProps.data) : cariOdemeSil(slotProps.data)"
               />
             </template>
@@ -1618,8 +1663,8 @@ onUnmounted(() => {
       </div>
 
       <template #footer>
-        <Button label="Sil" icon="pi pi-trash" severity="danger" text @click="cariHesapSil(seciliCari)" />
-        <Button label="Düzenle" icon="pi pi-pencil" severity="secondary" @click="cariDuzenleAc(seciliCari)" />
+        <Button label="Sil" icon="pi pi-trash" severity="danger" text :disabled="destekModu" @click="cariHesapSil(seciliCari)" />
+        <Button label="Düzenle" icon="pi pi-pencil" severity="secondary" :disabled="destekModu" @click="cariDuzenleAc(seciliCari)" />
         <Button label="Kapat" icon="pi pi-times" text @click="cariDetayDialog = false" />
         <Button label="Ekstre Yazdır" icon="pi pi-print" severity="info" @click="ekstreYazdir" />
       </template>

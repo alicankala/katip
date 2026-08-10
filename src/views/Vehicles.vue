@@ -12,6 +12,8 @@ import { useConfirm } from 'primevue/useconfirm'
 import { useRouter } from 'vue-router'
 import EmptyState from '../components/EmptyState.vue'
 import HelpButton from '../components/HelpButton.vue'
+import DestekModuUyarisi from '../components/DestekModuUyarisi.vue'
+import { useYetki } from '../composables/useYetki.js'
 
 const araclar = ref([])
 const yukleniyor = ref(true)
@@ -20,9 +22,14 @@ const dialogAcik = ref(false)
 const aramaKelimesi = ref('')
 const toast = useToast()
 const confirmDialog = useConfirm()
+
+// Araç kaydı usta işidir; destek (admin) oturumu değiştiremez.
+const { destekModu, destekModundaEngelle } = useYetki()
 const router = useRouter()
 
 const yeniAracAc = () => {
+  if (destekModundaEngelle(toast, 'Araç ekleme destek modunda yapılamaz.')) return
+
   Object.assign(form, {
     id: null, customer_id: null, plate: '', brand: '', model: '',
     year: null, mileage: null, chassis: ''
@@ -152,6 +159,8 @@ String(a.mileage || '').toLowerCase().includes(aranan) ||
   )
 })
 const duzenle = (arac) => {
+  if (destekModundaEngelle(toast, 'Araç düzenleme destek modunda yapılamaz.')) return
+
   Object.assign(form, {
     id: arac.id,
     customer_id: arac.customer_id,
@@ -167,6 +176,7 @@ const duzenle = (arac) => {
 }
 const sil = (id) => {
   if (!id) return
+  if (destekModundaEngelle(toast, 'Aracı pasife alma destek modunda yapılamaz.')) return
 
   confirmDialog.require({
     message: 'Bu aracı pasife almak istediğinize emin misiniz?',
@@ -190,6 +200,8 @@ const sil = (id) => {
 }
 
 const kaydet = async () => {
+  if (destekModundaEngelle(toast, 'Araç kaydetme destek modunda yapılamaz.')) return
+
   if (!form.customer_id || !form.plate) {
     uyariMesaji('Müşteri seçimi ve plaka alanı zorunludur.')
     return
@@ -254,10 +266,13 @@ onUnmounted(() => {
   label="Yeni Araç Ekle"
   icon="pi pi-car"
   severity="warning"
+  :disabled="destekModu"
   @click="yeniAracAc"
 />
       </div>
     </div>
+
+    <DestekModuUyarisi aciklama="Araç ekleme, düzenleme ve pasife alma destek modunda kapalıdır." />
 
     <div class="table-panel">
       <DataTable :value="filtrelenmisAraclar" :loading="yukleniyor" responsiveLayout="scroll">
@@ -277,6 +292,7 @@ onUnmounted(() => {
             action-label="Servis Kabul'e Git"
             action-icon="pi pi-bolt"
             hint-label="Nasıl yapılır?"
+            :action-disabled="destekModu"
             @action="servisKabuleGit"
             @hint="yardimaGit('arac')"
           />
@@ -302,10 +318,11 @@ onUnmounted(() => {
   outlined 
   rounded 
   severity="info" 
+  :disabled="destekModu"
   @click="duzenle(slotProps.data)" 
   style="margin-right: 8px;" 
 />
-            <Button icon="pi pi-trash" outlined rounded severity="danger" @click="sil(slotProps.data.id)" />
+            <Button icon="pi pi-trash" outlined rounded severity="danger" :disabled="destekModu" @click="sil(slotProps.data.id)" />
           </template>
         </Column>
       </DataTable>
@@ -364,7 +381,7 @@ onUnmounted(() => {
       </div>
       <template #footer>
         <Button label="İptal" icon="pi pi-times" text @click="dialogAcik = false" />
-        <Button label="Kaydet" icon="pi pi-check" @click="kaydet" />
+        <Button label="Kaydet" icon="pi pi-check" :disabled="destekModu" @click="kaydet" />
       </template>
     </Dialog>
   </div>

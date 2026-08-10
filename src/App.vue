@@ -10,6 +10,7 @@ import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
 import { useToast } from 'primevue/usetoast'
 import SetupWizard from './components/SetupWizard.vue'
+import { aktifUstaDegistiginiBildir } from './composables/useYetki.js'
 
 const router = useRouter()
 const toast = useToast()
@@ -160,6 +161,7 @@ const girisYap = async () => {
         const adminUser = { id: 'admin', name: 'Alican Kala', role: 'admin' }
         aktifUsta.value = adminUser
         localStorage.setItem('aktifUsta', JSON.stringify(adminUser))
+        aktifUstaDegistiginiBildir()
         pin.value = ''
       } else {
         girisHatasi.value = res?.error || 'Hatalı Admin PIN.'
@@ -229,6 +231,7 @@ const girisYap = async () => {
     const ustaBilgisi = { id: Number(ustaObj.id), name: String(ustaObj.name || '') }
     aktifUsta.value = ustaBilgisi
     localStorage.setItem('aktifUsta', JSON.stringify(ustaBilgisi))
+    aktifUstaDegistiginiBildir()
     pin.value = ''
     router.push('/dashboard')
     kurulumSihirbaziniKontrolEt()
@@ -265,6 +268,7 @@ const pencereKapat = async () => {
 const cikisYap = () => {
   aktifUsta.value = null
   localStorage.removeItem('aktifUsta')
+  aktifUstaDegistiginiBildir()
   pin.value = ''
   router.push('/dashboard')
   window.api?.ustaCikisYap?.().catch(() => {})
@@ -601,6 +605,8 @@ const verileriYenile = async () => {
 onMounted(async () => {
   temaUygula()
   localStorage.removeItem('aktifUsta')
+  // Önceki oturumdan kalan kayıt silindi; yetki durumu da sıfırlanmalı.
+  aktifUstaDegistiginiBildir()
   ustalariYukle()
   window.addEventListener('usta-cikis-yapildi', disaridanCikisYap)
   window.addEventListener('hava-durumu-yenile', havaYukle)

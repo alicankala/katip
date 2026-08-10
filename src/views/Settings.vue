@@ -40,7 +40,7 @@ const destekBilgileri = ref({
 // ── Güncelleme ──────────────────────────────────────────────
 const mevcutSurum = ref('1.0.0')
 const guncellemeDenetleniyor = ref(false)
-const guncellemeDurumu = ref({ durum: 'bilinmiyor', surum: '', yuzde: 0, hata: '' })
+const guncellemeDurumu = ref({ durum: 'bilinmiyor', surum: '', yuzde: 0, hata: '', internetYok: false })
 
 const guncellemeDurumMetni = computed(() => {
   const d = guncellemeDurumu.value
@@ -49,7 +49,8 @@ const guncellemeDurumMetni = computed(() => {
     case 'guncel': return 'Programınız güncel.'
     case 'indiriliyor': return `Yeni sürüm indiriliyor: %${d.yuzde || 0}`
     case 'hazir': return `Sürüm ${d.surum || ''} indirildi. Yeniden başlatınca kurulacak.`
-    case 'hata': return 'Güncelleme denetlenemedi. İnternet bağlantısını kontrol edin.'
+    // Metin main process'te Türkçeleştiriliyor; ham İngilizce hata yalnızca log dosyasına yazılır.
+    case 'hata': return d.hata || 'Güncelleme denetlenemedi. İnternet bağlantısını kontrol edin.'
     default: return 'Son denetim yapılmadı.'
   }
 })
@@ -68,9 +69,10 @@ const guncellemeleriDenetle = async () => {
         life: 4000
       })
     } else if (!res?.success) {
+      // İnternet yokluğu bir arıza değil; kırmızı hata yerine sade bir bilgi gösterilir.
       toast.add({
-        severity: 'error',
-        summary: 'Güncelleme',
+        severity: res?.internetYok ? 'info' : 'warn',
+        summary: res?.internetYok ? 'İnternet Yok' : 'Güncelleme',
         detail: res?.error || 'Güncelleme denetlenemedi.',
         life: 4000
       })
