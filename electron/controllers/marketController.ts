@@ -14,6 +14,13 @@ function getErrorMessage(err: unknown): string {
 const TCMB_URL = 'https://www.tcmb.gov.tr/kurlar/today.xml'
 const CACHE_SURESI_MS = 30 * 60 * 1000 // 30 dakika
 
+// Uygulama adı "Kâtip" ASCII olmayan 'â' harfi taşıyor ve Electron bunu varsayılan
+// User-Agent'a koyuyor. TCMB bu başlığı gördüğünde isteği reddedip HTTP 200 ile
+// "Sayfa Görüntülenemedi" HTML'i döndürüyor; kur ayrıştırması da boş dönüp şerit
+// "Kur verisi çözümlenemedi" hatası veriyordu. Bu yüzden dış isteklerde sabit,
+// ASCII bir User-Agent gönderiliyor.
+const USER_AGENT = 'Katip/1.0 (Windows)'
+
 interface KurBilgisi {
   alis: number | null
   satis: number | null
@@ -47,7 +54,10 @@ async function kurlariGetir(): Promise<KurVerisi> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 10000)
   try {
-    const res = await fetch(TCMB_URL, { signal: controller.signal })
+    const res = await fetch(TCMB_URL, {
+      signal: controller.signal,
+      headers: { 'User-Agent': USER_AGENT }
+    })
     if (!res.ok) {
       throw new Error(`TCMB kur servisi yanıt vermedi (HTTP ${res.status}).`)
     }
@@ -107,7 +117,10 @@ async function zamanAsimliFetch(url: string, timeoutMs = 10000): Promise<Respons
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    return await fetch(url, { signal: controller.signal })
+    return await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': USER_AGENT }
+    })
   } finally {
     clearTimeout(timeout)
   }

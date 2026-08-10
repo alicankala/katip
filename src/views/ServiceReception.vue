@@ -510,21 +510,34 @@ onUnmounted(() => {
         <h2>Nasıl çalışır?</h2>
 
         <p>
-          Plaka daha önce kayıtlıysa sistem mevcut aracı kullanır ve doğrudan yeni iş emri açar.
+          <strong>Plakayı yazarken:</strong> Harfler büyütülür, boşluklar silinir.
+          Plaka kayıtlıysa müşteri ve araç bilgileri forma otomatik doldurulur.
+          Şasinin 17 hanesi girildiğinde marka ile yıl boşsa şasiden tamamlanır.
         </p>
 
         <p>
-          Plaka kayıtlı değilse önce müşteri ve araç kaydı oluşturulur, ardından iş emri açılır.
+          <strong>Plaka kayıtlıysa:</strong> Mevcut araç kullanılır. Müşteri adını
+          veya telefonunu değiştirdiyseniz müşteri kaydı da güncellenir, araç
+          bilgilerindeki değişiklikler araca işlenir. Tanınmayan bir müşteri
+          girdiyseniz araç yeni sahibine aktarılır.
         </p>
 
         <p>
-          Telefon doluysa aynı telefona sahip müşteri bulunmaya çalışılır.
+          <strong>Plaka kayıtlı değilse:</strong> Müşteri önce telefondan, telefon
+          eşleşmezse birebir aynı isimden aranır. Bulunursa araç o müşteriye
+          bağlanır, bulunamazsa yeni müşteri kaydı açılır. Ardından araç
+          oluşturulur.
+        </p>
+
+        <p>
+          Her iki durumda da sonunda <strong>“Açık”</strong> durumunda yeni bir iş
+          emri açılır ve İş Emirleri ekranına geçilir.
         </p>
 
         <div class="hint-box">
-          <strong>Zorunlu alanlar:</strong>
+          <strong>Zorunlu:</strong>
           <br />
-          Müşteri adı ve plaka.
+          Usta girişi, müşteri adı ve plaka.
         </div>
       </div>
     </div>
