@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(grep -iE '\\\\.\\(db|sqlite|sqlite3\\)$')",
+      "Bash(grep -nE \"^\\\\s*//\\\\s*\\(const|let|await|window\\\\.api|<\\)\" src/views/WorkOrders.vue src/views/Dashboard.vue)",
+      "Skill(artifact-design)"
+    ]
+  }
+}
