@@ -98,47 +98,58 @@ function yedekDosyaAdiOlustur(tur: YedekTuru, stamp: string): string {
   return `katip-tam-yedek-${stamp}.zip`
 }
 
+// Arşivi tek geçişte üretir.
+//
+// Eskiden fotoğraf klasörünün tamamı önce geçici bir hazırlık klasörüne
+// kopyalanıp sonra o kopya sıkıştırılıyordu; yani her yedekte bütün fotoğraflar
+// diske iki kez yazılıyor ve o kadar da boş alan gerekiyordu. Fotoğraflar artık
+// doğrudan durdukları yerden arşive alınıyor. Üretilen paketin içeriği ve
+// klasör yapısı birebir aynı: database/otoservis.db + fotograflar/ + manifest.json
+//
+// hazirlikKok: içinde 'database/otoservis.db' hazır bekleyen geçici klasör.
 async function zipArsiviOlustur(
   zipPath: string,
-  databaseSnapshotPath: string,
+  hazirlikKok: string,
   photosDir: string,
   manifest: Record<string, unknown>
 ): Promise<void> {
-  const packageRoot = await fs.mkdtemp(path.join(app.getPath('temp'), 'katip-zip-stage-'))
+  await fs.writeFile(
+    path.join(hazirlikKok, 'manifest.json'),
+    JSON.stringify(manifest, null, 2),
+    'utf8'
+  )
 
-  try {
-    const databaseDir = path.join(packageRoot, 'database')
-    const packagePhotosDir = path.join(packageRoot, 'fotograflar')
+  // Fotoğraf klasörü hiç yoksa arşivde yine boş bir 'fotograflar' girdisi
+  // bulunsun diye geçici bir tane açılır. Eski paketler bu klasörü her zaman
+  // içeriyordu ve geri yükleme buna göre davranıyor; sözleşme korunuyor.
+  let fotografUstKlasoru = path.dirname(photosDir)
+  let fotografKlasorAdi = path.basename(photosDir)
 
-    await fs.mkdir(databaseDir, { recursive: true })
-    await fs.mkdir(packagePhotosDir, { recursive: true })
-    await fs.copyFile(databaseSnapshotPath, path.join(databaseDir, 'otoservis.db'))
-
-    if (await yolVarMi(photosDir)) {
-      await fs.cp(photosDir, packagePhotosDir, { recursive: true, force: true })
-    }
-
-    await fs.writeFile(
-      path.join(packageRoot, 'manifest.json'),
-      JSON.stringify(manifest, null, 2),
-      'utf8'
-    )
-
-    await fs.mkdir(path.dirname(zipPath), { recursive: true })
-    await fs.rm(zipPath, { force: true })
-
-    // Windows'un yerleşik tar.exe'si (bsdtar), '-f' değerindeki ilk ':' karakterini
-    // gördüğünde bunu uzak arşiv sözdizimi ("host:dosya") sanıp sürücü harfini
-    // hostname olarak çözmeye çalışıyor ("Cannot connect to C: resolve failed").
-    // Bunu önlemek için arşiv klasörüne geçip -f değerini göreli dosya adıyla veriyoruz.
-    await execFileAsync(
-      'tar.exe',
-      ['-a', '-c', '-f', path.basename(zipPath), '-C', packageRoot, 'database', 'fotograflar', 'manifest.json'],
-      { windowsHide: true, maxBuffer: 50 * 1024 * 1024, cwd: path.dirname(zipPath) }
-    )
-  } finally {
-    await fs.rm(packageRoot, { recursive: true, force: true })
+  if (!(await yolVarMi(photosDir))) {
+    await fs.mkdir(path.join(hazirlikKok, 'fotograflar'), { recursive: true })
+    fotografUstKlasoru = hazirlikKok
+    fotografKlasorAdi = 'fotograflar'
   }
+
+  await fs.mkdir(path.dirname(zipPath), { recursive: true })
+  await fs.rm(zipPath, { force: true })
+
+  // Windows'un yerleşik tar.exe'si (bsdtar), '-f' değerindeki ilk ':' karakterini
+  // gördüğünde bunu uzak arşiv sözdizimi ("host:dosya") sanıp sürücü harfini
+  // hostname olarak çözmeye çalışıyor ("Cannot connect to C: resolve failed").
+  // Bunu önlemek için arşiv klasörüne geçip -f değerini göreli dosya adıyla veriyoruz.
+  //
+  // İki ayrı '-C': önce hazırlık klasöründen database/ ve manifest.json, sonra
+  // fotoğrafların gerçek üst klasöründen fotograflar/ alınır.
+  await execFileAsync(
+    'tar.exe',
+    [
+      '-a', '-c', '-f', path.basename(zipPath),
+      '-C', hazirlikKok, 'database', 'manifest.json',
+      '-C', fotografUstKlasoru, fotografKlasorAdi
+    ],
+    { windowsHide: true, maxBuffer: 50 * 1024 * 1024, cwd: path.dirname(zipPath) }
+  )
 }
 
 export async function tamYedekPaketiOlustur(tur: YedekTuru): Promise<TamYedekSonucu> {
@@ -148,10 +159,13 @@ export async function tamYedekPaketiOlustur(tur: YedekTuru): Promise<TamYedekSon
   const backupFileName = yedekDosyaAdiOlustur(tur, stamp)
   const backupPath = path.join(backupDir, backupFileName)
   const tempRoot = await fs.mkdtemp(path.join(app.getPath('temp'), 'katip-full-backup-'))
-  const snapshotPath = path.join(tempRoot, 'otoservis.db')
+  // Anlık görüntü doğrudan arşivdeki yerine ('database/otoservis.db') alınır;
+  // böylece ayrıca kopyalanması gerekmez.
+  const snapshotPath = path.join(tempRoot, 'database', 'otoservis.db')
 
   try {
     await fs.mkdir(backupDir, { recursive: true })
+    await fs.mkdir(path.dirname(snapshotPath), { recursive: true })
     await db.backup(snapshotPath)
 
     const photoSummary = await klasorOzetiGetir(photosDir)
@@ -166,7 +180,7 @@ export async function tamYedekPaketiOlustur(tur: YedekTuru): Promise<TamYedekSon
       photoBytes: photoSummary.bytes
     }
 
-    await zipArsiviOlustur(backupPath, snapshotPath, photosDir, manifest)
+    await zipArsiviOlustur(backupPath, tempRoot, photosDir, manifest)
     const stat = await fs.stat(backupPath)
 
     return {
@@ -357,6 +371,11 @@ export function registerBackupHandlers(
     if (isRestoreInProgress()) {
       return { success: false, error: 'Zaten devam eden bir geri yükleme işlemi var.' }
     }
+    // db.close() çağrıldıktan sonra bir hata çıkarsa uygulama açık ama
+    // veritabanı kapalı kalıyordu: her ekran sessizce çalışmaz hâle geliyor,
+    // kullanıcıya da bir şey söylenmiyordu. Sıfırlama akışında olduğu gibi
+    // böyle bir durumda uygulama yeniden başlatılır.
+    let veritabaniKapatildi = false
     try {
       const win = getWin()
       if (!win) {
@@ -571,6 +590,7 @@ export function registerBackupHandlers(
       }
 
       db.close()
+      veritabaniKapatildi = true
 
       try { await fs.rm(dbPath + '-wal', { force: true }) } catch {}
       try { await fs.rm(dbPath + '-shm', { force: true }) } catch {}
@@ -592,8 +612,13 @@ export function registerBackupHandlers(
 
       await restoreSonrasiOnar()
 
-      console.log('[Restore] Geri yükleme tamamlandı. Uygulama kapatılıyor...')
+      console.log('[Restore] Geri yükleme tamamlandı. Uygulama yeniden başlatılıyor...')
 
+      // Sıfırlama akışıyla aynı davranış: eskiden burada yalnızca app.exit(0)
+      // çağrılıyordu; arayüz "başarıyla geri yüklendi" yazıp uygulama hiçbir
+      // uyarı olmadan kapanıyor, kullanıcının programı elle açması gerekiyordu.
+      // Zaten restartRequired: true dönüyoruz.
+      app.relaunch()
       setTimeout(() => {
         app.exit(0)
       }, 1200)
@@ -606,6 +631,24 @@ export function registerBackupHandlers(
       }
     } catch (error) {
       console.error('Yedekten geri yükleme hatası:', error)
+
+      if (veritabaniKapatildi) {
+        // Bağlantı kapandıktan sonra kalınan bir hatada güvenli devam mümkün
+        // değil; uygulama yeniden başlatılır ve açılışta kendini toparlar.
+        // Güvenlik yedeği zaten alınmış durumda (guvenlikDir).
+        console.error('[Restore] Veritabanı kapalı durumda kalındı, uygulama yeniden başlatılıyor.')
+        app.relaunch()
+        setTimeout(() => {
+          app.exit(0)
+        }, 1200)
+
+        return {
+          success: false,
+          error: getErrorMessage(error) + ' (Uygulama yeniden başlatılacak.)',
+          restartRequired: true
+        }
+      }
+
       return { success: false, error: getErrorMessage(error) }
     } finally {
       setRestoreInProgress(false)
