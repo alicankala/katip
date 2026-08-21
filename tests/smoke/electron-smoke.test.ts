@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { build } from 'vite'
+import { createRequire } from 'node:module'
 import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { basename, isAbsolute, join, relative, sep } from 'node:path'
@@ -61,9 +62,36 @@ async function runnerHazirla(testRoot: string): Promise<{ runnerPath: string, no
 
 async function electronHazirla(testRoot: string): Promise<{ electronPath: string, electronRoot: string }> {
   if (process.platform !== 'win32') throw new Error('Electron smoke testi Windows üzerinde çalıştırılmalıdır.')
-  const electronPath = join(projectRoot, 'node_modules', 'electron', 'dist', 'electron.exe')
-  if (!existsSync(electronPath)) throw new Error('Yerel Electron çalıştırılabilir dosyası bulunamadı.')
-  return { electronPath, electronRoot: join(testRoot, 'smoke-electron-unused') }
+  const nodeRequire = createRequire(import.meta.url)
+  try {
+    const localElectronPath = String(nodeRequire('electron'))
+    if (existsSync(localElectronPath)) {
+      return { electronPath: localElectronPath, electronRoot: join(testRoot, 'smoke-electron-unused') }
+    }
+  } catch {
+    // CI paket kurulumu executable'i yerelde birakmadiysa kontrollu fallback kullan.
+  }
+  const { downloadArtifact } = nodeRequire('@electron/get') as {
+    downloadArtifact: (options: Record<string, string>) => Promise<string>
+  }
+  let extractZip: (zipPath: string, options: { dir: string }) => Promise<void>
+  try {
+    extractZip = nodeRequire('@electron-internal/extract-zip').extract
+  } catch {
+    extractZip = nodeRequire('extract-zip')
+  }
+  const electronVersion = String(packageJson.devDependencies.electron).match(/\d+\.\d+\.\d+/)?.[0]
+  if (!electronVersion) throw new Error('Electron sürümü package.json içinden okunamadı.')
+  const electronRoot = join(testRoot, 'smoke-electron-host')
+  mkdirSync(electronRoot, { recursive: true })
+  const zipPath = await downloadArtifact({
+    version: electronVersion,
+    platform: 'win32',
+    arch: 'x64',
+    artifactName: 'electron'
+  })
+  await extractZip(zipPath, { dir: electronRoot })
+  return { electronPath: join(electronRoot, 'electron.exe'), electronRoot }
 }
 
 beforeAll(async () => {

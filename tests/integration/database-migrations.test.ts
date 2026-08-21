@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { build } from 'vite'
+import { createRequire } from 'node:module'
 import { execFile } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { basename, isAbsolute, join, relative, sep } from 'node:path'
@@ -108,13 +109,39 @@ async function runnerHazirla(testRoot: string): Promise<{ runnerPath: string, no
   }
 }
 
-async function electronCalistirilabiliriniHazirla(): Promise<string> {
+async function electronCalistirilabiliriniHazirla(testRoot: string): Promise<string> {
   if (process.platform !== 'win32') {
     throw new Error('Kâtip Electron entegrasyon testleri Windows uzerinde calistirilmalidir.')
   }
-  const electronPath = join(projectRoot, 'node_modules', 'electron', 'dist', 'electron.exe')
-  if (!existsSync(electronPath)) throw new Error('Yerel Electron calistirilabilir dosyasi bulunamadi.')
-  return electronPath
+  const nodeRequire = createRequire(import.meta.url)
+  try {
+    const localElectronPath = String(nodeRequire('electron'))
+    if (existsSync(localElectronPath)) return localElectronPath
+  } catch {
+    // CI paket kurulumu executable'i yerelde birakmadiysa kontrollu fallback kullan.
+  }
+
+  const { downloadArtifact } = nodeRequire('@electron/get') as {
+    downloadArtifact: (options: Record<string, string>) => Promise<string>
+  }
+  let extractZip: (zipPath: string, options: { dir: string }) => Promise<void>
+  try {
+    extractZip = nodeRequire('@electron-internal/extract-zip').extract
+  } catch {
+    extractZip = nodeRequire('extract-zip')
+  }
+  const electronVersion = String(packageJson.devDependencies.electron).match(/\d+\.\d+\.\d+/)?.[0]
+  if (!electronVersion) throw new Error('Electron surumu package.json icinden okunamadi.')
+  const electronRoot = join(testRoot, 'electron-host')
+  mkdirSync(electronRoot, { recursive: true })
+  const zipPath = await downloadArtifact({
+    version: electronVersion,
+    platform: 'win32',
+    arch: 'x64',
+    artifactName: 'electron'
+  })
+  await extractZip(zipPath, { dir: electronRoot })
+  return join(electronRoot, 'electron.exe')
 }
 
 async function senaryoCalistir(
@@ -151,7 +178,7 @@ async function senaryoCalistir(
 beforeAll(async () => {
   const testRoot = dogrulanmisAnaTestDizini()
   const { runnerPath, nodeModulesLink } = await runnerHazirla(testRoot)
-  const electronPath = await electronCalistirilabiliriniHazirla()
+  const electronPath = await electronCalistirilabiliriniHazirla(testRoot)
 
   try {
     freshReport = await senaryoCalistir(electronPath, runnerPath, testRoot, 'fresh')
