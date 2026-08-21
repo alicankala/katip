@@ -1,8 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { build } from 'vite'
-import { createRequire } from 'node:module'
 import { execFile } from 'node:child_process'
-import { mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
 import { basename, isAbsolute, join, relative, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { promisify } from 'node:util'
@@ -109,37 +108,13 @@ async function runnerHazirla(testRoot: string): Promise<{ runnerPath: string, no
   }
 }
 
-async function electronCalistirilabiliriniHazirla(testRoot: string): Promise<string> {
+async function electronCalistirilabiliriniHazirla(): Promise<string> {
   if (process.platform !== 'win32') {
     throw new Error('Kâtip Electron entegrasyon testleri Windows uzerinde calistirilmalidir.')
   }
-
-  const nodeRequire = createRequire(import.meta.url)
-  const { downloadArtifact } = nodeRequire('@electron/get') as {
-    downloadArtifact: (options: Record<string, string>) => Promise<string>
-  }
-  let extractZip: (zipPath: string, options: { dir: string }) => Promise<void>
-  try {
-    extractZip = nodeRequire('@electron-internal/extract-zip').extract
-  } catch {
-    extractZip = nodeRequire('extract-zip')
-  }
-  const electronVersion = String(packageJson.devDependencies.electron).match(/\d+\.\d+\.\d+/)?.[0]
-  if (!electronVersion) {
-    throw new Error('Electron surumu package.json icinden okunamadi.')
-  }
-
-  const electronRoot = join(testRoot, 'electron-host')
-  mkdirSync(electronRoot, { recursive: true })
-  const zipPath = await downloadArtifact({
-    version: electronVersion,
-    platform: 'win32',
-    arch: esmRuntime ? 'x64' : 'ia32',
-    artifactName: 'electron'
-  })
-  await extractZip(zipPath, { dir: electronRoot })
-
-  return join(electronRoot, 'electron.exe')
+  const electronPath = join(projectRoot, 'node_modules', 'electron', 'dist', 'electron.exe')
+  if (!existsSync(electronPath)) throw new Error('Yerel Electron calistirilabilir dosyasi bulunamadi.')
+  return electronPath
 }
 
 async function senaryoCalistir(
@@ -176,7 +151,7 @@ async function senaryoCalistir(
 beforeAll(async () => {
   const testRoot = dogrulanmisAnaTestDizini()
   const { runnerPath, nodeModulesLink } = await runnerHazirla(testRoot)
-  const electronPath = await electronCalistirilabiliriniHazirla(testRoot)
+  const electronPath = await electronCalistirilabiliriniHazirla()
 
   try {
     freshReport = await senaryoCalistir(electronPath, runnerPath, testRoot, 'fresh')
