@@ -19,7 +19,7 @@
 // döndürmek yeterli olduğu için net.fetch/Response gerekmiyor ve içerik türünü
 // Chromium uzantıdan kendisi belirliyor.
 //
-// Ek fayda: katip-x86 (Windows 7 / Electron 22) zaten bu API'yi kullanmak
+// Ek fayda: katip-32bit (Windows 7 / Electron 22) zaten bu API'yi kullanmak
 // zorunda, çünkü orada protocol.handle hiç yok. Aynı kodu kullanmak iki depo
 // arasındaki farkı azaltıyor.
 
