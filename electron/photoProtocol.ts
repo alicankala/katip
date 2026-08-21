@@ -8,25 +8,31 @@
 // için fotoğraflar paralel olarak çekiliyor.
 //
 // Artık arayüze yalnızca `katip-foto://foto/<id>` adresi gidiyor; baytları
-// Chromium'un kendisi, <img> göründükçe, akış hâlinde bu protokolden çekiyor.
-// Böylece IPC yükü sabit ve küçük kalıyor, bellek tepe noktası tek fotoğrafa
-// iniyor ve tarayıcı önbelleği devreye giriyor.
+// Chromium'un kendisi, <img> göründükçe çekiyor.
+//
+// ── Neden protocol.handle() değil de registerFileProtocol? ───────────────
+// protocol.handle (Electron 25+) bu uygulamada çalışmadı: ana süreçten
+// net.fetch ile çağrıldığında 200 dönüyor ve isProtocolHandled true, ancak
+// file:// kökenli pencereden gelen <img> istekleri net::ERR_UNEXPECTED ile
+// reddedilip işleyiciye hiç ulaşmıyor (ölçülerek doğrulandı).
+// registerFileProtocol ile aynı iş sorunsuz çalışıyor; üstelik dosya yolunu
+// döndürmek yeterli olduğu için net.fetch/Response gerekmiyor ve içerik türünü
+// Chromium uzantıdan kendisi belirliyor.
+//
+// Ek fayda: katip-x86 (Windows 7 / Electron 22) zaten bu API'yi kullanmak
+// zorunda, çünkü orada protocol.handle hiç yok. Aynı kodu kullanmak iki depo
+// arasındaki farkı azaltıyor.
 
-import { app, net, protocol } from 'electron'
+import { app, protocol } from 'electron'
 import path from 'node:path'
-import { pathToFileURL } from 'node:url'
 import db from './database.js'
 
 export const FOTO_SEMASI = 'katip-foto'
 
-const ICERIK_TURLERI: Record<string, string> = {
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-  '.gif': 'image/gif',
-  '.bmp': 'image/bmp',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg'
-}
+// Chromium net hata kodları (registerFileProtocol geri çağrısında kullanılır).
+const NET_ERR_FAILED = -2
+const NET_ERR_FILE_NOT_FOUND = -6
+const NET_ERR_ACCESS_DENIED = -10
 
 // Arayüzün <img src> alanına koyacağı adres.
 export function fotografAdresi(photoId: number | string): string {
@@ -47,26 +53,28 @@ export function fotografSemasiniTanimla(): void {
       privileges: {
         standard: true,
         secure: true,
-        supportFetchAPI: true,
-        stream: true
+        supportFetchAPI: true
       }
     }
   ])
 }
 
-// Asıl işleyici; app 'ready' olduktan sonra kaydedilir.
+// Asıl işleyici; app 'ready' olduktan sonra kaydedilir
+// (registerFileProtocol ready'den önce tanımlı değil).
 export function fotografProtokolunuKaydet(): void {
-  protocol.handle(FOTO_SEMASI, async (request) => {
+  protocol.registerFileProtocol(FOTO_SEMASI, (request, callback) => {
     try {
       const id = Number(new URL(request.url).pathname.replace(/^\//, ''))
       if (!Number.isFinite(id) || id <= 0) {
-        return new Response('Gecersiz fotograf kimligi', { status: 400 })
+        callback({ error: NET_ERR_FILE_NOT_FOUND })
+        return
       }
 
       const row = db.prepare('SELECT file_path FROM work_order_photos WHERE id = ?').get(id) as any
       const dosyaYolu = String(row?.file_path || '')
       if (!dosyaYolu) {
-        return new Response('Fotograf bulunamadi', { status: 404 })
+        callback({ error: NET_ERR_FILE_NOT_FOUND })
+        return
       }
 
       // Yol her zaman fotoğraf klasörünün içinde olmalı. Veritabanındaki
@@ -76,27 +84,14 @@ export function fotografProtokolunuKaydet(): void {
       const tamYol = path.resolve(dosyaYolu)
       if (tamYol !== kok && !tamYol.startsWith(kok + path.sep)) {
         console.warn('[FotoProtokol] Fotograf klasoru disindaki yol reddedildi:', dosyaYolu)
-        return new Response('Gecersiz yol', { status: 403 })
+        callback({ error: NET_ERR_ACCESS_DENIED })
+        return
       }
 
-      const uzanti = path.extname(tamYol).toLowerCase()
-      const yanit = await net.fetch(pathToFileURL(tamYol).toString())
-      if (!yanit.ok) {
-        return new Response('Fotograf okunamadi', { status: 404 })
-      }
-
-      return new Response(yanit.body, {
-        status: 200,
-        headers: {
-          'Content-Type': ICERIK_TURLERI[uzanti] || 'image/jpeg',
-          // Bir fotoğraf satırı hep aynı kareyi gösterir (silme + yeni kayıt
-          // yeni bir id üretir), bu yüzden önbelleklenmesi güvenli.
-          'Cache-Control': 'private, max-age=3600'
-        }
-      })
+      callback({ path: tamYol })
     } catch (error) {
       console.error('[FotoProtokol] Hata:', error)
-      return new Response('Fotograf servis edilemedi', { status: 500 })
+      callback({ error: NET_ERR_FAILED })
     }
   })
 }
